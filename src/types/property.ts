@@ -17,6 +17,10 @@ export type PropertyPosition =
 
 export type PropertyCondition = 'Novo' | 'Usado' | 'Reformado' | 'Outro';
 
+export type PropertyPurpose = 'Venda' | 'Locação';
+
+export type FieldState = 'informed' | 'missing' | 'ambiguous';
+
 export type SourceType = 'Próprio' | 'Parceiro';
 
 export type PropertyStatus = 'Ativo' | 'Vendido' | 'Arquivado';
@@ -31,6 +35,7 @@ export interface PropertyPhoto {
 
 export interface Property {
   id: string;
+  purpose?: PropertyPurpose;
   type: PropertyType;
   neighborhood: string;
   address?: string;

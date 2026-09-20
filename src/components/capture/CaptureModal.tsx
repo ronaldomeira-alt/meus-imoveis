@@ -3,37 +3,86 @@ import {
   X,
   Sparkles,
   Mic,
-  Square,
-  Image as ImageIcon,
-  Trash2,
+  Plus,
   Star,
   Check,
-  Building2,
-  MapPin,
-  DollarSign,
-  Bed,
-  Bath,
-  Maximize2,
-  Car,
-  User,
-  Phone,
-  Layers,
-  ArrowRight,
   ArrowLeft,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  HelpCircle,
+  Send,
+  PenSquare,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AudioRecorder } from '../../lib/audio-recorder';
 import { processImageFile, ProcessedImage } from '../../lib/image-processor';
-import { extractPropertyWithGemini, transcribeAudioWithGemini, ExtractedPropertyData } from '../../lib/gemini';
-import type { Property, PropertyType, PropertyPosition, PropertyCondition, SourceType } from '../../types/property';
+import { ExtractedPropertyData, validatePropertyExtraction } from '../../lib/gemini';
+import {
+  validateRequiredPropertyFields,
+  MANDATORY_FIELD_LABELS,
+  MandatoryPropertyFieldKey,
+} from '../../lib/property-validation';
+import {
+  transcribeAudioMultiProvider,
+  extractPropertyMultiProvider,
+  PreferredAIProvider,
+} from '../../lib/ai-provider';
+import type {
+  Property,
+  PropertyType,
+  PropertyPurpose,
+  PropertyPosition,
+  PropertyCondition,
+} from '../../types/property';
+import { ManualPropertyForm } from './ManualPropertyForm';
+
+const emptyReviewData: ExtractedPropertyData = {
+  purpose: null,
+  type: null,
+  neighborhood: null,
+  address: null,
+  number: null,
+  complement: null,
+  condominium_name: null,
+  bedrooms: null,
+  suites: null,
+  bathrooms: null,
+  parking_spaces: null,
+  area_m2: null,
+  is_approximate_area: false,
+  price: null,
+  is_approximate_price: false,
+  condo_fee: null,
+  condo_included: false,
+  iptu: null,
+  floor: null,
+  position: null,
+  furnished: null,
+  condition: null,
+  building_features: [],
+  apartment_features: [],
+  source_type: 'Próprio',
+  owner_name: null,
+  owner_phone: null,
+  partner_name: null,
+  partner_phone: null,
+  notes: '',
+  missing_mandatory: [],
+  missing_desirable: [],
+  field_states: {},
+  ambiguous_fields: [],
+};
 
 interface CaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveProperty: (property: Property) => void;
   geminiApiKey?: string;
+  groqApiKey?: string;
+  preferredAIProvider?: PreferredAIProvider;
 }
 
 export const CaptureModal: React.FC<CaptureModalProps> = ({
@@ -41,53 +90,52 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   onClose,
   onSaveProperty,
   geminiApiKey,
+  groqApiKey,
+  preferredAIProvider,
 }) => {
-  // Estados do Step
+  // ── Modo de Captação: 'ai' ou 'manual' (Padrão: Com IA) ──
+  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
+
+  // Estados do Step (para o fluxo de IA)
   const [step, setStep] = useState<'composer' | 'review'>('composer');
 
   // Estados do Composer
   const [textInput, setTextInput] = useState('');
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Refs de mídia
+  // Refs de mídia e textarea
   const recorderRef = useRef<AudioRecorder | null>(null);
   const timerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Estados dos dados extraídos para revisão
-  const [reviewData, setReviewData] = useState<ExtractedPropertyData>({
-    type: 'Apartamento',
-    neighborhood: 'Bessa',
-    bedrooms: 2,
-    suites: 1,
-    bathrooms: 2,
-    parking_spaces: 1,
-    area_m2: 65,
-    price: 450000,
-    condo_fee: 450,
-    iptu: 850,
-    floor: 3,
-    position: 'Nascente',
-    furnished: false,
-    condition: 'Usado',
-    building_features: ['Piscina', 'Elevador'],
-    apartment_features: ['Varanda gourmet'],
-    source_type: 'Próprio',
-    owner_name: '',
-    owner_phone: '',
-    partner_name: '',
-    partner_phone: '',
-    notes: '',
-  });
+  // Estados dos dados extraídos para revisão (inicialmente sem defaults inventados)
+  const [reviewData, setReviewData] = useState<ExtractedPropertyData>(emptyReviewData);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode('ai');
+      setStep('composer');
+      setErrorMessage(null);
+      setReviewData(emptyReviewData);
+      setTextInput('');
+      setImages([]);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (recorderRef.current) recorderRef.current.cancel();
+      if (recorderRef.current) {
+        recorderRef.current.cancel();
+        recorderRef.current = null;
+      }
     };
   }, []);
 
@@ -96,39 +144,94 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   // ── Gravação de Áudio Nativo ──
   const handleStartRecording = async () => {
     try {
+      setErrorMessage(null);
+      if (recorderRef.current) {
+        recorderRef.current.cancel();
+        recorderRef.current = null;
+      }
       const recorder = new AudioRecorder();
       await recorder.start();
       recorderRef.current = recorder;
       setIsRecording(true);
       setRecordingSeconds(0);
 
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao iniciar gravação de áudio:', err);
-      alert('Não foi possível acessar o microfone. Verifique as permissões do navegador.');
+      setErrorMessage(err.message || 'Não foi possível acessar o microfone. Verifique as permissões do navegador.');
+      setIsRecording(false);
+      setRecordingSeconds(0);
     }
   };
 
-  const handleStopRecording = async () => {
+  // Cancelar gravação e descartar áudio (volta ao normal sem transcrever nem enviar)
+  const handleCancelRecording = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (recorderRef.current) {
+      recorderRef.current.cancel();
+      recorderRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+  };
+
+  // Finalizar gravação de áudio e transcrever para dentro do textarea do mesmo composer (NÃO envia à IA ainda)
+  const handleStopAndTranscribeRecording = async () => {
     if (!recorderRef.current) return;
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    const recorder = recorderRef.current;
+    recorderRef.current = null;
 
     setIsRecording(false);
-    setIsProcessing(true);
+    setIsTranscribing(true);
     setProcessingStatus('Transcrevendo áudio com IA...');
+    setErrorMessage(null);
 
     try {
-      const audioBlob = await recorderRef.current.stop();
-      const transcription = await transcribeAudioWithGemini(audioBlob, geminiApiKey);
-      setTextInput((prev) => (prev ? `${prev}\n\n[Áudio]: ${transcription}` : transcription));
-    } catch (err) {
-      console.error('Erro ao parar gravação de áudio:', err);
+      const audioBlob = await recorder.stop();
+      const spokenText = recorder.getSpokenText();
+
+      const result = await transcribeAudioMultiProvider({
+        audioBlob,
+        groqApiKey,
+        geminiApiKey,
+        preferredProvider: preferredAIProvider,
+        spokenTextFallback: spokenText,
+      });
+
+      const transcription = result.text;
+
+      // Coloca o texto transcrito diretamente dentro do textarea do mesmo composer
+      setTextInput((prev) => {
+        const trimmed = prev.trim();
+        if (!trimmed) return transcription;
+        return `${trimmed}\n\n${transcription}`;
+      });
+    } catch (err: any) {
+      console.error('Erro ao transcrever áudio:', err);
+      setErrorMessage(err.message || 'Não foi possível transcrever o áudio. Tente falar novamente ou digite as informações.');
     } finally {
-      setIsProcessing(false);
+      setIsTranscribing(false);
       setProcessingStatus('');
+      setRecordingSeconds(0);
     }
+  };
+
+  const handleModalClose = () => {
+    handleCancelRecording();
+    setMode('ai');
+    setStep('composer');
+    onClose();
   };
 
   // ── Upload e Processamento de Imagens ──
@@ -172,31 +275,89 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     );
   };
 
-  // ── Extração Inteligente com IA ──
-  const handleAnalyzeWithAI = async () => {
+  // Atualização reativa de campo no review com recálculo imediato de obrigatoriedade
+  const handleUpdateReviewField = (field: keyof ExtractedPropertyData, value: any) => {
+    setReviewData((prev) => {
+      const updated = { ...prev, [field]: value };
+      const validation = validatePropertyExtraction(updated);
+      updated.missing_mandatory = validation.missing_mandatory;
+      updated.missing_desirable = validation.missing_desirable;
+      return updated;
+    });
+  };
+
+  // ── Extração Inteligente com IA (Acionado SOMENTE no clique do botão "Enviar") ──
+  const handleSendToAI = async () => {
     if (!textInput.trim() && images.length === 0) {
-      alert('Digite ou grave uma descrição do imóvel antes de analisar.');
+      setErrorMessage('Escreva os dados do imóvel ou grave um áudio para prosseguir.');
       return;
     }
 
     setIsProcessing(true);
     setProcessingStatus('Extraindo características, valores e dados com IA...');
+    setErrorMessage(null);
 
     try {
-      const extracted = await extractPropertyWithGemini(textInput, geminiApiKey);
-      setReviewData(extracted);
+      const result = await extractPropertyMultiProvider({
+        text: textInput,
+        groqApiKey,
+        geminiApiKey,
+        preferredProvider: preferredAIProvider,
+      });
+
+      setReviewData((prev) => {
+        // Verifica se já existiam dados confirmados anteriormente (atualização incremental)
+        const hasExistingData = Boolean(prev.type || prev.neighborhood || prev.price || prev.area_m2);
+        if (!hasExistingData) {
+          return result.data;
+        }
+
+        // Merge incremental: preserva o que já tínhamos confirmado e só substitui se a nova extração trouxe valor explícito não-nulo
+        const merged: ExtractedPropertyData = { ...prev };
+        (Object.keys(result.data) as (keyof ExtractedPropertyData)[]).forEach((key) => {
+          const val = result.data[key];
+          if (val !== null && val !== undefined && val !== '') {
+            (merged as any)[key] = val;
+          }
+        });
+
+        // Recalcula validações para os dados mesclados
+        const validation = validatePropertyExtraction(merged);
+        merged.missing_mandatory = validation.missing_mandatory;
+        merged.missing_desirable = validation.missing_desirable;
+        return merged;
+      });
+
       setStep('review');
     } catch (err) {
       console.error('Erro na extração de IA:', err);
-      alert('Houve um erro ao processar o texto com IA. Tente novamente.');
+      setErrorMessage('Houve um erro ao processar as informações com IA. Suas anotações e fotos foram preservadas para tentar novamente.');
     } finally {
       setIsProcessing(false);
       setProcessingStatus('');
     }
   };
 
+  // Envio pelo teclado com Enter no desktop (Shift+Enter para quebra de linha)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (typeof window !== 'undefined' && window.innerWidth > 640 && (textInput.trim() || images.length > 0) && !isProcessing && !isRecording && !isTranscribing) {
+        e.preventDefault();
+        handleSendToAI();
+      }
+    }
+  };
+
   // ── Finalização e Salvar no Estoque ──
   const handleConfirmSave = () => {
+    const validation = validateRequiredPropertyFields(reviewData);
+    if (!validation.valid) {
+      setErrorMessage(
+        `Preencha os campos obrigatórios antes de salvar: ${validation.missingLabels.join(', ')}.`
+      );
+      return;
+    }
+
     const newPropertyId = `prop-${Date.now()}`;
     const photos = images.map((img, idx) => ({
       id: `photo-${idx}`,
@@ -218,8 +379,34 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     }
 
     const newProp: Property = {
-      ...reviewData,
       id: newPropertyId,
+      purpose: reviewData.purpose || 'Venda',
+      type: reviewData.type || 'Apartamento',
+      neighborhood: reviewData.neighborhood || '',
+      address: reviewData.address || undefined,
+      number: reviewData.number || undefined,
+      complement: reviewData.complement || undefined,
+      condominium_name: reviewData.condominium_name || undefined,
+      bedrooms: reviewData.bedrooms ?? 0,
+      suites: reviewData.suites ?? 0,
+      bathrooms: reviewData.bathrooms ?? 0,
+      parking_spaces: reviewData.parking_spaces ?? 0,
+      area_m2: reviewData.area_m2 ?? 0,
+      price: reviewData.price ?? 0,
+      condo_fee: reviewData.condo_included ? 0 : (reviewData.condo_fee ?? 0),
+      iptu: reviewData.iptu ?? undefined,
+      floor: reviewData.floor ?? null,
+      position: reviewData.position ?? undefined,
+      furnished: Boolean(reviewData.furnished),
+      condition: reviewData.condition ?? undefined,
+      building_features: reviewData.building_features || [],
+      apartment_features: reviewData.apartment_features || [],
+      source_type: reviewData.source_type || 'Próprio',
+      owner_name: reviewData.owner_name || undefined,
+      owner_phone: reviewData.owner_phone || undefined,
+      partner_name: reviewData.partner_name || undefined,
+      partner_phone: reviewData.partner_phone || undefined,
+      notes: reviewData.notes || '',
       status: 'Ativo',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -241,6 +428,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     setStep('composer');
     setTextInput('');
     setImages([]);
+    setReviewData(emptyReviewData);
   };
 
   const formatSeconds = (sec: number) => {
@@ -249,471 +437,975 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const requiredValidation = validateRequiredPropertyFields(reviewData);
+  const missingMandatoryKeys: MandatoryPropertyFieldKey[] = requiredValidation.missing;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in">
       <div
-        className="relative w-full max-w-4xl max-h-[92vh] glass-modal rounded-3xl flex flex-col overflow-hidden border border-white/15"
+        className={`relative w-full glass-modal rounded-3xl flex flex-col overflow-hidden border border-white/15 transition-all duration-300 ease-in-out ${
+          mode === 'manual'
+            ? 'max-w-5xl h-[750px] max-h-[90vh]'
+            : 'max-w-3xl h-[580px] max-h-[92vh]'
+        }`}
         style={{
           boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 50px -10px rgba(0, 229, 255, 0.15)',
         }}
       >
-        {/* ── Topo do Modal ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-950/40">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-2xl flex items-center justify-center text-cyan-400"
-              style={{
-                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.15) 0%, rgba(14, 165, 233, 0.05) 100%)',
-                border: '1px solid rgba(0, 229, 255, 0.3)',
-              }}
-            >
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                Captar Imóvel
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-300 font-semibold border border-cyan-400/30">
-                  Composer IA
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                {step === 'composer'
-                  ? 'Envie fotos, grave um áudio ou cole os dados brutos para extração'
-                  : 'Revise e ajuste as informações extraídas antes de cadastrar no estoque'}
-              </p>
-            </div>
+        {/* ── HEADER DO MODAL ── */}
+        <div className="px-6 pt-5 pb-3 flex items-start justify-between flex-shrink-0">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              Adicionar imóvel
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Adicione um imóvel do jeito que preferir.
+            </p>
           </div>
 
           <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            type="button"
+            onClick={handleModalClose}
+            className="p-2 -mr-2 -mt-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            title="Fechar"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* ── Corpo do Modal ── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {step === 'composer' ? (
-            <>
-              {/* 1. Galeria de Fotos Anexadas */}
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
-                    Fotos do Imóvel ({images.length})
-                  </label>
-                  <span className="text-[11px] text-slate-400">Suporta iPhone HEIC, JPEG e PNG</span>
+        {/* ── SELETOR DE MODO: SEGMENTED CONTROL COMPACTO ── */}
+        <div className="px-6 pb-3 flex-shrink-0 border-b border-white/10">
+          <div className="p-1 bg-slate-900/80 border border-white/10 rounded-2xl inline-flex items-center gap-1 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setMode('ai')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-1.5 rounded-xl text-xs transition-all duration-200 cursor-pointer ${
+                mode === 'ai'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+              }`}
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${mode === 'ai' ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <span>Com IA</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                handleCancelRecording();
+                setMode('manual');
+              }}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-1.5 rounded-xl text-xs transition-all duration-200 cursor-pointer ${
+                mode === 'manual'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+              }`}
+            >
+              <PenSquare className={`w-3.5 h-3.5 ${mode === 'manual' ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <span>Manual</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── CONTEÚDO: MODO IA OU MODO MANUAL ── */}
+        {mode === 'ai' ? (
+          step === 'composer' ? (
+          /* ── ESPAÇO PRINCIPAL COM UM ÚNICO AI COMPOSER ── */
+          <div className="flex-1 flex flex-col justify-end p-4 sm:p-6 relative overflow-hidden">
+            {/* Input de arquivos oculto (ativado pelo botão [+] do composer) */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,.heic,.heif"
+              onChange={handleFilesSelected}
+              className="hidden"
+            />
+
+            {/* Mensagem de Erro / Alerta com botão de fechar */}
+            {errorMessage && (
+              <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-3 text-amber-200 text-xs animate-fade-in flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>{errorMessage}</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setErrorMessage(null)}
+                  className="p-1 text-amber-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
-                <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-none">
-                  {/* Botão de Adicionar Fotos */}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-shrink-0 w-28 h-28 rounded-2xl border-2 border-dashed border-cyan-500/30 hover:border-cyan-400/60 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all flex flex-col items-center justify-center gap-2 text-cyan-400 group cursor-pointer"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <ImageIcon className="w-4 h-4" />
-                    </div>
-                    <span className="text-[11px] font-semibold">Adicionar</span>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.heic,.heif"
-                    onChange={handleFilesSelected}
-                    className="hidden"
-                  />
+            {/* ── UM ÚNICO AI COMPOSER: Altura travada em 112px em todos os estados ── */}
+            <div
+              className={`w-full h-[112px] rounded-2xl border flex flex-col overflow-hidden transition-all duration-200 ${
+                isRecording
+                  ? 'bg-white/[0.04] border-cyan-400/40 shadow-[0_0_20px_rgba(0,229,255,0.08)]'
+                  : isTranscribing
+                  ? 'bg-white/[0.04] border-cyan-400/30'
+                  : isProcessing
+                  ? 'bg-white/[0.04] border-cyan-400/40'
+                  : 'bg-white/[0.03] border-white/12 focus-within:border-cyan-400/50 focus-within:bg-white/[0.05]'
+              }`}
+            >
+              {/* CONTEÚDO SUPERIOR DO COMPOSER: Altura 70px */}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+                {isRecording ? (
+                  /* Estado RECORDING: 'Ouvindo...' em ciano suave com tipografia premium */
+                  <div className="flex-1 px-4 py-3 select-none animate-fade-in flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(0,229,255,0.7)]" />
+                    <span className="text-cyan-300/90 italic text-sm font-normal tracking-wide">
+                      Ouvindo...
+                    </span>
+                  </div>
+                ) : isTranscribing ? (
+                  /* Estado TRANSCRIBING: processando áudio para colocar no textarea */
+                  <div className="flex-1 px-4 py-3 select-none animate-fade-in flex items-center gap-2.5 text-cyan-300">
+                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                    <span className="text-sm italic font-normal text-slate-300">Transcrevendo áudio com IA...</span>
+                  </div>
+                ) : (
+                  /* Estado NORMAL / DIGITAÇÃO: Anexos de fotos + Textarea */
+                  <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+                    {/* Overlay de processamento de envio à IA */}
+                    {isProcessing && (
+                      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex items-center justify-center gap-2 text-cyan-300 text-xs font-medium animate-fade-in">
+                        <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                        <span>{processingStatus || 'Analisando com IA...'}</span>
+                      </div>
+                    )}
 
-                  {/* Miniaturas */}
-                  {images.map((img, idx) => (
-                    <div
-                      key={idx}
-                      className="relative flex-shrink-0 w-28 h-28 rounded-2xl overflow-hidden group border border-white/10"
-                    >
-                      <img
-                        src={img.previewUrl}
-                        alt={`Upload ${idx}`}
-                        className="w-full h-full object-cover"
-                      />
-
-                      {/* Badge de Capa */}
-                      {img.isCover && (
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-cyan-500 text-[9px] font-bold text-slate-950 flex items-center gap-1 shadow-md">
-                          <Star className="w-2.5 h-2.5 fill-current" /> Capa
-                        </span>
-                      )}
-
-                      {/* Ações ao passar o mouse */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        {!img.isCover && (
-                          <button
-                            onClick={() => handleSetCover(idx)}
-                            title="Definir como capa"
-                            className="p-1.5 rounded-lg bg-white/20 hover:bg-cyan-500 hover:text-slate-950 text-white transition-colors"
+                    {/* Anexos de Fotos DENTRO do Composer */}
+                    {images.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 pt-2 pb-1 overflow-x-auto scrollbar-none flex-shrink-0">
+                        {images.map((img, idx) => (
+                          <div
+                            key={idx}
+                            className="relative flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden group border border-white/15 bg-slate-900/60 shadow-md"
                           >
-                            <Star className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                            <img
+                              src={img.previewUrl}
+                              alt={`Foto ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            {img.isCover && (
+                              <span className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded bg-cyan-500 text-[7px] font-bold text-slate-950 flex items-center gap-0.5 shadow">
+                                <Star className="w-1.5 h-1.5 fill-current" />
+                              </span>
+                            )}
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                              {!img.isCover && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetCover(idx)}
+                                  title="Definir como capa"
+                                  className="p-0.5 rounded bg-white/20 hover:bg-cyan-500 hover:text-slate-950 text-white transition-colors cursor-pointer"
+                                >
+                                  <Star className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(idx)}
+                                title="Remover foto"
+                                className="p-0.5 rounded bg-white/20 hover:bg-slate-700 text-white transition-colors cursor-pointer"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                         <button
-                          onClick={() => handleRemoveImage(idx)}
-                          title="Remover foto"
-                          className="p-1.5 rounded-lg bg-white/20 hover:bg-rose-500 text-white transition-colors"
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          title="Adicionar mais fotos"
+                          className="flex-shrink-0 w-10 h-10 rounded-lg border border-dashed border-white/20 hover:border-cyan-400/50 hover:bg-cyan-500/5 flex items-center justify-center text-slate-400 hover:text-cyan-300 transition-all cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    )}
 
-              {/* 2. Área de Texto Livre / Anotações */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between mb-2.5">
-                  <span>Descrição / Mensagem do Proprietário ou Parceiro</span>
-                  <span className="text-[11px] text-slate-500 font-normal">Cole textos, áudios ou notas</span>
-                </label>
-
-                <textarea
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Exemplo: Apartamento no Bessa com 2 quartos sendo 1 suíte, 64m², varanda gourmet com vista mar. Prédio com piscina e elevador. Valor R$ 495.000, condomínio R$ 450. Proprietário Carlos telefone 83 99999-0000..."
-                  rows={6}
-                  className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.04] border border-white/10 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* 3. Barra de Gravação de Áudio */}
-              <div
-                className="p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all"
-                style={{
-                  background: isRecording
-                    ? 'linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, rgba(225, 29, 72, 0.04) 100%)'
-                    : 'rgba(255, 255, 255, 0.02)',
-                  borderColor: isRecording ? 'rgba(244, 63, 94, 0.4)' : 'rgba(255, 255, 255, 0.08)',
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={isRecording ? handleStopRecording : handleStartRecording}
-                    className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-white transition-all shadow-lg ${
-                      isRecording
-                        ? 'bg-rose-500 hover:bg-rose-600 animate-pulse'
-                        : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500'
-                    }`}
-                  >
-                    {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-5 h-5" />}
-                  </button>
-
-                  <div>
-                    <p className="text-xs font-bold text-white">
-                      {isRecording ? 'Gravando áudio...' : 'Grave um áudio narrando os detalhes'}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      {isRecording
-                        ? 'Fale livremente sobre o imóvel. Clique no quadrado para parar e transcrever.'
-                        : 'A IA transcreve e extrai os campos automaticamente.'}
-                    </p>
-                  </div>
-                </div>
-
-                {isRecording && (
-                  <div className="flex items-center gap-3 pr-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                    <span className="font-mono text-sm font-bold text-rose-400">
-                      {formatSeconds(recordingSeconds)}
-                    </span>
+                    {/* Campo de Texto Principal */}
+                    <textarea
+                      ref={textareaRef}
+                      value={textInput}
+                      onChange={(e) => {
+                        setTextInput(e.target.value);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      disabled={isProcessing}
+                      placeholder={
+                        Boolean(reviewData.neighborhood || reviewData.price || reviewData.type)
+                          ? "Fale ou digite informações complementares (ex: 'Valor de venda 420 mil')..."
+                          : "Escreva os dados do imóvel..."
+                      }
+                      className="w-full flex-1 px-3 py-2 bg-transparent text-white placeholder-slate-500 text-sm focus:outline-none resize-none leading-relaxed overflow-y-auto disabled:opacity-50"
+                    />
                   </div>
                 )}
               </div>
-            </>
-          ) : (
-            /* ── Step 2: Conferência e Edição dos Campos Extraídos ── */
-            <div className="space-y-6">
-              <div className="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 flex items-center gap-3">
-                <Check className="w-5 h-5 text-cyan-400 flex-shrink-0" />
-                <p className="text-xs text-cyan-200">
-                  Os dados foram analisados pela IA. Confira e ajuste qualquer informação antes de adicionar ao estoque.
-                </p>
-              </div>
 
-              {/* Grid de Informações Básicas */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Tipo de Imóvel
-                  </label>
-                  <select
-                    value={reviewData.type}
-                    onChange={(e) => setReviewData({ ...reviewData, type: e.target.value as PropertyType })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
-                  >
-                    <option value="Apartamento">Apartamento</option>
-                    <option value="Flat">Flat</option>
-                    <option value="Studio">Studio</option>
-                    <option value="Cobertura">Cobertura</option>
-                    <option value="Casa">Casa</option>
-                    <option value="Terreno">Terreno</option>
-                    <option value="Outro">Outro</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    value={reviewData.neighborhood}
-                    onChange={(e) => setReviewData({ ...reviewData, neighborhood: e.target.value })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Preço de Venda (R$)
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.price}
-                    onChange={(e) => setReviewData({ ...reviewData, price: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-cyan-400 font-bold text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Condomínio (R$)
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.condo_fee || 0}
-                    onChange={(e) => setReviewData({ ...reviewData, condo_fee: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    IPTU Anual (R$)
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.iptu || 0}
-                    onChange={(e) => setReviewData({ ...reviewData, iptu: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Área Privativa (m²)
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.area_m2}
-                    onChange={(e) => setReviewData({ ...reviewData, area_m2: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
-                  />
-                </div>
-              </div>
-
-              {/* Cômodos */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Quartos
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.bedrooms}
-                    onChange={(e) => setReviewData({ ...reviewData, bedrooms: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Suítes
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.suites}
-                    onChange={(e) => setReviewData({ ...reviewData, suites: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Banheiros
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.bathrooms}
-                    onChange={(e) => setReviewData({ ...reviewData, bathrooms: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Vagas
-                  </label>
-                  <input
-                    type="number"
-                    value={reviewData.parking_spaces}
-                    onChange={(e) => setReviewData({ ...reviewData, parking_spaces: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Origem da Captação: Próprio ou Parceiro */}
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-                  Origem do Imóvel
-                </label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setReviewData({ ...reviewData, source_type: 'Próprio' })}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      reviewData.source_type === 'Próprio'
-                        ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
-                        : 'bg-white/5 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Captação Própria
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReviewData({ ...reviewData, source_type: 'Parceiro' })}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      reviewData.source_type === 'Parceiro'
-                        ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20'
-                        : 'bg-white/5 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Parceria com Corretor
-                  </button>
-                </div>
-
-                {reviewData.source_type === 'Próprio' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Nome do Proprietário</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Roberto Silva"
-                        value={reviewData.owner_name || ''}
-                        onChange={(e) => setReviewData({ ...reviewData, owner_name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                      />
+              {/* BARRA DE CONTROLES INFERIOR DO COMPOSER: Altura travada em 42px */}
+              <div className="h-[42px] px-3 sm:px-3.5 flex items-center justify-between gap-2 border-t border-white/5 flex-shrink-0">
+                {isRecording ? (
+                  /* Controles da Gravação: [ + ] na esquerda | [ dots ciano ] [ ✕ ] [ ✓ ] na direita */
+                  <>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 bg-white/[0.02] border border-white/5 opacity-40 cursor-not-allowed"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Telefone do Proprietário</label>
-                      <input
-                        type="text"
-                        placeholder="(83) 99999-0000"
-                        value={reviewData.owner_phone || ''}
-                        onChange={(e) => setReviewData({ ...reviewData, owner_phone: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                      />
+
+                    <div className="flex items-center gap-2">
+                      {/* Dotted Waveform Ciano */}
+                      <div className="flex items-center gap-1 sm:gap-1.5 mr-1 sm:mr-2 select-none" aria-hidden="true">
+                        {[...Array(15)].map((_, i) => (
+                          <span
+                            key={i}
+                            className="w-1 h-1 rounded-full bg-cyan-400/80 shadow-[0_0_6px_rgba(0,229,255,0.45)] animate-pulse"
+                            style={{
+                              animationDelay: `${(i % 5) * 0.16}s`,
+                              animationDuration: '1.1s',
+                            }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Botão Cancelar [ ✕ ] */}
+                      <button
+                        type="button"
+                        onClick={handleCancelRecording}
+                        title="Cancelar gravação"
+                        aria-label="Cancelar gravação"
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+
+                      {/* Botão Finalizar [ ✓ ] - Gradiente Ciano com brilho característico */}
+                      <button
+                        type="button"
+                        onClick={handleStopAndTranscribeRecording}
+                        title="Finalizar gravação e transcrever"
+                        aria-label="Finalizar gravação"
+                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 hover:from-cyan-400 hover:to-sky-400 text-slate-950 font-bold flex items-center justify-center transition-all cursor-pointer shadow-md shadow-cyan-500/25 active:scale-95"
+                      >
+                        <Check className="w-4 h-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </>
+                ) : isTranscribing ? (
+                  /* Durante a transcrição */
+                  <div className="flex items-center justify-between w-full h-8 px-1">
+                    <button
+                      type="button"
+                      disabled
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 bg-transparent opacity-40 cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    <div className="flex items-center gap-2 text-xs text-cyan-300 font-medium">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                      <span>Transcrevendo áudio...</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Nome do Parceiro</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Corretor Marcos Santos"
-                        value={reviewData.partner_name || ''}
-                        onChange={(e) => setReviewData({ ...reviewData, partner_name: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                      />
+                  /* Controles normais: [ + ] [ 🎙 ] ... [ ➤ Enviar ] */
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isProcessing}
+                        title="Anexar fotos do imóvel"
+                        aria-label="Anexar fotos"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group disabled:opacity-40"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-slate-300 group-hover:text-cyan-400 transition-colors" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleStartRecording}
+                        disabled={isProcessing}
+                        title="Gravar áudio narrando os detalhes"
+                        aria-label="Gravar áudio"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group disabled:opacity-40"
+                      >
+                        <Mic className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-[11px] text-slate-400 block mb-1">Telefone do Parceiro</label>
-                      <input
-                        type="text"
-                        placeholder="(83) 98888-1111"
-                        value={reviewData.partner_phone || ''}
-                        onChange={(e) => setReviewData({ ...reviewData, partner_phone: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
-                      />
-                    </div>
-                  </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSendToAI}
+                      disabled={isProcessing || (!textInput.trim() && images.length === 0)}
+                      title="Enviar para análise e extração com IA"
+                      aria-label="Enviar dados do imóvel"
+                      className="h-7 px-3.5 rounded-lg text-xs font-bold text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        background: 'linear-gradient(135deg, #00E5FF 0%, #38BDF8 100%)',
+                        boxShadow:
+                          !textInput.trim() && images.length === 0
+                            ? 'none'
+                            : '0 0 14px rgba(0, 229, 255, 0.4)',
+                      }}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Analisando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Enviar</span>
+                          <Send className="w-3 h-3" />
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* ── ETAPA DE REVISÃO (STEP REVIEW) ── */
+          <>
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
+              {/* Indicador Geral de Campos Obrigatórios (Topo) */}
+              {!requiredValidation.valid ? (
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2.5">
+                  <div className="flex items-center gap-2 text-rose-400 text-xs font-bold">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    <span>
+                      Faltam {missingMandatoryKeys.length}{' '}
+                      {missingMandatoryKeys.length === 1
+                        ? 'informação obrigatória'
+                        : 'informações obrigatórias'}{' '}
+                      para adicionar este imóvel.
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-200/90 leading-relaxed">
+                    Para garantir a confiabilidade dos dados no estoque, preencha os 5 campos essenciais destacados abaixo ou retorne ao composer para falar/digitar:
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {missingMandatoryKeys.map((key: MandatoryPropertyFieldKey) => (
+                      <span
+                        key={key}
+                        className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                        {MANDATORY_FIELD_LABELS[key]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-emerald-300">
+                      Todas as informações obrigatórias foram preenchidas!
+                    </p>
+                    <p className="text-[11px] text-emerald-200/80">
+                      O imóvel atende a todos os requisitos do estoque e está pronto para ser salvo.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-        {/* ── Rodapé do Modal ── */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-slate-950/60">
-          {step === 'composer' ? (
-            <>
-              <span className="text-xs text-slate-400">
-                {isProcessing ? processingStatus : 'Pronto para extrair com IA'}
-              </span>
+              {/* Aviso de campos ambíguos na fala */}
+              {reviewData.ambiguous_fields && reviewData.ambiguous_fields.length > 0 && (
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-400/20 flex items-center gap-2.5 text-xs text-purple-200">
+                  <HelpCircle className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span>
+                    Campos com fala ambígua ou incerta:{' '}
+                    <strong className="text-white">{reviewData.ambiguous_fields.join(', ')}</strong>. Por favor confira os valores.
+                  </span>
+                </div>
+              )}
 
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                >
-                  Cancelar
-                </button>
+              {/* Fotos Anexadas no Composer (exibidas na revisão para conferência) */}
+              {images.length > 0 && (
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                    Fotos Anexadas ({images.length})
+                  </label>
+                  <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none">
+                    {images.map((img, idx) => (
+                      <div
+                        key={idx}
+                        className="relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-white/15 shadow-md"
+                      >
+                        <img
+                          src={img.previewUrl}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {img.isCover && (
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-cyan-500 text-[8px] font-bold text-slate-950 flex items-center gap-0.5 shadow">
+                            <Star className="w-2 h-2 fill-current" /> Capa
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                <button
-                  onClick={handleAnalyzeWithAI}
-                  disabled={isProcessing}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 flex items-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
-                  style={{
-                    background: 'linear-gradient(135deg, #00E5FF 0%, #38BDF8 100%)',
-                    boxShadow: '0 0 20px rgba(0, 229, 255, 0.4)',
-                  }}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processando...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Analisar e Extrair com IA
-                    </>
-                  )}
-                </button>
+              {/* ── SEÇÃO 1: INFORMAÇÕES ESSENCIAIS (Obrigatórias) ── */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,229,255,0.8)]" />
+                      Informações Essenciais
+                      <span className="text-[11px] text-rose-400 font-normal lowercase">(obrigatórias)</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Os 5 dados fundamentais exigidos para salvar no estoque.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* 1. Tipo de Imóvel * */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Tipo do Imóvel <span className="text-rose-400">*</span></span>
+                      {!requiredValidation.errors.type ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Preenchido
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Obrigatório
+                        </span>
+                      )}
+                    </label>
+                    <select
+                      value={reviewData.type || ''}
+                      onChange={(e) => handleUpdateReviewField('type', (e.target.value || null) as PropertyType)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
+                        requiredValidation.errors.type
+                          ? 'border-2 border-rose-500/70 text-rose-200 bg-rose-500/5 focus:border-rose-400'
+                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                      }`}
+                    >
+                      <option value="" disabled>Selecione o tipo do imóvel...</option>
+                      <option value="Apartamento">Apartamento</option>
+                      <option value="Casa">Casa</option>
+                      <option value="Flat">Flat</option>
+                      <option value="Studio">Studio</option>
+                      <option value="Cobertura">Cobertura</option>
+                      <option value="Terreno">Terreno</option>
+                      <option value="Comercial">Comercial</option>
+                      <option value="Outro">Outro</option>
+                    </select>
+                  </div>
+
+                  {/* 2. Bairro * */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Bairro <span className="text-rose-400">*</span></span>
+                      {!requiredValidation.errors.neighborhood ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Preenchido
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Obrigatório
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Bessa, Manaíra, Cabo Branco..."
+                      value={reviewData.neighborhood || ''}
+                      onChange={(e) => handleUpdateReviewField('neighborhood', e.target.value || null)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
+                        requiredValidation.errors.neighborhood
+                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
+                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                      }`}
+                    />
+                  </div>
+
+                  {/* 3. Valor do Imóvel * */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>
+                        {reviewData.purpose === 'Locação' ? 'Valor do Aluguel (R$)' : 'Valor do Imóvel (R$)'}{' '}
+                        <span className="text-rose-400">*</span>
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {reviewData.is_approximate_price && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                            ~ Aproximado
+                          </span>
+                        )}
+                        {!requiredValidation.errors.price ? (
+                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Preenchido
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Obrigatório
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Ex: 450000"
+                      value={reviewData.price ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('price', e.target.value !== '' ? parseFloat(e.target.value) : null)
+                      }
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold focus:outline-none transition-colors ${
+                        requiredValidation.errors.price
+                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
+                          : 'border border-white/10 text-cyan-400 bg-slate-900/80 focus:border-cyan-400'
+                      }`}
+                    />
+                  </div>
+
+                  {/* 4. Quartos * (aceita 0, ex: studio/comercial) */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Quartos <span className="text-rose-400">*</span></span>
+                      {!requiredValidation.errors.bedrooms ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Preenchido
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Obrigatório
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Ex: 2 (ou 0 para studio/sala)"
+                      value={reviewData.bedrooms ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField(
+                          'bedrooms',
+                          e.target.value !== '' ? parseInt(e.target.value, 10) : null
+                        )
+                      }
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
+                        requiredValidation.errors.bedrooms
+                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
+                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                      }`}
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Informe 0 para salas comerciais ou studios.
+                    </p>
+                  </div>
+
+                  {/* 5. Área Privativa (m²) * */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Área (m²) <span className="text-rose-400">*</span></span>
+                      <div className="flex items-center gap-1.5">
+                        {reviewData.is_approximate_area && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                            ~ Aproximado
+                          </span>
+                        )}
+                        {!requiredValidation.errors.area_m2 ? (
+                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Preenchido
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Obrigatório
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Ex: 65"
+                      value={reviewData.area_m2 ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField(
+                          'area_m2',
+                          e.target.value !== '' ? parseFloat(e.target.value) : null
+                        )
+                      }
+                      className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
+                        requiredValidation.errors.area_m2
+                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
+                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                      }`}
+                    />
+                  </div>
+                </div>
               </div>
-            </>
-          ) : (
-            <>
+
+              {/* ── SEÇÃO 2: INFORMAÇÕES ADICIONAIS (Opcionais) ── */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-500" />
+                      Informações Adicionais
+                      <span className="text-[11px] text-slate-400 font-normal lowercase">(opcionais)</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Campos complementares que enriquecem o anúncio do imóvel.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Finalidade, Condomínio e IPTU */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Finalidade (Venda / Locação) */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                      Finalidade
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateReviewField('purpose', 'Venda')}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          reviewData.purpose === 'Venda' || !reviewData.purpose
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                            : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Venda
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateReviewField('purpose', 'Locação')}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          reviewData.purpose === 'Locação'
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                            : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Locação
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Condomínio e Condomínio Incluso */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Condomínio (R$)</span>
+                      {reviewData.condo_included ? (
+                        <span className="text-[10px] text-cyan-300 font-semibold">Incluso</span>
+                      ) : reviewData.condo_fee ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold">
+                          R$ {reviewData.condo_fee}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500">Opcional</span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        disabled={reviewData.condo_included}
+                        placeholder={reviewData.condo_included ? 'Incluso no valor' : 'Opcional'}
+                        value={reviewData.condo_included ? '' : (reviewData.condo_fee ?? '')}
+                        onChange={(e) =>
+                          handleUpdateReviewField(
+                            'condo_fee',
+                            e.target.value !== '' ? parseFloat(e.target.value) : null
+                          )
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 disabled:opacity-50 disabled:bg-slate-950"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextIncluded = !reviewData.condo_included;
+                          handleUpdateReviewField('condo_included', nextIncluded);
+                          if (nextIncluded) handleUpdateReviewField('condo_fee', null);
+                        }}
+                        className={`px-3 py-2.5 rounded-xl text-[11px] font-bold border whitespace-nowrap transition-colors cursor-pointer ${
+                          reviewData.condo_included
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
+                            : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                        title="Marcar condomínio incluso"
+                      >
+                        Incluso
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* IPTU Anual (R$) */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>IPTU Anual (R$)</span>
+                      <span className="text-[10px] text-slate-500">Opcional</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Opcional"
+                      value={reviewData.iptu ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('iptu', e.target.value !== '' ? parseFloat(e.target.value) : null)
+                      }
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Cômodos Complementares: Suítes, Banheiros, Vagas */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Suítes <span className="text-slate-500 font-normal">(Opcional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Não informado"
+                      value={reviewData.suites ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('suites', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Banheiros <span className="text-slate-500 font-normal">(Opcional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Não informado"
+                      value={reviewData.bathrooms ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('bathrooms', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Vagas <span className="text-slate-500 font-normal">(Opcional)</span>
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Não informado"
+                      value={reviewData.parking_spaces ?? ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('parking_spaces', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Posição Solar, Condição e Mobiliado */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Posição Solar
+                    </label>
+                    <select
+                      value={reviewData.position || ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('position', (e.target.value || null) as PropertyPosition)
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Não informada</option>
+                      <option value="Nascente">Nascente</option>
+                      <option value="Poente">Poente</option>
+                      <option value="Norte">Norte</option>
+                      <option value="Sul">Sul</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Condição
+                    </label>
+                    <select
+                      value={reviewData.condition || ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField('condition', (e.target.value || null) as PropertyCondition)
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Não informada</option>
+                      <option value="Novo">Novo</option>
+                      <option value="Usado">Usado</option>
+                      <option value="Reformado">Reformado</option>
+                      <option value="Em construção">Em construção</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Mobiliado
+                    </label>
+                    <select
+                      value={reviewData.furnished === true ? 'true' : reviewData.furnished === false ? 'false' : ''}
+                      onChange={(e) =>
+                        handleUpdateReviewField(
+                          'furnished',
+                          e.target.value === 'true' ? true : e.target.value === 'false' ? false : null
+                        )
+                      }
+                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Não informado</option>
+                      <option value="true">Sim (Mobiliado)</option>
+                      <option value="false">Não (Sem mobília)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Origem do Imóvel & Contatos */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/8 space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                    Origem do Imóvel
+                  </label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateReviewField('source_type', 'Próprio')}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        reviewData.source_type === 'Próprio' || !reviewData.source_type
+                          ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-bold'
+                          : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Captação Própria
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateReviewField('source_type', 'Parceiro')}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        reviewData.source_type === 'Parceiro'
+                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20 font-bold'
+                          : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Parceria com Corretor
+                    </button>
+                  </div>
+
+                  {reviewData.source_type === 'Parceiro' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Nome do Parceiro</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Corretor Marcos Santos"
+                          value={reviewData.partner_name || ''}
+                          onChange={(e) => handleUpdateReviewField('partner_name', e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Telefone do Parceiro</label>
+                        <input
+                          type="text"
+                          placeholder="(83) 98888-1111"
+                          value={reviewData.partner_phone || ''}
+                          onChange={(e) => handleUpdateReviewField('partner_phone', e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Nome do Proprietário</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Roberto Silva"
+                          value={reviewData.owner_name || ''}
+                          onChange={(e) => handleUpdateReviewField('owner_name', e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Telefone do Proprietário</label>
+                        <input
+                          type="text"
+                          placeholder="(83) 99999-0000"
+                          value={reviewData.owner_phone || ''}
+                          onChange={(e) => handleUpdateReviewField('owner_phone', e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── RODAPÉ DA ETAPA DE REVISÃO: Altura fixa estrutural de 68px ── */}
+            <div className="h-[68px] flex items-center justify-between px-6 border-t border-white/10 bg-slate-950/60 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setStep('composer')}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors flex items-center gap-2 cursor-pointer border border-cyan-500/20"
+                title="Voltar ao composer para adicionar mais detalhes por voz ou texto"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Voltar ao Composer
+                Complementar com IA / Áudio
               </button>
 
               <button
+                type="button"
                 onClick={handleConfirmSave}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold text-slate-950 flex items-center gap-2 transition-all cursor-pointer shadow-lg"
+                disabled={!requiredValidation.valid}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold text-slate-950 flex items-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                 style={{
-                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)',
+                  background:
+                    !requiredValidation.valid
+                      ? '#64748B'
+                      : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                  boxShadow:
+                    !requiredValidation.valid
+                      ? 'none'
+                      : '0 0 20px rgba(16, 185, 129, 0.4)',
                 }}
               >
-                <Check className="w-4 h-4" />
-                Salvar no Estoque
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>
+                  {!requiredValidation.valid
+                    ? `Preencha ${missingMandatoryKeys.length} obrigatório(s)`
+                    : 'Salvar no Estoque'}
+                </span>
               </button>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )) : (
+          /* ── MODO MANUAL: FORMULÁRIO COMPLETO COM UPLOAD DEDICADO DE FOTOS ── */
+          <ManualPropertyForm
+            onSaveProperty={(newProp) => {
+              onSaveProperty(newProp);
+              onClose();
+            }}
+            onCancel={handleModalClose}
+          />
+        )}
       </div>
     </div>
   );

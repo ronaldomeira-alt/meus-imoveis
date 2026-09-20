@@ -32,13 +32,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCapture,
 }) => {
   const navItems = [
-    { id: 'dashboard' as NavSection,     label: 'Dashboard',      icon: Home },
-    { id: 'estoque' as NavSection,       label: 'Estoque',        icon: Building2 },
-    { id: 'captar' as NavSection,        label: 'Captar imóvel',  icon: PlusCircle, isAction: true },
-    { id: 'parceiros' as NavSection,     label: 'Parceiros',      icon: Users },
-    { id: 'arquivados' as NavSection,    label: 'Arquivados',     icon: Archive },
-    { id: 'relatorios' as NavSection,    label: 'Relatórios',     icon: BarChart3 },
-    { id: 'configuracoes' as NavSection, label: 'Configurações',  icon: Settings },
+    { id: 'dashboard' as NavSection,     label: 'Dashboard',        icon: Home },
+    { id: 'estoque' as NavSection,       label: 'Estoque',          icon: Building2 },
+    { id: 'captar' as NavSection,        label: 'Adicionar imóvel', icon: PlusCircle, isAction: true },
+    { id: 'parceiros' as NavSection,     label: 'Parceiros',        icon: Users },
+    { id: 'arquivados' as NavSection,    label: 'Arquivados',       icon: Archive },
+    { id: 'relatorios' as NavSection,    label: 'Relatórios',       icon: BarChart3 },
+    { id: 'configuracoes' as NavSection, label: 'Configurações',    icon: Settings },
   ];
 
   return (

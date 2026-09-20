@@ -19,15 +19,23 @@ import {
   Building,
   Mail,
   ChevronRight,
-  Plus
+  Plus,
+  Zap,
+  Cpu
 } from 'lucide-react';
 import type { AppearanceSettings } from '../../types/property';
+import { testGroqConnection, GROQ_MODELS } from '../../lib/groq';
+import type { PreferredAIProvider } from '../../lib/ai-provider';
 
 interface SettingsViewProps {
   appearance: AppearanceSettings;
   onUpdateAppearance: (newSettings: AppearanceSettings) => void;
   geminiApiKey: string;
   onUpdateGeminiKey: (key: string) => void;
+  groqApiKey?: string;
+  onUpdateGroqKey?: (key: string) => void;
+  preferredAIProvider?: PreferredAIProvider;
+  onUpdateAIProvider?: (provider: PreferredAIProvider) => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
 }
@@ -68,15 +76,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateAppearance,
   geminiApiKey,
   onUpdateGeminiKey,
+  groqApiKey = '',
+  onUpdateGroqKey,
+  preferredAIProvider = 'auto',
+  onUpdateAIProvider,
   onExportJSON,
   onExportCSV,
 }) => {
   const [activeTab, setActiveTab] = useState<'aparencia' | 'gemini' | 'usuarios' | 'conta'>('aparencia');
   const [showKey, setShowKey] = useState(false);
   const [keyInput, setKeyInput] = useState(geminiApiKey);
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash');
   const [keySaved, setKeySaved] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
+
+  // Estados Groq API
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [groqKeyInput, setGroqKeyInput] = useState(groqApiKey);
+  const [selectedGroqModel, setSelectedGroqModel] = useState(GROQ_MODELS.EXTRACTION_PRIMARY);
+  const [groqKeySaved, setGroqKeySaved] = useState(false);
+  const [groqTestStatus, setGroqTestStatus] = useState<string | null>(null);
+  const [isTestingGroq, setIsTestingGroq] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +137,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setKeySaved(false), 2500);
   };
 
+  const handleSaveGroqKey = () => {
+    if (onUpdateGroqKey) {
+      onUpdateGroqKey(groqKeyInput.trim());
+    }
+    setGroqKeySaved(true);
+    setTimeout(() => setGroqKeySaved(false), 2500);
+  };
+
   const handleTestGemini = async () => {
     setTestStatus('Testando conexão com a Google AI API...');
     await new Promise((r) => setTimeout(r, 1200));
@@ -126,6 +154,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setTestStatus('Chave salva. Modo de extração local e inteligente ativo.');
     }
     setTimeout(() => setTestStatus(null), 4000);
+  };
+
+  const handleTestGroq = async () => {
+    setIsTestingGroq(true);
+    setGroqTestStatus('Testando conexão com a Groq Cloud...');
+    const result = await testGroqConnection(groqKeyInput);
+    setIsTestingGroq(false);
+    if (result.success) {
+      setGroqTestStatus(result.message || 'Conexão bem-sucedida! Whisper & Llama disponíveis.');
+    } else {
+      setGroqTestStatus(`Erro: ${result.message}`);
+    }
+    setTimeout(() => setGroqTestStatus(null), 5000);
   };
 
   return (
@@ -165,7 +206,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            IA Gemini
+            Modelos & IA
           </button>
 
           <button
@@ -630,9 +671,187 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {/* 2. ABA INTELIGÊNCIA ARTIFICIAL (GEMINI) */}
+        {/* 2. ABA INTELIGÊNCIA ARTIFICIAL (GROQ & GEMINI) */}
         {activeTab === 'gemini' && (
           <div className="space-y-5 pb-6">
+            {/* Bloco 0: Seleção de Provedor Preferencial */}
+            <div className="glass-panel p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-cyan-400" />
+                    Orquestração e Provedor Principal
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Defina como o sistema deve rotear as requisições de áudio e extração imobiliária
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                {[
+                  {
+                    id: 'auto' as PreferredAIProvider,
+                    title: 'Automático / Resiliente',
+                    desc: 'Groq prioritário com fallback para Gemini e Web Speech nativo',
+                    badge: 'Recomendado',
+                  },
+                  {
+                    id: 'groq' as PreferredAIProvider,
+                    title: 'Groq Cloud LPU',
+                    desc: 'Prioriza Whisper v3 Turbo e Llama 3.3 70B (~300ms)',
+                    badge: 'Ultra-rápido',
+                  },
+                  {
+                    id: 'gemini' as PreferredAIProvider,
+                    title: 'Google Gemini',
+                    desc: 'Prioriza modelos multimodais Gemini 3.6 Flash',
+                    badge: 'Google AI',
+                  },
+                ].map((prov) => {
+                  const isSelected = preferredAIProvider === prov.id;
+                  return (
+                    <button
+                      key={prov.id}
+                      type="button"
+                      onClick={() => onUpdateAIProvider && onUpdateAIProvider(prov.id)}
+                      className={`p-3 rounded-2xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-cyan-500/15 border-cyan-400/70 shadow-lg shadow-cyan-500/10'
+                          : 'bg-white/5 border-white/10 hover:border-white/20 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{prov.title}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-300 font-semibold">
+                          {prov.badge}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">{prov.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bloco 1: GROQ CLOUD (NOVO PROVEDOR ULTRA-RÁPIDO) */}
+            <div className="glass-panel p-5 space-y-4 border border-cyan-500/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    Chave de API da Groq Cloud
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Inferência em tempo recorde (~300ms) com Whisper Large v3 Turbo para voz e Llama 3.3 70B
+                  </p>
+                </div>
+
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <Zap className="w-3 h-3 fill-current" /> LPU Ultra-Rápido
+                </span>
+              </div>
+
+              {/* Input Groq Key */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">Groq API Key (gsk_...)</label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showGroqKey ? 'text' : 'password'}
+                      value={groqKeyInput}
+                      onChange={(e) => setGroqKeyInput(e.target.value)}
+                      placeholder="gsk_..."
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGroqKey(!showGroqKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      {showGroqKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleSaveGroqKey}
+                    className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-cyan-500/20"
+                  >
+                    {groqKeySaved ? <Check className="w-4 h-4" /> : null}
+                    {groqKeySaved ? 'Salvo!' : 'Salvar Chave'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Obtenha gratuitamente sua chave de API em <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">console.groq.com/keys</a>
+                </p>
+              </div>
+
+              {/* Seleção de Modelo Groq */}
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <label className="text-xs font-semibold text-slate-300">Modelos Groq Configurados</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroqModel(GROQ_MODELS.EXTRACTION_PRIMARY)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      selectedGroqModel === GROQ_MODELS.EXTRACTION_PRIMARY
+                        ? 'bg-cyan-500/10 border-cyan-400/60 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-white flex items-center justify-between">
+                      GPT-OSS 120B / Llama 3.3
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-300">Recomendado</span>
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Extração estruturada de alta fidelidade com raciocínio profundo</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroqModel(GROQ_MODELS.EXTRACTION_FAST)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      selectedGroqModel === GROQ_MODELS.EXTRACTION_FAST
+                        ? 'bg-cyan-500/10 border-cyan-400/60 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-white flex items-center justify-between">
+                      GPT-OSS 20B Instant
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300">~400ms</span>
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Velocidade máxima em tempo real para cadastros rápidos</p>
+                  </button>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center gap-2 text-[11px] text-slate-300 mt-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span><strong>Whisper Large v3 Turbo</strong> integrado para transcrição de áudio em alta fidelidade.</span>
+                </div>
+              </div>
+
+              {/* Botão de Testar Conexão Groq */}
+              <div className="pt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleTestGroq}
+                  disabled={isTestingGroq}
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-cyan-400 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Testar Conexão com Groq API
+                </button>
+
+                {groqTestStatus && (
+                  <span className={`text-xs font-medium animate-fade-in ${
+                    groqTestStatus.includes('Erro') ? 'text-amber-400' : 'text-emerald-400'
+                  }`}>
+                    {groqTestStatus}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Bloco 2: GOOGLE GEMINI */}
             <div className="glass-panel p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -641,7 +860,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     Chave de API do Google Gemini
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Utilizada no Composer IA para transcrição de áudio, leitura de imagens e extração automática
+                    Provedor multimodal alternativo para leitura de fotos e descrições complexas
                   </p>
                 </div>
 
@@ -650,7 +869,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </span>
               </div>
 
-              {/* Input de Chave */}
+              {/* Input de Chave Gemini */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-300">Gemini API Key</label>
                 <div className="flex items-center gap-2">
@@ -684,37 +903,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </p>
               </div>
 
-              {/* Seleção de Modelo */}
+              {/* Seleção de Modelo Gemini */}
               <div className="space-y-2 pt-2 border-t border-white/5">
-                <label className="text-xs font-semibold text-slate-300">Modelo de Linguagem & Visão</label>
+                <label className="text-xs font-semibold text-slate-300">Modelo Gemini</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedModel('gemini-2.5-flash')}
+                    onClick={() => setSelectedModel('gemini-3.6-flash')}
                     className={`p-3 rounded-xl border text-left transition-all ${
-                      selectedModel === 'gemini-2.5-flash'
+                      selectedModel === 'gemini-3.6-flash'
                         ? 'bg-cyan-500/10 border-cyan-400/60 text-white'
                         : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
                     }`}
                   >
                     <p className="text-xs font-bold text-white flex items-center justify-between">
-                      Gemini 2.5 Flash
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-300">Recomendado</span>
+                      Gemini 3.6 Flash
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-300">Mais Recente</span>
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-1">Extração rápida de fotos, texto e áudio</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedModel('gemini-2.5-pro')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      selectedModel === 'gemini-2.5-pro'
-                        ? 'bg-cyan-500/10 border-cyan-400/60 text-white'
-                        : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <p className="text-xs font-bold text-white">Gemini 2.5 Pro</p>
-                    <p className="text-[10px] text-slate-400 mt-1">Raciocínio complexo para descrições extensas</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Extração rápida e suporte multimodal atualizado</p>
                   </button>
 
                   <button
@@ -729,16 +935,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <p className="text-xs font-bold text-white">Gemini 1.5 Flash</p>
                     <p className="text-[10px] text-slate-400 mt-1">Leveza e compatibilidade estável</p>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedModel('gemini-2.0-flash')}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      selectedModel === 'gemini-2.0-flash'
+                        ? 'bg-cyan-500/10 border-cyan-400/60 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-white">Gemini 2.0 Flash</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Equilíbrio de performance e precisão</p>
+                  </button>
                 </div>
               </div>
 
-              {/* Botão de Testar Conexão */}
+              {/* Botão de Testar Conexão Gemini */}
               <div className="pt-2 flex items-center justify-between">
                 <button
+                  type="button"
                   onClick={handleTestGemini}
                   className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-cyan-400 transition-colors"
                 >
-                  Testar Conexão com a API
+                  Testar Conexão com Gemini API
                 </button>
 
                 {testStatus && (

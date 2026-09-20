@@ -16,6 +16,7 @@ import { initialProperties } from './data/initialProperties';
 import { calculateDashboardStats } from './lib/supabase';
 import type { Property, AppearanceSettings, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
+import type { PreferredAIProvider } from './lib/ai-provider';
 import { PlusCircle, Building2, Users, Archive } from 'lucide-react';
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
@@ -136,14 +137,32 @@ export const App: React.FC = () => {
     root.style.setProperty('--bg-saturation', `${appearance.bgSaturation}`);
   }, [appearance]);
 
-  // ── Configurações de IA Gemini ──
+  // ── Configurações de IA (Groq & Gemini) ──
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    return localStorage.getItem('meus_imoveis_gemini_key') || '';
+    return localStorage.getItem('meus_imoveis_gemini_key') || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+  });
+
+  const [groqApiKey, setGroqApiKey] = useState<string>(() => {
+    return localStorage.getItem('meus_imoveis_groq_key') || (import.meta.env.VITE_GROQ_API_KEY as string) || '';
+  });
+
+  const [preferredAIProvider, setPreferredAIProvider] = useState<PreferredAIProvider>(() => {
+    return (localStorage.getItem('meus_imoveis_ai_provider') as PreferredAIProvider) || 'auto';
   });
 
   const handleUpdateGeminiKey = (key: string) => {
     setGeminiApiKey(key);
     localStorage.setItem('meus_imoveis_gemini_key', key);
+  };
+
+  const handleUpdateGroqKey = (key: string) => {
+    setGroqApiKey(key);
+    localStorage.setItem('meus_imoveis_groq_key', key);
+  };
+
+  const handleUpdateAIProvider = (provider: PreferredAIProvider) => {
+    setPreferredAIProvider(provider);
+    localStorage.setItem('meus_imoveis_ai_provider', provider);
   };
 
   // ── Notificações ──
@@ -262,7 +281,7 @@ export const App: React.FC = () => {
     // Notificação automática
     const newNotification: NotificationItem = {
       id: `notif-${Date.now()}`,
-      title: `Novo ${newProperty.type} Captado`,
+      title: `Novo ${newProperty.type} Adicionado`,
       body: `${newProperty.neighborhood} • ${newProperty.area_m2}m² • R$ ${newProperty.price.toLocaleString('pt-BR')}`,
       property_id: newProperty.id,
       read: false,
@@ -475,7 +494,7 @@ export const App: React.FC = () => {
                   }}
                 >
                   <PlusCircle className="w-4 h-4" />
-                  Captar Imóvel
+                  Adicionar Imóvel
                 </button>
               </div>
 
@@ -533,6 +552,10 @@ export const App: React.FC = () => {
               onUpdateAppearance={(newApp) => setAppearance(newApp)}
               geminiApiKey={geminiApiKey}
               onUpdateGeminiKey={handleUpdateGeminiKey}
+              groqApiKey={groqApiKey}
+              onUpdateGroqKey={handleUpdateGroqKey}
+              preferredAIProvider={preferredAIProvider}
+              onUpdateAIProvider={handleUpdateAIProvider}
               onExportJSON={handleExportJSON}
               onExportCSV={handleExportCSV}
             />
@@ -557,6 +580,8 @@ export const App: React.FC = () => {
         onClose={() => setIsCaptureOpen(false)}
         onSaveProperty={handleSaveNewProperty}
         geminiApiKey={geminiApiKey}
+        groqApiKey={groqApiKey}
+        preferredAIProvider={preferredAIProvider}
       />
 
       {/* ── DRAWER LATERAL DE NOTIFICAÇÕES ── */}

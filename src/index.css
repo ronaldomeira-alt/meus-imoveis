@@ -207,3 +207,18 @@ html, body, #root {
 .tabular { font-variant-numeric: tabular-nums; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Animação das barras de onda sonora idênticas à referência */
+@keyframes waveform-bounce {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+.animate-waveform {
+  animation: waveform-bounce 1s ease-in-out infinite alternate;
+  transform-origin: center;
+}
