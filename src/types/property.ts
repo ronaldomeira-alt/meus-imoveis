@@ -87,6 +87,12 @@ export interface PriceRangeStat {
   color: string;
 }
 
+export interface PropertyTypeStat {
+  type: PropertyType | string;
+  count: number;
+  pct: number;
+}
+
 export interface DashboardStats {
   totalActive: number;
   ownCount: number;
@@ -97,6 +103,7 @@ export interface DashboardStats {
   partnerCountChangePct: number;
   addedThisWeekChangePct: number;
   byNeighborhood: NeighborhoodStat[];
+  byPropertyType: PropertyTypeStat[];
   byPriceRange: PriceRangeStat[];
   totalPortfolioValue: number;
 }

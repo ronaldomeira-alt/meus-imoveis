@@ -5,6 +5,8 @@ import type { PriceRangeStat } from '../../types/property';
 interface PriceRangeChartProps {
   data: PriceRangeStat[];
   totalActive: number;
+  selectedMinPrice?: string;
+  selectedMaxPrice?: string;
   onSelectRange: (min: number, max: number) => void;
   onViewAll: () => void;
 }
@@ -12,6 +14,8 @@ interface PriceRangeChartProps {
 export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
   data,
   totalActive = 24,
+  selectedMinPrice = '',
+  selectedMaxPrice = '',
   onSelectRange,
   onViewAll,
 }) => {
@@ -28,9 +32,17 @@ export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
   const ranges = data.length > 0 ? data : defaultRanges;
   const countTotal = totalActive || 24;
 
-  // Renderização SVG precisa do Donut Chart
-  const size = 150;
-  const strokeWidth = 18;
+  const hasRangeSelection = Boolean(selectedMinPrice || selectedMaxPrice);
+  const isRangeSelected = (seg: PriceRangeStat) => {
+    if (!hasRangeSelection) return false;
+    const minMatch = selectedMinPrice ? String(seg.minPrice) === selectedMinPrice : seg.minPrice === 0;
+    const maxMatch = selectedMaxPrice ? String(seg.maxPrice) === selectedMaxPrice : seg.maxPrice === Infinity;
+    return minMatch && maxMatch;
+  };
+
+  // Renderização SVG precisa do Donut Chart (135px otimizado para layout de 3 colunas)
+  const size = 135;
+  const strokeWidth = 16;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   let accumulatedAngle = 0;
@@ -79,7 +91,7 @@ export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
       {/* Corpo: Donut Chart à esquerda + Legenda com 6 faixas à direita */}
       <div className="flex-1 flex items-center justify-between gap-3 relative z-10 pt-1">
         {/* Gráfico Donut / Anel */}
-        <div className="relative w-[150px] h-[150px] flex items-center justify-center flex-shrink-0">
+        <div className="relative w-[135px] h-[135px] flex items-center justify-center flex-shrink-0">
           <svg className="w-full h-full -rotate-90" viewBox={`0 0 ${size} ${size}`}>
             {/* Círculo de fundo do trilho */}
             <circle
@@ -95,9 +107,12 @@ export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
             {ranges.map((seg) => {
               const fraction = seg.count / countTotal;
               const dashLength = fraction * circumference;
-              const strokeDasharray = `${dashLength - 2} ${circumference - (dashLength - 2)}`;
+              const strokeDasharray = `${Math.max(0, dashLength - 2)} ${circumference - Math.max(0, dashLength - 2)}`;
               const strokeDashoffset = -accumulatedAngle;
               accumulatedAngle += dashLength;
+
+              const isSelected = isRangeSelected(seg);
+              const isDimmed = hasRangeSelection && !isSelected;
 
               return (
                 <circle
@@ -106,65 +121,87 @@ export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
                   cy={size / 2}
                   r={radius}
                   stroke={seg.color}
-                  strokeWidth={strokeWidth}
+                  strokeWidth={isSelected ? strokeWidth + 3 : strokeWidth}
                   strokeDasharray={strokeDasharray}
                   strokeDashoffset={strokeDashoffset}
                   strokeLinecap="round"
                   fill="none"
-                  className="transition-all duration-500 hover:brightness-125 cursor-pointer"
+                  opacity={isDimmed ? 0.3 : 1}
+                  className="transition-all duration-300 hover:brightness-125 cursor-pointer"
                   onClick={() => onSelectRange(seg.minPrice, seg.maxPrice)}
                 />
               );
             })}
           </svg>
 
-          {/* Centro do Anel: Número 24 + IMÓVEIS ATIVOS */}
+          {/* Centro do Anel: Número + IMÓVEIS ATIVOS */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
             <span
-              className="text-[25px] font-black text-white leading-none tracking-tight"
+              className="text-[23px] font-black text-white leading-none tracking-tight"
               style={{ textShadow: '0 2px 14px rgba(0, 229, 255, 0.4)' }}
             >
               {countTotal}
             </span>
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-1 leading-none">
+            <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider mt-1 leading-none">
               Imóveis ativos
             </span>
           </div>
         </div>
 
         {/* Legenda Vertical das 6 Faixas (Idêntica à Referência) */}
-        <div className="flex-1 flex flex-col justify-between h-[150px] py-0.5">
-          {ranges.map((seg) => (
-            <button
-              key={seg.id}
-              onClick={() => onSelectRange(seg.minPrice, seg.maxPrice)}
-              className="flex items-center justify-between text-left group cursor-pointer transition-colors py-0.5"
-            >
-              {/* Ponto colorido + Rótulo */}
-              <div className="flex items-center gap-2 truncate pr-1">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 transition-transform group-hover:scale-125"
-                  style={{
-                    backgroundColor: seg.color,
-                    boxShadow: `0 0 8px ${seg.color}`,
-                  }}
-                />
-                <span className="text-[11px] font-medium text-slate-300 truncate group-hover:text-white transition-colors">
-                  {seg.label}
-                </span>
-              </div>
+        <div className="flex-1 flex flex-col justify-between h-[135px] py-0.5">
+          {ranges.map((seg) => {
+            const isSelected = isRangeSelected(seg);
+            const isDimmed = hasRangeSelection && !isSelected;
 
-              {/* Contagem e Porcentagem: ex "4 (16,7%)" */}
-              <div className="text-[10.5px] tabular font-medium text-slate-400 flex items-center gap-1 flex-shrink-0">
-                <span className="font-bold text-white group-hover:text-cyan-400 transition-colors">
-                  {seg.count}
-                </span>
-                <span className="text-slate-500">
-                  ({seg.pct.toFixed(1).replace('.', ',')}%)
-                </span>
-              </div>
-            </button>
-          ))}
+            return (
+              <button
+                key={seg.id}
+                onClick={() => onSelectRange(seg.minPrice, seg.maxPrice)}
+                className={`flex items-center justify-between text-left group cursor-pointer transition-all duration-200 py-0.5 px-1.5 -mx-1.5 rounded-md ${
+                  isSelected
+                    ? 'bg-cyan-500/15 ring-1 ring-cyan-400/50 shadow-[0_0_10px_rgba(0,229,255,0.2)]'
+                    : isDimmed
+                    ? 'opacity-35 hover:opacity-75'
+                    : 'hover:bg-white/[0.03]'
+                }`}
+              >
+                {/* Ponto colorido + Rótulo */}
+                <div className="flex items-center gap-1.5 truncate pr-1">
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 transition-transform ${
+                      isSelected ? 'scale-125' : 'group-hover:scale-125'
+                    }`}
+                    style={{
+                      backgroundColor: seg.color,
+                      boxShadow: `0 0 8px ${seg.color}`,
+                    }}
+                  />
+                  <span
+                    className={`text-[10.5px] font-medium truncate transition-colors ${
+                      isSelected ? 'text-cyan-300 font-bold' : 'text-slate-300 group-hover:text-white'
+                    }`}
+                  >
+                    {seg.label}
+                  </span>
+                </div>
+
+                {/* Contagem e Porcentagem */}
+                <div className="text-[10px] tabular font-medium text-slate-400 flex items-center gap-1 flex-shrink-0">
+                  <span
+                    className={`font-bold transition-colors ${
+                      isSelected ? 'text-cyan-300' : 'text-white group-hover:text-cyan-400'
+                    }`}
+                  >
+                    {seg.count}
+                  </span>
+                  <span className="text-slate-500 text-[9.5px]">
+                    ({seg.pct.toFixed(1).replace('.', ',')}%)
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

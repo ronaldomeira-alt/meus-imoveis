@@ -3,6 +3,7 @@ import { Sidebar, NavSection } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { SummaryCards } from './components/dashboard/SummaryCards';
 import { NeighborhoodsChart } from './components/dashboard/NeighborhoodsChart';
+import { PropertyTypesChart } from './components/dashboard/PropertyTypesChart';
 import { PriceRangeChart } from './components/dashboard/PriceRangeChart';
 import { RecentCarousel } from './components/dashboard/RecentCarousel';
 import { PropertyCard } from './components/properties/PropertyCard';
@@ -375,19 +376,32 @@ export const App: React.FC = () => {
     }
   };
 
-  // ── Filtros Rápidos por Gráficos do Dashboard ──
+  // ── Filtros Coordenados por Gráficos do Dashboard ──
+  const handleSelectPropertyType = (type: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      type: prev.type === type ? '' : type,
+    }));
+  };
+
   const handleSelectNeighborhood = (neighborhood: string) => {
-    setFilters({ ...DEFAULT_FILTERS, neighborhood });
-    setActiveSection('estoque');
+    setFilters((prev) => ({
+      ...prev,
+      neighborhood: prev.neighborhood === neighborhood ? '' : neighborhood,
+    }));
   };
 
   const handleSelectPriceRange = (min: number, max: number) => {
-    setFilters({
-      ...DEFAULT_FILTERS,
-      minPrice: min > 0 ? min.toString() : '',
-      maxPrice: max < Infinity ? max.toString() : '',
+    const minStr = min > 0 ? min.toString() : '';
+    const maxStr = max < Infinity ? max.toString() : '';
+    setFilters((prev) => {
+      const isSame = prev.minPrice === minStr && prev.maxPrice === maxStr;
+      return {
+        ...prev,
+        minPrice: isSame ? '' : minStr,
+        maxPrice: isSame ? '' : maxStr,
+      };
     });
-    setActiveSection('estoque');
   };
 
   const handleKpiCardClick = (filter: SummaryFilterType) => {
@@ -511,21 +525,80 @@ export const App: React.FC = () => {
               <SummaryCards stats={stats} onSelectFilter={handleKpiCardClick} />
             </div>
 
-            {/* 2. MEIO: Bento Grid com Gráficos (Imóveis por bairro + Faixas de preço Donut) */}
-            <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3.5">
-              {/* Esquerda: Bairros com barras de neon */}
-              <div className="lg:col-span-6 xl:col-span-7 h-full min-h-0">
+            {/* Barra de Filtros Ativos Coordenados no Dashboard */}
+            {(filters.neighborhood || filters.type || filters.minPrice || filters.maxPrice) && (
+              <div className="flex-shrink-0 flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-cyan-950/40 border border-cyan-500/30 backdrop-blur-md animate-fade-in text-xs">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-bold text-cyan-400">Filtros no estoque:</span>
+                  {filters.neighborhood && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 text-[10.5px]">
+                      Bairro: <strong className="text-white">{filters.neighborhood}</strong>
+                      <button onClick={() => handleSelectNeighborhood(filters.neighborhood)} className="hover:text-white ml-0.5">✕</button>
+                    </span>
+                  )}
+                  {filters.type && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 text-[10.5px]">
+                      Tipo: <strong className="text-white">{filters.type}</strong>
+                      <button onClick={() => handleSelectPropertyType(filters.type)} className="hover:text-white ml-0.5">✕</button>
+                    </span>
+                  )}
+                  {(filters.minPrice || filters.maxPrice) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 text-[10.5px]">
+                      Faixa de preço
+                      <button onClick={() => setFilters((p) => ({ ...p, minPrice: '', maxPrice: '' }))} className="hover:text-white ml-0.5">✕</button>
+                    </span>
+                  )}
+                  <span className="text-slate-400 text-[11px] font-medium">
+                    • {filteredProperties.length} {filteredProperties.length === 1 ? 'imóvel correspondente' : 'imóveis correspondentes'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setActiveSection('estoque')}
+                    className="px-2.5 py-1 rounded-lg bg-cyan-500 text-slate-950 font-bold text-[11px] hover:bg-cyan-400 transition-all shadow-md shadow-cyan-500/20 cursor-pointer"
+                  >
+                    Ver no catálogo ({filteredProperties.length}) →
+                  </button>
+                  <button
+                    onClick={() => setFilters(DEFAULT_FILTERS)}
+                    className="text-[10.5px] text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 2. MEIO: 3 Gráficos Coordenados (1. Bairros, 2. Tipos de Imóvel, 3. Faixas de Preço) */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {/* 1. Imóveis por bairro */}
+              <div className="h-full min-h-[210px] lg:min-h-0">
                 <NeighborhoodsChart
                   data={stats.byNeighborhood}
+                  selectedNeighborhood={filters.neighborhood}
                   onSelectNeighborhood={handleSelectNeighborhood}
+                  onViewAll={() => setActiveSection('estoque')}
                 />
               </div>
 
-              {/* Direita: Donut Chart com 6 faixas de preço */}
-              <div className="lg:col-span-6 xl:col-span-5 h-full min-h-0">
+              {/* 2. Tipos de imóvel (EXATAMENTE NO MEIO) */}
+              <div className="h-full min-h-[210px] lg:min-h-0">
+                <PropertyTypesChart
+                  data={stats.byPropertyType}
+                  totalActive={stats.totalActive}
+                  selectedType={filters.type}
+                  onSelectType={handleSelectPropertyType}
+                  onViewAll={() => setActiveSection('estoque')}
+                />
+              </div>
+
+              {/* 3. Faixas de preço */}
+              <div className="h-full min-h-[210px] lg:min-h-0 md:col-span-2 lg:col-span-1">
                 <PriceRangeChart
                   data={stats.byPriceRange}
                   totalActive={stats.totalActive}
+                  selectedMinPrice={filters.minPrice}
+                  selectedMaxPrice={filters.maxPrice}
                   onSelectRange={handleSelectPriceRange}
                   onViewAll={() => setActiveSection('estoque')}
                 />

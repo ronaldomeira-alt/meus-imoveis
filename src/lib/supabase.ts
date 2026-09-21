@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Property, DashboardStats, NeighborhoodStat, PriceRangeStat } from '../types/property';
+import type { Property, DashboardStats, NeighborhoodStat, PropertyTypeStat, PriceRangeStat } from '../types/property';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -44,6 +44,21 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
   const byNeighborhood: NeighborhoodStat[] = Object.entries(countsByNeighborhood)
     .map(([neighborhood, count]) => ({
       neighborhood,
+      count,
+      pct: totalActive > 0 ? (count / totalActive) * 100 : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // ── Agrupamento por Tipos de Imóvel (Barras Verticais) ──
+  const countsByType: Record<string, number> = {};
+  activeProps.forEach((p) => {
+    const t = p.type || 'Outro';
+    countsByType[t] = (countsByType[t] || 0) + 1;
+  });
+
+  const byPropertyType: PropertyTypeStat[] = Object.entries(countsByType)
+    .map(([type, count]) => ({
+      type,
       count,
       pct: totalActive > 0 ? (count / totalActive) * 100 : 0,
     }))
@@ -96,6 +111,7 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
     partnerCountChangePct: 28,
     addedThisWeekChangePct: 33,
     byNeighborhood,
+    byPropertyType,
     byPriceRange,
     totalPortfolioValue,
   };

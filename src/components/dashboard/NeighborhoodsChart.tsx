@@ -4,12 +4,16 @@ import type { NeighborhoodStat } from '../../types/property';
 
 interface NeighborhoodsChartProps {
   data: NeighborhoodStat[];
+  selectedNeighborhood?: string;
   onSelectNeighborhood: (neighborhood: string) => void;
+  onViewAll?: () => void;
 }
 
 export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
   data,
+  selectedNeighborhood = '',
   onSelectNeighborhood,
+  onViewAll,
 }) => {
   // Valores default calibrados exatamente com a imagem de referência (5, 4, 3, 3, 2, 2, 1)
   const defaultItems: NeighborhoodStat[] = [
@@ -58,8 +62,9 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
         </div>
 
         <button
-          onClick={() => onSelectNeighborhood('')}
+          onClick={onViewAll ? onViewAll : () => onSelectNeighborhood('')}
           className="text-[11px] font-medium text-slate-400 hover:text-cyan-400 flex items-center gap-1 transition-colors group"
+          title="Ver todos os bairros no catálogo"
         >
           <span>Ver detalhes</span>
           <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -71,32 +76,55 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
         {items.map((item, idx) => {
           // Calcula largura proporcional de 20% a 95%
           const pct = Math.max(18, Math.round((item.count / maxCount) * 95));
+          const isSelected = selectedNeighborhood === item.neighborhood;
+          const hasSelection = Boolean(selectedNeighborhood);
+          const isDimmed = hasSelection && !isSelected;
 
           return (
             <div
               key={item.neighborhood || idx}
-              onClick={() => onSelectNeighborhood(item.neighborhood)}
-              className="flex items-center gap-3 py-0.5 group cursor-pointer"
+              onClick={() => onSelectNeighborhood(isSelected ? '' : item.neighborhood)}
+              className={`flex items-center gap-3 py-0.5 px-1.5 -mx-1.5 rounded-lg group cursor-pointer transition-all duration-200 ${
+                isSelected
+                  ? 'bg-cyan-500/15 ring-1 ring-cyan-400/50 shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                  : isDimmed
+                  ? 'opacity-35 hover:opacity-75'
+                  : 'hover:bg-white/[0.03]'
+              }`}
             >
               {/* Nome do Bairro */}
-              <span className="text-[11.5px] font-medium text-slate-300 w-24 truncate text-left transition-colors group-hover:text-cyan-300">
+              <span
+                className={`text-[11.5px] font-medium w-24 truncate text-left transition-colors ${
+                  isSelected ? 'text-cyan-300 font-bold' : 'text-slate-300 group-hover:text-cyan-300'
+                }`}
+              >
                 {item.neighborhood}
               </span>
 
               {/* Trilho e Barra Neon Cyan */}
               <div className="flex-1 h-3 rounded-full bg-white/[0.04] p-[1.5px] relative overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-700 ease-out group-hover:brightness-125"
+                  className={`h-full rounded-full transition-all duration-700 ease-out group-hover:brightness-125 ${
+                    isSelected ? 'brightness-125 ring-1 ring-white/50' : ''
+                  }`}
                   style={{
                     width: `${pct}%`,
-                    background: 'linear-gradient(90deg, #0284C7 0%, #00E5FF 100%)',
-                    boxShadow: '0 0 12px rgba(0, 229, 255, 0.45)',
+                    background: isSelected
+                      ? 'linear-gradient(90deg, #00E5FF 0%, #38BDF8 100%)'
+                      : 'linear-gradient(90deg, #0284C7 0%, #00E5FF 100%)',
+                    boxShadow: isSelected
+                      ? '0 0 16px rgba(0, 229, 255, 0.7)'
+                      : '0 0 12px rgba(0, 229, 255, 0.45)',
                   }}
                 />
               </div>
 
               {/* Contagem no lado direito */}
-              <span className="text-xs font-bold text-white tabular w-5 text-right">
+              <span
+                className={`text-xs font-bold tabular w-5 text-right transition-colors ${
+                  isSelected ? 'text-cyan-300' : 'text-white'
+                }`}
+              >
                 {item.count}
               </span>
             </div>
