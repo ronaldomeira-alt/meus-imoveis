@@ -1,9 +1,11 @@
 import heic2any from 'heic2any';
 
 export interface ProcessedImage {
-  file: File;
+  id?: string;
+  file?: File;
   previewUrl: string;
   isCover: boolean;
+  storagePath?: string;
 }
 
 export const processImageFile = async (file: File): Promise<ProcessedImage> => {

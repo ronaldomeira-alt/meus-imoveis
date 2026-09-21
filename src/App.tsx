@@ -7,7 +7,9 @@ import { PriceRangeChart } from './components/dashboard/PriceRangeChart';
 import { RecentCarousel } from './components/dashboard/RecentCarousel';
 import { PropertyCard } from './components/properties/PropertyCard';
 import { PropertyFilters, FilterState } from './components/properties/PropertyFilters';
-import { PropertyDetailModal } from './components/properties/PropertyDetailModal';
+import { PropertySummaryModal } from './components/properties/PropertySummaryModal';
+import { PropertyDetailPage } from './components/properties/PropertyDetailPage';
+import { PropertyEditModal } from './components/properties/PropertyEditModal';
 import { CaptureModal } from './components/capture/CaptureModal';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { SettingsView } from './components/settings/SettingsView';
@@ -169,9 +171,62 @@ export const App: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
 
-  // ── Modais ──
+  // ── Modais e Visualização em Dois Níveis (Modal Resumo → Página Completa) ──
   const [isCaptureOpen, setIsCaptureOpen] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [summaryProperty, setSummaryProperty] = useState<Property | null>(null);
+  const [viewingPropertyId, setViewingPropertyId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const match = window.location.pathname.match(/^\/imoveis\/([^/]+)$/);
+      return match ? match[1] : null;
+    }
+    return null;
+  });
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+
+  const viewingProperty = useMemo(() => {
+    if (!viewingPropertyId) return null;
+    return properties.find((p) => p.id === viewingPropertyId) || null;
+  }, [properties, viewingPropertyId]);
+
+  // ── Sincronização de Rota SPA (/imoveis/:id) e Histórico do Navegador ──
+  useEffect(() => {
+    const parseUrl = () => {
+      const match = window.location.pathname.match(/^\/imoveis\/([^/]+)$/);
+      if (match && match[1]) {
+        setViewingPropertyId(match[1]);
+      } else {
+        setViewingPropertyId(null);
+      }
+    };
+
+    parseUrl();
+
+    window.addEventListener('popstate', parseUrl);
+    return () => window.removeEventListener('popstate', parseUrl);
+  }, []);
+
+  const handleOpenSummary = (property: Property) => {
+    setSummaryProperty(property);
+  };
+
+  const handleOpenDetail = (property: Property) => {
+    setSummaryProperty(null);
+    setViewingPropertyId(property.id);
+    window.history.pushState({ propertyId: property.id }, '', `/imoveis/${property.id}`);
+  };
+
+  const handleBackToInventory = () => {
+    setViewingPropertyId(null);
+    if (window.location.pathname.startsWith('/imoveis/')) {
+      window.history.pushState(null, '', '/');
+    }
+  };
+
+  const handleUpdateProperty = (updatedProperty: Property) => {
+    setProperties((prev) =>
+      prev.map((p) => (p.id === updatedProperty.id ? updatedProperty : p))
+    );
+  };
 
   // ── Filtros e Busca Global ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -292,22 +347,31 @@ export const App: React.FC = () => {
 
   const handleArchiveProperty = async (id: string) => {
     setProperties((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'Arquivado', updated_at: new Date().toISOString() } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          const nextStatus = p.status === 'Arquivado' ? 'Ativo' : 'Arquivado';
+          return { ...p, status: nextStatus, updated_at: new Date().toISOString() };
+        }
+        return p;
+      })
     );
-    setSelectedProperty(null);
+    setSummaryProperty(null);
   };
 
   const handleMarkAsSold = async (id: string) => {
     setProperties((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'Vendido', updated_at: new Date().toISOString() } : p))
     );
-    setSelectedProperty(null);
+    setSummaryProperty(null);
   };
 
   const handleDeleteProperty = async (id: string) => {
     if (window.confirm('Tem certeza que deseja remover este imóvel do catálogo?')) {
       setProperties((prev) => prev.filter((p) => p.id !== id));
-      setSelectedProperty(null);
+      setSummaryProperty(null);
+      if (viewingPropertyId === id) {
+        handleBackToInventory();
+      }
     }
   };
 
@@ -404,14 +468,28 @@ export const App: React.FC = () => {
       {/* ── SIDEBAR FIXA LATERAL (220px a 235px) ── */}
       <Sidebar
         activeSection={activeSection}
-        onSelectSection={(section) => setActiveSection(section)}
+        onSelectSection={(section) => {
+          handleBackToInventory();
+          setActiveSection(section);
+        }}
         onOpenCapture={() => setIsCaptureOpen(true)}
       />
 
-      {/* ── ÁREA PRINCIPAL DO COCKPIT ── */}
+      {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA DO IMÓVEL (NÍVEL 2) ── */}
       <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden p-3.5 sm:p-5 lg:p-6 min-w-0">
-        {/* Header Superior */}
-        <Header
+        {viewingProperty ? (
+          <PropertyDetailPage
+            property={viewingProperty}
+            onBack={handleBackToInventory}
+            onEdit={(p) => setEditingProperty(p)}
+            onArchive={handleArchiveProperty}
+            onMarkAsSold={handleMarkAsSold}
+            onDelete={handleDeleteProperty}
+          />
+        ) : (
+          <>
+            {/* Header Superior */}
+            <Header
           searchQuery={searchQuery}
           onSearchChange={(q) => {
             setSearchQuery(q);
@@ -458,7 +536,7 @@ export const App: React.FC = () => {
             <div className="flex-shrink-0">
               <RecentCarousel
                 properties={properties.filter((p) => p.status === 'Ativo')}
-                onSelectProperty={(prop) => setSelectedProperty(prop)}
+                onSelectProperty={(prop) => handleOpenSummary(prop)}
                 onViewAll={() => setActiveSection('estoque')}
               />
             </div>
@@ -528,7 +606,7 @@ export const App: React.FC = () => {
                     <PropertyCard
                       key={property.id}
                       property={property}
-                      onClick={() => setSelectedProperty(property)}
+                      onClick={() => handleOpenSummary(property)}
                     />
                   ))}
                 </div>
@@ -561,18 +639,26 @@ export const App: React.FC = () => {
             />
           </div>
         )}
+          </>
+        )}
       </main>
 
-      {/* ── MODAL DE DETALHES DO IMÓVEL ── */}
-      {selectedProperty && (
-        <PropertyDetailModal
-          property={selectedProperty}
-          onClose={() => setSelectedProperty(null)}
-          onArchive={handleArchiveProperty}
-          onMarkAsSold={handleMarkAsSold}
-          onDelete={handleDeleteProperty}
+      {/* ── MODAL DE RESUMO DO IMÓVEL (NÍVEL 1) ── */}
+      {summaryProperty && (
+        <PropertySummaryModal
+          property={summaryProperty}
+          onClose={() => setSummaryProperty(null)}
+          onOpenDetail={handleOpenDetail}
         />
       )}
+
+      {/* ── MODAL DE EDIÇÃO DO IMÓVEL ── */}
+      <PropertyEditModal
+        isOpen={Boolean(editingProperty)}
+        property={editingProperty}
+        onClose={() => setEditingProperty(null)}
+        onSaveProperty={handleUpdateProperty}
+      />
 
       {/* ── MODAL COMPOSER IA DE CAPTAÇÃO ── */}
       <CaptureModal
@@ -595,7 +681,7 @@ export const App: React.FC = () => {
         onSelectProperty={(propId) => {
           const found = properties.find((p) => p.id === propId);
           if (found) {
-            setSelectedProperty(found);
+            handleOpenSummary(found);
             setIsNotificationDrawerOpen(false);
           }
         }}

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { processImageFile, ProcessedImage } from '../../lib/image-processor';
+import { getPhotoUrl } from '../../lib/supabase';
 import {
   validateRequiredPropertyFields,
   MandatoryPropertyFieldKey,
@@ -28,6 +29,8 @@ import type {
 interface ManualPropertyFormProps {
   onSaveProperty: (property: Property) => void;
   onCancel: () => void;
+  initialProperty?: Property;
+  submitButtonLabel?: string;
 }
 
 const COMMON_BUILDING_FEATURES = [
@@ -70,48 +73,61 @@ const NEIGHBORHOOD_SUGGESTIONS = [
 export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   onSaveProperty,
   onCancel,
+  initialProperty,
+  submitButtonLabel,
 }) => {
-  // ── Estados do Formulário (Inicialmente limpos sem valores falsos) ──
-  const [type, setType] = useState<PropertyType>('Apartamento');
-  const [neighborhood, setNeighborhood] = useState('');
-  const [condominiumName, setCondominiumName] = useState('');
-  const [address, setAddress] = useState('');
-  const [number, setNumber] = useState('');
-  const [complement, setComplement] = useState('');
+  // ── Estados do Formulário (Inicialmente limpos ou preenchidos com dados do imóvel) ──
+  const [type, setType] = useState<PropertyType>(initialProperty?.type || 'Apartamento');
+  const [neighborhood, setNeighborhood] = useState(initialProperty?.neighborhood || '');
+  const [condominiumName, setCondominiumName] = useState(initialProperty?.condominium_name || '');
+  const [address, setAddress] = useState(initialProperty?.address || '');
+  const [number, setNumber] = useState(initialProperty?.number || '');
+  const [complement, setComplement] = useState(initialProperty?.complement || '');
 
   // Características (Área e Quartos são obrigatórios; demais opcionais)
-  const [areaM2, setAreaM2] = useState<number | ''>('');
-  const [bedrooms, setBedrooms] = useState<number | ''>('');
-  const [suites, setSuites] = useState<number | ''>('');
-  const [bathrooms, setBathrooms] = useState<number | ''>('');
-  const [parkingSpaces, setParkingSpaces] = useState<number | ''>('');
-  const [floor, setFloor] = useState<number | ''>('');
-  const [position, setPosition] = useState<PropertyPosition>('Nascente');
-  const [condition, setCondition] = useState<PropertyCondition>('Usado');
-  const [furnished, setFurnished] = useState(false);
+  const [areaM2, setAreaM2] = useState<number | ''>(initialProperty?.area_m2 ?? '');
+  const [bedrooms, setBedrooms] = useState<number | ''>(initialProperty?.bedrooms ?? '');
+  const [suites, setSuites] = useState<number | ''>(initialProperty?.suites ?? '');
+  const [bathrooms, setBathrooms] = useState<number | ''>(initialProperty?.bathrooms ?? '');
+  const [parkingSpaces, setParkingSpaces] = useState<number | ''>(initialProperty?.parking_spaces ?? '');
+  const [floor, setFloor] = useState<number | ''>(initialProperty?.floor ?? '');
+  const [position, setPosition] = useState<PropertyPosition>(initialProperty?.position || 'Nascente');
+  const [condition, setCondition] = useState<PropertyCondition>(initialProperty?.condition || 'Usado');
+  const [furnished, setFurnished] = useState(initialProperty?.furnished ?? false);
 
   // Valores (Preço é obrigatório; condomínio e IPTU são opcionais)
-  const [price, setPrice] = useState<number | ''>('');
-  const [condoFee, setCondoFee] = useState<number | ''>('');
-  const [iptu, setIptu] = useState<number | ''>('');
+  const [price, setPrice] = useState<number | ''>(initialProperty?.price ?? '');
+  const [condoFee, setCondoFee] = useState<number | ''>(initialProperty?.condo_fee ?? '');
+  const [iptu, setIptu] = useState<number | ''>(initialProperty?.iptu ?? '');
 
   // Características / Tags (opcionais)
-  const [buildingFeatures, setBuildingFeatures] = useState<string[]>([]);
-  const [apartmentFeatures, setApartmentFeatures] = useState<string[]>([]);
+  const [buildingFeatures, setBuildingFeatures] = useState<string[]>(initialProperty?.building_features || []);
+  const [apartmentFeatures, setApartmentFeatures] = useState<string[]>(initialProperty?.apartment_features || []);
   const [customFeature, setCustomFeature] = useState('');
 
   // Fotos
-  const [images, setImages] = useState<ProcessedImage[]>([]);
+  const [images, setImages] = useState<ProcessedImage[]>(() => {
+    if (initialProperty?.photos && initialProperty.photos.length > 0) {
+      return initialProperty.photos.map((p, idx) => ({
+        id: p.id || `photo-${idx}`,
+        previewUrl: getPhotoUrl(p.storage_path),
+        storagePath: p.storage_path,
+        isCover: p.is_cover,
+        sortOrder: p.sort_order,
+      }));
+    }
+    return [];
+  });
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Origem & Contatos
-  const [sourceType, setSourceType] = useState<SourceType>('Próprio');
-  const [ownerName, setOwnerName] = useState('');
-  const [ownerPhone, setOwnerPhone] = useState('');
-  const [partnerName, setPartnerName] = useState('');
-  const [partnerPhone, setPartnerPhone] = useState('');
-  const [notes, setNotes] = useState('');
+  const [sourceType, setSourceType] = useState<SourceType>(initialProperty?.source_type || 'Próprio');
+  const [ownerName, setOwnerName] = useState(initialProperty?.owner_name || '');
+  const [ownerPhone, setOwnerPhone] = useState(initialProperty?.owner_phone || '');
+  const [partnerName, setPartnerName] = useState(initialProperty?.partner_name || '');
+  const [partnerPhone, setPartnerPhone] = useState(initialProperty?.partner_phone || '');
+  const [notes, setNotes] = useState(initialProperty?.notes || '');
 
   // Validação dos 5 campos obrigatórios
   const [submitted, setSubmitted] = useState(false);
@@ -216,29 +232,37 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
     setErrorMessage(null);
 
     const numericPrice = Number(price);
-    const newPropertyId = `prop-${Date.now()}`;
+    const newPropertyId = initialProperty?.id || `prop-${Date.now()}`;
+
+    // Monta array de fotos
     const photos = images.map((img, idx) => ({
-      id: `photo-${idx}`,
+      id: img.id || `photo-${idx}`,
       property_id: newPropertyId,
-      storage_path: img.previewUrl,
+      storage_path: img.storagePath || img.previewUrl,
       sort_order: idx,
       is_cover: img.isCover,
     }));
 
+    // Se nenhuma foto foi enviada e não tínhamos fotos anteriores, mantém foto padrão
     if (photos.length === 0) {
-      photos.push({
-        id: `photo-0`,
-        property_id: newPropertyId,
-        storage_path:
-          'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80',
-        sort_order: 0,
-        is_cover: true,
-      });
+      if (initialProperty?.photos && initialProperty.photos.length > 0) {
+        photos.push(...initialProperty.photos);
+      } else {
+        photos.push({
+          id: `photo-0`,
+          property_id: newPropertyId,
+          storage_path:
+            'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80',
+          sort_order: 0,
+          is_cover: true,
+        });
+      }
     }
 
     const newProperty: Property = {
+      ...(initialProperty || {}),
       id: newPropertyId,
-      purpose: 'Venda',
+      purpose: initialProperty?.purpose || 'Venda',
       type,
       neighborhood: neighborhood.trim(),
       condominium_name: condominiumName.trim() || undefined,
@@ -265,8 +289,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
       partner_name: sourceType === 'Parceiro' ? partnerName.trim() || undefined : undefined,
       partner_phone: sourceType === 'Parceiro' ? partnerPhone.trim() || undefined : undefined,
       notes: notes.trim() || undefined,
-      status: 'Ativo',
-      created_at: new Date().toISOString(),
+      status: initialProperty?.status || 'Ativo',
+      created_at: initialProperty?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       photos,
     };
@@ -981,7 +1005,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
           }}
         >
           <Check className="w-4 h-4 stroke-[2.5]" />
-          <span>Adicionar imóvel</span>
+          <span>{submitButtonLabel || (initialProperty ? 'Salvar Alterações' : 'Adicionar imóvel')}</span>
         </button>
       </div>
     </form>
