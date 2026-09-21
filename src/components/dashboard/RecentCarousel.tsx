@@ -150,23 +150,8 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
                       {formatPrice(property.price)}
                     </span>
 
-                    {/* Selo Próprio (Âmbar) ou Parceiro (Azul) idêntico à referência */}
-                    <span
-                      className="px-2.5 py-0.5 rounded-full text-[9px] font-bold"
-                      style={
-                        property.source_type === 'Próprio'
-                          ? {
-                              background: 'rgba(245, 158, 11, 0.15)',
-                              border: '1px solid rgba(245, 158, 11, 0.40)',
-                              color: '#FCD34D',
-                            }
-                          : {
-                              background: 'rgba(2, 132, 199, 0.18)',
-                              border: '1px solid rgba(2, 132, 199, 0.45)',
-                              color: '#38BDF8',
-                            }
-                      }
-                    >
+                    {/* Selo Próprio / Parceiro em vidro neutro e elegante */}
+                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.08] text-slate-300 border border-white/12">
                       {property.source_type}
                     </span>
                   </div>

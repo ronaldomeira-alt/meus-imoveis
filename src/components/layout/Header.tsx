@@ -31,7 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <h2 className="text-[23px] lg:text-[26px] font-bold text-white tracking-tight leading-tight">
             Boa noite,{' '}
-            <span className="text-[#38BDF8] font-bold" style={{ textShadow: '0 0 16px rgba(56, 189, 248, 0.4)' }}>
+            <span className="text-[#38BDF8] font-bold">
               Ronaldo
             </span>
           </h2>
@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
               </kbd>
             </div>
 
-            {/* Notificações com Badge Vermelho */}
+            {/* Notificações com Badge Ciano Discreto */}
             <button
               onClick={onOpenNotifications}
               className="relative flex-shrink-0 w-8.5 h-8.5 rounded-full flex items-center justify-center text-slate-300 hover:text-white transition-colors"
@@ -80,12 +80,9 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Notificações"
             >
               <Bell style={{ width: '14px', height: '14px' }} strokeWidth={2} />
-              <span
-                className="absolute top-1 right-1 w-3 h-3 rounded-full bg-rose-500 text-[8px] font-bold text-white flex items-center justify-center border-2 border-[#030611]"
-                style={{ boxShadow: '0 0 8px rgba(244, 63, 94, 0.85)' }}
-              >
-                1
-              </span>
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 border-2 border-[#030611]" />
+              )}
             </button>
 
             {/* Perfil do Usuário */}

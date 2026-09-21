@@ -331,7 +331,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         )}
 
         {/* ── 1. INFORMAÇÕES PRINCIPAIS ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-1 space-y-3.5">
           <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
             <Building2 className="w-3.5 h-3.5 text-cyan-400" />
             <span>Informações Principais</span>
@@ -462,7 +462,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 2. CARACTERÍSTICAS & DIMENSÕES ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
             <Layers className="w-3.5 h-3.5 text-cyan-400" />
             <span>Características do Imóvel</span>
@@ -638,7 +638,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 3. VALORES FINANCEIROS ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
             <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
             <span>Valores e Encargos</span>
@@ -704,7 +704,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 4. COMODIDADES E TAGS ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
             <span className="text-white text-xs font-bold uppercase tracking-wider">
               Comodidades e Detalhes
@@ -789,7 +789,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 5. SEÇÃO EXCLUSIVA DE FOTOS (MODO MANUAL) ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
               <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
@@ -881,7 +881,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 6. ORIGEM & CONTATOS ── */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/8 space-y-3.5">
+        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
               <User className="w-3.5 h-3.5 text-cyan-400" />

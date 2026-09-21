@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Share2,
@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Home,
+  MoreHorizontal,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Property } from '../../types/property';
@@ -48,6 +49,23 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o menu de ações ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+        setIsActionMenuOpen(false);
+      }
+    };
+    if (isActionMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isActionMenuOpen]);
 
   // Garante que o scroll suba ao topo ao abrir
   useEffect(() => {
@@ -107,11 +125,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         </button>
 
         {/* Grupo de Ações do Imóvel */}
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="flex items-center gap-2">
           {/* Editar */}
           <button
             onClick={() => onEdit(property)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 hover:text-white bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Editar imóvel</span>
@@ -120,51 +138,76 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Compartilhar */}
           <button
             onClick={handleShare}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] ${
               shareSuccess
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 : 'glass-pill text-slate-200 hover:text-white'
             }`}
           >
             {shareSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-cyan-400" />}
-            <span>{shareSuccess ? 'Copiado sem dados confidenciais!' : 'Compartilhar'}</span>
+            <span>{shareSuccess ? 'Copiado!' : 'Compartilhar'}</span>
           </button>
 
-          {/* Arquivar / Reativar */}
-          <button
-            onClick={() => onArchive(property.id)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white glass-pill flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Archive className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">
-              {property.status === 'Arquivado' ? 'Reativar' : 'Arquivar'}
-            </span>
-          </button>
-
-          {/* Marcar como Vendido */}
-          {property.status !== 'Vendido' && (
+          {/* Menu de Ações Secundárias (•••) */}
+          <div className="relative" ref={actionMenuRef}>
             <button
-              onClick={() => onMarkAsSold(property.id)}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+              onClick={() => setIsActionMenuOpen((prev) => !prev)}
+              aria-label="Mais ações do imóvel"
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 border ${
+                isActionMenuOpen
+                  ? 'bg-white/15 text-white border-white/25 shadow-md'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10'
+              }`}
             >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Vendido</span>
+              <MoreHorizontal className="w-4 h-4" />
             </button>
-          )}
 
-          {/* Excluir */}
-          <button
-            onClick={() => {
-              if (window.confirm('Tem certeza que deseja excluir este imóvel permanentemente?')) {
-                onDelete(property.id);
-              }
-            }}
-            aria-label="Excluir imóvel"
-            className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/15 border border-rose-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Excluir</span>
-          </button>
+            {isActionMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl bg-[#090e1f] border border-white/15 backdrop-blur-xl shadow-2xl py-1.5 z-30 animate-fade-in">
+                {/* Arquivar / Reativar */}
+                <button
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    onArchive(property.id);
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Archive className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{property.status === 'Arquivado' ? 'Reativar imóvel' : 'Arquivar imóvel'}</span>
+                </button>
+
+                {/* Marcar como Vendido */}
+                {property.status !== 'Vendido' && (
+                  <button
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      onMarkAsSold(property.id);
+                    }}
+                    className="w-full px-3.5 py-2 text-left text-xs font-medium text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Marcar como vendido</span>
+                  </button>
+                )}
+
+                <div className="my-1 border-t border-white/10" />
+
+                {/* Excluir */}
+                <button
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    if (window.confirm('Tem certeza que deseja excluir este imóvel permanentemente?')) {
+                      onDelete(property.id);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Excluir imóvel</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -174,13 +217,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-white/10 pb-5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                  property.source_type === 'Próprio'
-                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                    : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                }`}
-              >
+              <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/[0.08] text-slate-300 border border-white/12">
                 {property.source_type}
               </span>
 
@@ -455,13 +492,26 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
           {/* Coluna Direita (1/3): Informações Confidenciais do Corretor */}
           <div className="space-y-6">
-            {/* Card Exclusivo do Corretor (Protegido com 🔒) */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-amber-500/[0.04] border border-amber-500/30 space-y-4 shadow-xl">
+            {/* Card Exclusivo do Corretor (Cofre / Dados Internos) */}
+            <div
+              className="p-5 sm:p-6 rounded-3xl space-y-4 shadow-xl backdrop-blur-md"
+              style={{
+                background: 'linear-gradient(180deg, rgba(212, 175, 55, 0.03) 0%, rgba(255, 255, 255, 0.015) 100%)',
+                border: '1px solid rgba(212, 175, 55, 0.18)',
+              }}
+            >
               <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider font-extrabold text-amber-400 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" /> Informações do Corretor
+                <span className="text-[11px] uppercase tracking-wider font-bold text-[#E5C984] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#D4AF37]" /> Informações do Corretor
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span
+                  className="px-2.5 py-0.5 rounded-lg text-[10px] font-medium flex items-center gap-1"
+                  style={{
+                    background: 'rgba(212, 175, 55, 0.08)',
+                    color: '#E5C984',
+                    border: '1px solid rgba(212, 175, 55, 0.22)',
+                  }}
+                >
                   🔒 Confidencial
                 </span>
               </div>

@@ -95,22 +95,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
             {formatPrice(property.price)}
           </span>
 
-          <span
-            className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-            style={
-              property.source_type === 'Próprio'
-                ? {
-                    background: 'rgba(245, 158, 11, 0.14)',
-                    border: '1px solid rgba(245, 158, 11, 0.30)',
-                    color: '#FCD34D',
-                  }
-                : {
-                    background: 'rgba(0, 229, 255, 0.12)',
-                    border: '1px solid rgba(0, 229, 255, 0.28)',
-                    color: '#67E8F9',
-                  }
-            }
-          >
+          <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.08] text-slate-300 border border-white/12">
             {property.source_type}
           </span>
         </div>

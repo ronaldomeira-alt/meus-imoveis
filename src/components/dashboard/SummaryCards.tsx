@@ -26,7 +26,6 @@ interface KPICardConfig {
   iconBg: string;
   kpiClass: string;
   trendText: string;
-  barHeights: number[]; // Altura das 5 mini barrinhas no canto direito
 }
 
 const CARDS_CONFIG: KPICardConfig[] = [
@@ -39,7 +38,6 @@ const CARDS_CONFIG: KPICardConfig[] = [
     iconBg: '#0284C7',
     kpiClass: 'glass-kpi-1',
     trendText: '+12%',
-    barHeights: [28, 45, 62, 78, 98],
   },
   {
     id: 'own',
@@ -50,7 +48,6 @@ const CARDS_CONFIG: KPICardConfig[] = [
     iconBg: '#0D9488',
     kpiClass: 'glass-kpi-2',
     trendText: '+7%',
-    barHeights: [35, 52, 42, 74, 90],
   },
   {
     id: 'partner',
@@ -61,7 +58,6 @@ const CARDS_CONFIG: KPICardConfig[] = [
     iconBg: '#7C3AED',
     kpiClass: 'glass-kpi-3',
     trendText: '+28%',
-    barHeights: [24, 40, 56, 70, 94],
   },
   {
     id: 'this_week',
@@ -72,7 +68,6 @@ const CARDS_CONFIG: KPICardConfig[] = [
     iconBg: '#EA580C',
     kpiClass: 'glass-kpi-4',
     trendText: '+33%',
-    barHeights: [20, 38, 58, 78, 100],
   },
 ];
 
@@ -127,17 +122,11 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 <Icon className="w-4.5 h-4.5 text-white" strokeWidth={2.4} />
               </div>
 
-              {/* Chevron circular glassmorphism */}
-              <div
-                className="w-6.5 h-6.5 rounded-full flex items-center justify-center text-slate-400 group-hover:text-white transition-colors"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  backdropFilter: 'blur(12px)',
-                }}
-              >
-                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
-              </div>
+              {/* Chevron suave e discreto (revela sutilmente no hover) */}
+              <ChevronRight
+                className="w-4 h-4 text-slate-500 opacity-20 group-hover:opacity-75 group-hover:translate-x-0.5 transition-all duration-200"
+                strokeWidth={1.8}
+              />
             </div>
 
             {/* Rótulo do KPI */}
@@ -147,42 +136,25 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
               </span>
             </div>
 
-            {/* Linha Inferior: Número Gigante + Taxa de Variação na esquerda, Barras Neon na direita */}
-            <div className="flex items-end justify-between mt-1 relative z-10">
-              <div>
-                <span
-                  className="font-black text-white tabular tracking-tight leading-none block"
-                  style={{
-                    fontSize: 'clamp(28px, 2.4vw, 36px)',
-                    letterSpacing: '-0.03em',
-                    textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {value}
+            {/* Linha Inferior: Número Gigante + Taxa de Variação com respiro limpo */}
+            <div className="mt-1 relative z-10">
+              <span
+                className="font-black text-white tabular tracking-tight leading-none block"
+                style={{
+                  fontSize: 'clamp(28px, 2.4vw, 36px)',
+                  letterSpacing: '-0.03em',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                {value}
+              </span>
+
+              <div className="flex items-center gap-1 mt-1.5 text-[9.5px] font-bold text-emerald-400">
+                <ArrowUp className="w-3 h-3 flex-shrink-0" strokeWidth={2.8} />
+                <span>{card.trendText}</span>
+                <span className="text-slate-400 font-normal ml-0.5">
+                  {card.id === 'this_week' ? 'vs. semana anterior' : 'vs. mês anterior'}
                 </span>
-
-                <div className="flex items-center gap-1 mt-1.5 text-[9.5px] font-bold text-emerald-400">
-                  <ArrowUp className="w-3 h-3 flex-shrink-0" strokeWidth={2.8} />
-                  <span>{card.trendText}</span>
-                  <span className="text-slate-400 font-normal ml-0.5">
-                    {card.id === 'this_week' ? 'vs. semana anterior' : 'vs. mês anterior'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 5 Mini Barrinhas Verticais com Brilho Neon (Idênticas à Referência) */}
-              <div className="flex items-end gap-1 h-7 pb-0.5">
-                {card.barHeights.map((h, bIdx) => (
-                  <div
-                    key={bIdx}
-                    className="w-[3px] rounded-full transition-all duration-300 group-hover:brightness-125"
-                    style={{
-                      height: `${h}%`,
-                      background: card.accentColor,
-                      boxShadow: `0 0 8px ${card.accentColor}`,
-                    }}
-                  />
-                ))}
               </div>
             </div>
           </button>

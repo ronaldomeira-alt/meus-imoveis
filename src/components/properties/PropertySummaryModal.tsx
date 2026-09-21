@@ -125,13 +125,7 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
 
               {/* Badges de Origem & Status */}
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                    property.source_type === 'Próprio'
-                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                      : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                  }`}
-                >
+                <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.08] text-slate-300 border border-white/12">
                   {property.source_type}
                 </span>
                 {property.status !== 'Ativo' && (
@@ -204,14 +198,10 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
             <div className="pt-1">
               <button
                 onClick={() => onOpenDetail(property)}
-                className="w-full py-3 px-5 rounded-2xl text-xs sm:text-sm font-black text-slate-950 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.98] group"
-                style={{
-                  background: 'linear-gradient(135deg, #00E5FF 0%, #38BDF8 100%)',
-                  boxShadow: '0 0 24px rgba(0, 229, 255, 0.35)',
-                }}
+                className="w-full py-3 px-5 rounded-2xl text-xs sm:text-sm font-semibold text-white bg-white/[0.08] hover:bg-cyan-500/15 border border-white/15 hover:border-cyan-400/40 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.98] group"
               >
                 <span>Abrir imóvel</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5] transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="w-4 h-4 text-cyan-400 stroke-[2] transition-transform group-hover:translate-x-1" />
               </button>
             </div>
           </div>
