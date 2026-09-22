@@ -22,7 +22,6 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
   onClose,
   onOpenDetail,
 }) => {
-  // Atalho Esc para fechar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -47,30 +46,26 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pointer-events-auto">
-        {/* Backdrop escuro com desfoque profundo */}
+        {/* Backdrop escuro sólido (sem blur) */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.15 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/80 backdrop-blur-xl"
+          className="fixed inset-0 bg-black/75"
         />
 
-        {/* Modal Compacto Estável — Sem Scroll Vertical */}
+        {/* Modal Compacto */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
+          initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-          className="relative w-full max-w-[440px] rounded-3xl overflow-hidden z-10 border border-white/15 shadow-2xl flex flex-col pointer-events-auto"
-          style={{
-            background: 'linear-gradient(180deg, rgba(10, 17, 34, 0.94) 0%, rgba(6, 10, 22, 0.98) 100%)',
-            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 40px rgba(0, 229, 255, 0.08)',
-          }}
+          exit={{ opacity: 0, scale: 0.96, y: 10 }}
+          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-full max-w-[440px] rounded-2xl overflow-hidden z-10 modal-surface shadow-modal flex flex-col pointer-events-auto"
         >
-          {/* 1. Foto Principal Protagonista */}
-          <div className="relative aspect-[16/10] w-full overflow-hidden bg-black/60 flex-shrink-0">
+          {/* 1. Foto Principal */}
+          <div className="relative aspect-[16/10] w-full overflow-hidden bg-black/40 flex-shrink-0">
             {photoUrl ? (
               <img
                 src={photoUrl}
@@ -78,58 +73,53 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
                 className="w-full h-full object-cover select-none"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-slate-900 text-slate-500">
+              <div className="w-full h-full flex items-center justify-center bg-surface-2 text-ink-secondary">
                 Sem fotografia disponível
               </div>
             )}
 
-            {/* Gradiente sutil para garantir contraste visual */}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
-                background: 'linear-gradient(to top, rgba(6, 10, 22, 0.9) 0%, rgba(6, 10, 22, 0.1) 50%, rgba(0, 0, 0, 0.4) 100%)',
+                background: 'linear-gradient(to top, rgba(6, 10, 22, 0.85) 0%, rgba(6, 10, 22, 0.1) 50%, rgba(0, 0, 0, 0.35) 100%)',
               }}
             />
 
-            {/* Badge discreto de quantidade de fotos */}
             {photos.length > 1 && (
-              <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white/90 bg-black/50 backdrop-blur-md border border-white/15 flex items-center gap-1.5 shadow-md">
-                <Images className="w-3.5 h-3.5 text-cyan-400" />
+              <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-semibold text-ink-primary/90 bg-black/55 border border-line-strong flex items-center gap-1.5">
+                <Images className="w-3.5 h-3.5 text-accent" />
                 <span>{photos.length} fotos</span>
               </div>
             )}
 
-            {/* Botão Fechar no Topo Direito */}
             <button
               onClick={onClose}
               aria-label="Fechar"
-              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center bg-black/50 hover:bg-black/80 text-white/80 hover:text-white border border-white/15 backdrop-blur-md transition-all cursor-pointer shadow-md active:scale-90"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center bg-black/55 hover:bg-black/75 text-ink-primary/80 hover:text-ink-primary border border-line-strong transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* 2. Informações Essenciais (Layout Compacto Sem Scroll) */}
+          {/* 2. Informações Essenciais */}
           <div className="p-4 sm:p-5 flex flex-col justify-between space-y-3.5 flex-1">
-            {/* Título do Bairro & Subtítulo */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight truncate">
+                <h3 className="text-xl sm:text-2xl font-black text-ink-primary tracking-tight truncate">
                   {property.neighborhood}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5 truncate font-medium">
+                <p className="text-xs text-ink-secondary mt-0.5 truncate font-medium">
                   {property.type} · {property.bedrooms} {property.bedrooms === 1 ? 'quarto' : 'quartos'} · {property.area_m2} m²
                   {property.condominium_name ? ` · ${property.condominium_name}` : ''}
                 </p>
               </div>
 
-              {/* Badges de Origem & Status */}
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.08] text-slate-300 border border-white/12">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.05] text-ink-secondary border border-line-subtle">
                   {property.source_type}
                 </span>
                 {property.status !== 'Ativo' && (
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-white/10 text-slate-300 border border-white/15">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-status-warning/15 text-status-warning border border-status-warning/30">
                     {property.status}
                   </span>
                 )}
@@ -137,71 +127,71 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
             </div>
 
             {/* Preço Principal em Destaque */}
-            <div className="flex items-baseline justify-between border-y border-white/10 py-2.5">
+            <div className="flex items-baseline justify-between border-y border-line-subtle py-2.5">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-400 block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-accent block">
                   Valor de {property.purpose === 'Locação' ? 'Aluguel' : 'Venda'}
                 </span>
-                <div className="text-2xl font-black text-white tabular tracking-tight">
+                <div className="text-2xl font-black text-ink-primary tabular tracking-tight">
                   {formatPrice(property.price)}
                 </div>
               </div>
 
               {property.condo_fee ? (
                 <div className="text-right">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block">
+                  <span className="text-[10px] uppercase font-semibold text-ink-secondary block">
                     Condomínio
                   </span>
-                  <span className="text-xs font-bold text-slate-200">
+                  <span className="text-xs font-bold text-ink-primary">
                     {formatPrice(property.condo_fee)}/mês
                   </span>
                 </div>
               ) : null}
             </div>
 
-            {/* Grade Bento Compacta de Métricas Essenciais */}
+            {/* Grade Compacta de Métricas */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center flex-shrink-0">
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-line-subtle flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
                   <Bed className="w-3.5 h-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Quartos</span>
-                  <p className="text-xs font-bold text-white truncate">
+                  <span className="text-[9px] uppercase font-bold text-ink-secondary block leading-tight">Quartos</span>
+                  <p className="text-xs font-bold text-ink-primary truncate">
                     {property.bedrooms} {property.suites > 0 ? `(${property.suites}s)` : ''}
                   </p>
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center flex-shrink-0">
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-line-subtle flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
                   <Maximize2 className="w-3.5 h-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Área</span>
-                  <p className="text-xs font-bold text-white truncate">{property.area_m2} m²</p>
+                  <span className="text-[9px] uppercase font-bold text-ink-secondary block leading-tight">Área</span>
+                  <p className="text-xs font-bold text-ink-primary truncate">{property.area_m2} m²</p>
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center flex-shrink-0">
+              <div className="p-2.5 rounded-xl bg-white/[0.03] border border-line-subtle flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-accent-soft text-accent flex items-center justify-center flex-shrink-0">
                   <Car className="w-3.5 h-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block leading-tight">Vagas</span>
-                  <p className="text-xs font-bold text-white truncate">{property.parking_spaces} vaga(s)</p>
+                  <span className="text-[9px] uppercase font-bold text-ink-secondary block leading-tight">Vagas</span>
+                  <p className="text-xs font-bold text-ink-primary truncate">{property.parking_spaces} vaga(s)</p>
                 </div>
               </div>
             </div>
 
-            {/* 3. Botão Inferior de Navegação: [ Abrir imóvel → ] */}
+            {/* 3. Botão de Navegação */}
             <div className="pt-1">
               <button
                 onClick={() => onOpenDetail(property)}
-                className="w-full py-3 px-5 rounded-2xl text-xs sm:text-sm font-semibold text-white bg-white/[0.08] hover:bg-cyan-500/15 border border-white/15 hover:border-cyan-400/40 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-[0.98] group"
+                className="btn-secondary w-full py-3 px-5 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer group"
               >
                 <span>Abrir imóvel</span>
-                <ArrowRight className="w-4 h-4 text-cyan-400 stroke-[2] transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="w-4 h-4 text-accent stroke-[2] transition-transform group-hover:translate-x-1" />
               </button>
             </div>
           </div>

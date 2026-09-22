@@ -302,7 +302,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
       particleCount: 80,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#00E5FF', '#38BDF8', '#818CF8', '#10B981'],
+      colors: ['#3B82F6', '#60A5FA', '#93C5FD', '#10B981'],
     });
   };
 
@@ -315,15 +315,15 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
       {/* Área rolável com campos organizados */}
       <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 space-y-5 custom-scrollbar">
         {errorMessage && (
-          <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between text-rose-200 text-xs">
+          <div className="p-3.5 rounded-2xl bg-status-danger/10 border border-status-danger/30 flex items-center justify-between text-status-danger text-xs">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-status-danger flex-shrink-0" />
               <span>{errorMessage}</span>
             </div>
             <button
               type="button"
               onClick={() => setErrorMessage(null)}
-              className="text-rose-400 hover:text-white text-xs cursor-pointer font-semibold"
+              className="text-status-danger hover:text-ink-primary text-xs cursor-pointer font-semibold"
             >
               Fechar
             </button>
@@ -332,16 +332,16 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
         {/* ── 1. INFORMAÇÕES PRINCIPAIS ── */}
         <div className="pt-1 space-y-3.5">
-          <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-            <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
+            <Building2 className="w-3.5 h-3.5 text-accent" />
             <span>Informações Principais</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* 1. Tipo do Imóvel * */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Tipo do imóvel <span className="text-rose-400 font-bold">*</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Tipo do imóvel <span className="text-status-danger font-bold">*</span>
               </label>
               <select
                 value={type}
@@ -349,10 +349,10 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   setType(e.target.value as PropertyType);
                   clearFieldError('type');
                 }}
-                className={`w-full px-3 py-2 rounded-xl bg-slate-900/80 text-white text-xs focus:outline-none cursor-pointer transition-colors ${
+                className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none cursor-pointer transition-colors ${
                   fieldErrors.type
-                    ? 'border-2 border-rose-500/70 bg-rose-500/5 text-rose-200'
-                    : 'border border-white/10 focus:border-cyan-400'
+                    ? 'border-2 border-status-danger/70 bg-status-danger/5 text-status-danger'
+                    : 'border border-line-subtle focus:border-accent'
                 }`}
               >
                 <option value="Apartamento">Apartamento</option>
@@ -364,7 +364,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 <option value="Outro">Outro</option>
               </select>
               {fieldErrors.type && (
-                <p className="mt-1 text-[11px] text-rose-400 flex items-center gap-1 font-medium animate-fade-in">
+                <p className="mt-1 text-[11px] text-status-danger flex items-center gap-1 font-medium animate-fade-in">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>⚠ {fieldErrors.type}</span>
                 </p>
@@ -373,8 +373,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
             {/* 2. Bairro * */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Bairro <span className="text-rose-400 font-bold">*</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Bairro <span className="text-status-danger font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -385,10 +385,10 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   clearFieldError('neighborhood');
                 }}
                 placeholder="Ex: Bessa, Manaíra..."
-                className={`w-full px-3 py-2 rounded-xl bg-slate-900/80 text-white text-xs focus:outline-none transition-colors ${
+                className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none transition-colors ${
                   fieldErrors.neighborhood
-                    ? 'border-2 border-rose-500/70 bg-rose-500/5 placeholder-rose-400/40 text-rose-200'
-                    : 'border border-white/10 focus:border-cyan-400'
+                    ? 'border-2 border-status-danger/70 bg-status-danger/5 placeholder-rose-400/40 text-status-danger'
+                    : 'border border-line-subtle focus:border-accent'
                 }`}
               />
               <datalist id="neighborhood-list">
@@ -397,7 +397,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 ))}
               </datalist>
               {fieldErrors.neighborhood && (
-                <p className="mt-1 text-[11px] text-rose-400 flex items-center gap-1 font-medium animate-fade-in">
+                <p className="mt-1 text-[11px] text-status-danger flex items-center gap-1 font-medium animate-fade-in">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>⚠ {fieldErrors.neighborhood}</span>
                 </p>
@@ -405,7 +405,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Condomínio / Edifício
               </label>
               <input
@@ -413,14 +413,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={condominiumName}
                 onChange={(e) => setCondominiumName(e.target.value)}
                 placeholder="Ex: Ed. Ocean Palace"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <div className="sm:col-span-2">
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Endereço / Rua
               </label>
               <input
@@ -428,13 +428,13 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Ex: Av. Governador Argemiro de Figueiredo"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Número
                 </label>
                 <input
@@ -442,11 +442,11 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={number}
                   onChange={(e) => setNumber(e.target.value)}
                   placeholder="120"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Apto
                 </label>
                 <input
@@ -454,7 +454,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={complement}
                   onChange={(e) => setComplement(e.target.value)}
                   placeholder="302"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                 />
               </div>
             </div>
@@ -463,16 +463,16 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
         {/* ── 2. CARACTERÍSTICAS & DIMENSÕES ── */}
         <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
-          <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
+            <Layers className="w-3.5 h-3.5 text-accent" />
             <span>Características do Imóvel</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {/* 3. Área (m²) * */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Área (m²) <span className="text-rose-400 font-bold">*</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Área (m²) <span className="text-status-danger font-bold">*</span>
               </label>
               <input
                 type="number"
@@ -484,14 +484,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   clearFieldError('area_m2');
                 }}
                 placeholder="Ex: 65"
-                className={`w-full px-3 py-2 rounded-xl bg-slate-900/80 text-white text-xs focus:outline-none font-mono transition-colors ${
+                className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none font-mono transition-colors ${
                   fieldErrors.area_m2
-                    ? 'border-2 border-rose-500/70 bg-rose-500/5 placeholder-rose-400/40 text-rose-200'
-                    : 'border border-white/10 focus:border-cyan-400'
+                    ? 'border-2 border-status-danger/70 bg-status-danger/5 placeholder-rose-400/40 text-status-danger'
+                    : 'border border-line-subtle focus:border-accent'
                 }`}
               />
               {fieldErrors.area_m2 && (
-                <p className="mt-1 text-[11px] text-rose-400 flex items-center gap-1 font-medium animate-fade-in">
+                <p className="mt-1 text-[11px] text-status-danger flex items-center gap-1 font-medium animate-fade-in">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>⚠ {fieldErrors.area_m2}</span>
                 </p>
@@ -500,8 +500,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
             {/* 4. Quartos * */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Quartos <span className="text-rose-400 font-bold">*</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Quartos <span className="text-status-danger font-bold">*</span>
               </label>
               <input
                 type="number"
@@ -513,14 +513,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   clearFieldError('bedrooms');
                 }}
                 placeholder="Ex: 2"
-                className={`w-full px-3 py-2 rounded-xl bg-slate-900/80 text-white text-xs focus:outline-none font-mono transition-colors ${
+                className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none font-mono transition-colors ${
                   fieldErrors.bedrooms
-                    ? 'border-2 border-rose-500/70 bg-rose-500/5 placeholder-rose-400/40 text-rose-200'
-                    : 'border border-white/10 focus:border-cyan-400'
+                    ? 'border-2 border-status-danger/70 bg-status-danger/5 placeholder-rose-400/40 text-status-danger'
+                    : 'border border-line-subtle focus:border-accent'
                 }`}
               />
               {fieldErrors.bedrooms && (
-                <p className="mt-1 text-[11px] text-rose-400 flex items-center gap-1 font-medium animate-fade-in">
+                <p className="mt-1 text-[11px] text-status-danger flex items-center gap-1 font-medium animate-fade-in">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>⚠ {fieldErrors.bedrooms}</span>
                 </p>
@@ -528,7 +528,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Suítes
               </label>
               <input
@@ -538,12 +538,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={suites}
                 onChange={(e) => setSuites(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Banheiros
               </label>
               <input
@@ -553,12 +553,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={bathrooms}
                 onChange={(e) => setBathrooms(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Vagas
               </label>
               <input
@@ -568,20 +568,20 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={parkingSpaces}
                 onChange={(e) => setParkingSpaces(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Posição Solar
               </label>
               <select
                 value={position}
                 onChange={(e) => setPosition(e.target.value as PropertyPosition)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent cursor-pointer"
               >
                 <option value="Nascente">Nascente</option>
                 <option value="Poente">Poente</option>
@@ -593,13 +593,13 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Condição
               </label>
               <select
                 value={condition}
                 onChange={(e) => setCondition(e.target.value as PropertyCondition)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 cursor-pointer"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent cursor-pointer"
               >
                 <option value="Novo">Novo</option>
                 <option value="Usado">Usado</option>
@@ -609,7 +609,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Andar
               </label>
               <input
@@ -619,7 +619,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={floor}
                 onChange={(e) => setFloor(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Ex: 3"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
 
@@ -631,7 +631,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   onChange={(e) => setFurnished(e.target.checked)}
                   className="w-4 h-4 rounded accent-cyan-400 cursor-pointer"
                 />
-                <span className="text-xs text-white font-medium">Imóvel Mobiliado</span>
+                <span className="text-xs text-ink-primary font-medium">Imóvel Mobiliado</span>
               </label>
             </div>
           </div>
@@ -639,16 +639,16 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
         {/* ── 3. VALORES FINANCEIROS ── */}
         <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
-          <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
+            <DollarSign className="w-3.5 h-3.5 text-status-success" />
             <span>Valores e Encargos</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* 5. Valor do imóvel * */}
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Valor do imóvel (R$) <span className="text-rose-400 font-bold">*</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Valor do imóvel (R$) <span className="text-status-danger font-bold">*</span>
               </label>
               <input
                 type="number"
@@ -659,14 +659,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   clearFieldError('price');
                 }}
                 placeholder="Ex: 450000"
-                className={`w-full px-3 py-2 rounded-xl bg-slate-900/80 text-white text-xs focus:outline-none font-mono font-bold transition-colors ${
+                className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none font-mono font-bold transition-colors ${
                   fieldErrors.price
-                    ? 'border-2 border-rose-500/70 bg-rose-500/5 placeholder-rose-400/40 text-rose-200'
-                    : 'border border-white/10 focus:border-cyan-400'
+                    ? 'border-2 border-status-danger/70 bg-status-danger/5 placeholder-rose-400/40 text-status-danger'
+                    : 'border border-line-subtle focus:border-accent'
                 }`}
               />
               {fieldErrors.price && (
-                <p className="mt-1 text-[11px] text-rose-400 flex items-center gap-1 font-medium animate-fade-in">
+                <p className="mt-1 text-[11px] text-status-danger flex items-center gap-1 font-medium animate-fade-in">
                   <AlertCircle className="w-3 h-3 flex-shrink-0" />
                   <span>⚠ {fieldErrors.price}</span>
                 </p>
@@ -674,8 +674,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
-                Condomínio Mensal (R$) <span className="text-slate-500 font-normal">(Opcional)</span>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Condomínio Mensal (R$) <span className="text-ink-secondary font-normal">(Opcional)</span>
               </label>
               <input
                 type="number"
@@ -683,12 +683,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={condoFee}
                 onChange={(e) => setCondoFee(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="Ex: 450"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 IPTU Anual (R$)
               </label>
               <input
@@ -697,7 +697,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 value={iptu}
                 onChange={(e) => setIptu(e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="850"
-                className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
           </div>
@@ -706,13 +706,13 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         {/* ── 4. COMODIDADES E TAGS ── */}
         <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-white text-xs font-bold uppercase tracking-wider">
+            <span className="text-ink-primary text-xs font-bold uppercase tracking-wider">
               Comodidades e Detalhes
             </span>
           </div>
 
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+            <label className="text-[11px] font-semibold text-ink-secondary block mb-1.5">
               Características do Edifício
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -725,8 +725,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                     onClick={() => toggleBuildingFeature(feat)}
                     className={`px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer select-none ${
                       active
-                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-sm font-semibold'
-                        : 'bg-white/5 text-slate-400 hover:text-white border border-white/5'
+                        ? 'bg-accent/20 text-accent border border-accent/50 shadow-sm font-semibold'
+                        : 'bg-white/5 text-ink-secondary hover:text-ink-primary border border-line-subtle'
                     }`}
                   >
                     {active ? '✓ ' : '+ '}
@@ -737,8 +737,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5">
-            <label className="text-[11px] font-semibold text-slate-400 block mb-1.5">
+          <div className="pt-2 border-t border-line-subtle">
+            <label className="text-[11px] font-semibold text-ink-secondary block mb-1.5">
               Características do Imóvel
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -751,8 +751,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                     onClick={() => toggleApartmentFeature(feat)}
                     className={`px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer select-none ${
                       active
-                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-sm font-semibold'
-                        : 'bg-white/5 text-slate-400 hover:text-white border border-white/5'
+                        ? 'bg-accent/20 text-accent border border-accent/50 shadow-sm font-semibold'
+                        : 'bg-white/5 text-ink-secondary hover:text-ink-primary border border-line-subtle'
                     }`}
                   >
                     {active ? '✓ ' : '+ '}
@@ -775,12 +775,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   }
                 }}
                 placeholder="Adicionar outra comodidade..."
-                className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900/80 border border-white/10 text-white text-xs"
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-surface-1 border border-line-subtle text-ink-primary text-xs"
               />
               <button
                 type="button"
                 onClick={handleAddCustomFeature}
-                className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-cyan-400 text-xs font-semibold border border-white/10 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-accent text-xs font-semibold border border-line-subtle cursor-pointer"
               >
                 Adicionar
               </button>
@@ -791,8 +791,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         {/* ── 5. SEÇÃO EXCLUSIVA DE FOTOS (MODO MANUAL) ── */}
         <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-              <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
+              <ImageIcon className="w-3.5 h-3.5 text-accent" />
               <span>Fotos do Imóvel ({images.length})</span>
             </div>
 
@@ -800,7 +800,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isProcessingImages}
-              className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-300 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 rounded-xl bg-accent/15 hover:bg-accent/25 border border-accent/40 text-accent text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
             >
               <Upload className="w-3.5 h-3.5" />
               <span>Adicionar fotos</span>
@@ -823,8 +823,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   key={idx}
                   className={`relative group rounded-xl overflow-hidden aspect-video border transition-all ${
                     img.isCover
-                      ? 'border-cyan-400 ring-2 ring-cyan-400/40 shadow-lg shadow-cyan-500/20'
-                      : 'border-white/15 hover:border-white/30'
+                      ? 'border-accent ring-2 ring-accent/40 shadow-lg shadow-accent/20'
+                      : 'border-line-strong hover:border-line-strong'
                   }`}
                 >
                   <img
@@ -835,19 +835,19 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
                   {/* Badge de Capa */}
                   {img.isCover && (
-                    <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-cyan-500 text-[9px] font-bold text-slate-950 flex items-center gap-1 shadow-md">
+                    <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-accent text-[9px] font-bold text-white flex items-center gap-1 shadow-md">
                       <Star className="w-2.5 h-2.5 fill-current" /> Capa
                     </span>
                   )}
 
                   {/* Ações ao passar o mouse */}
-                  <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <div className="absolute inset-0 bg-surface-2/90 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     {!img.isCover && (
                       <button
                         type="button"
                         onClick={() => handleSetCover(idx)}
                         title="Definir como foto principal de capa"
-                        className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-cyan-300 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-accent transition-colors cursor-pointer"
                       >
                         <Star className="w-3.5 h-3.5" />
                       </button>
@@ -867,13 +867,13 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
           ) : (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border border-dashed border-white/15 hover:border-cyan-400/40 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-white/[0.01] hover:bg-white/[0.03]"
+              className="border border-dashed border-line-strong hover:border-accent/40 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-white/[0.01] hover:bg-white/[0.03]"
             >
-              <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2 group-hover:text-cyan-400" />
-              <p className="text-xs text-slate-300 font-medium">
+              <Upload className="w-6 h-6 text-ink-secondary mx-auto mb-2 group-hover:text-accent" />
+              <p className="text-xs text-ink-secondary font-medium">
                 Clique para selecionar ou arraste fotos aqui
               </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
+              <p className="text-[10px] text-ink-secondary mt-0.5">
                 PNG, JPG ou HEIC. Se nenhuma for enviada, um placeholder moderno será adotado.
               </p>
             </div>
@@ -883,20 +883,20 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         {/* ── 6. ORIGEM & CONTATOS ── */}
         <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-wider">
-              <User className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
+              <User className="w-3.5 h-3.5 text-accent" />
               <span>Origem e Contatos</span>
             </div>
 
             {/* Toggle Próprio / Parceiro */}
-            <div className="p-0.5 rounded-xl bg-slate-900 border border-white/10 flex items-center">
+            <div className="p-0.5 rounded-xl bg-surface-1 border border-line-subtle flex items-center">
               <button
                 type="button"
                 onClick={() => setSourceType('Próprio')}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   sourceType === 'Próprio'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-accent/20 text-accent border border-accent/30'
+                    : 'text-ink-secondary hover:text-ink-primary'
                 }`}
               >
                 Próprio
@@ -906,8 +906,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 onClick={() => setSourceType('Parceiro')}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   sourceType === 'Parceiro'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/30'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-accent/20 text-accent border border-accent/30'
+                    : 'text-ink-secondary hover:text-ink-primary'
                 }`}
               >
                 Parceiro
@@ -918,7 +918,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
           {sourceType === 'Próprio' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Nome do Proprietário
                 </label>
                 <input
@@ -926,11 +926,11 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={ownerName}
                   onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="Ex: Carlos Eduardo"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Telefone / WhatsApp
                 </label>
                 <input
@@ -938,14 +938,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={ownerPhone}
                   onChange={(e) => setOwnerPhone(e.target.value)}
                   placeholder="(83) 99999-8888"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
                 />
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Nome do Corretor Parceiro
                 </label>
                 <input
@@ -953,11 +953,11 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={partnerName}
                   onChange={(e) => setPartnerName(e.target.value)}
                   placeholder="Ex: Corretor Silva"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+                <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                   Telefone do Parceiro
                 </label>
                 <input
@@ -965,14 +965,14 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   value={partnerPhone}
                   onChange={(e) => setPartnerPhone(e.target.value)}
                   placeholder="(83) 98888-7777"
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
                 />
               </div>
             </div>
           )}
 
           <div className="pt-2">
-            <label className="text-[11px] font-semibold text-slate-400 block mb-1">
+            <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
               Observações / Notas Internas
             </label>
             <textarea
@@ -980,29 +980,25 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Informações adicionais, chaves, horários para visitação..."
-              className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 resize-none"
+              className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent resize-none"
             />
           </div>
         </div>
       </div>
 
       {/* ── 7. RODAPÉ FIXO DO MODO MANUAL ── */}
-      <div className="h-[64px] px-6 border-t border-white/10 bg-slate-950/70 flex items-center justify-between flex-shrink-0">
+      <div className="h-[64px] px-6 border-t border-line-subtle bg-surface-2/90 flex items-center justify-between flex-shrink-0">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+          className="px-4 py-2 rounded-xl text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:bg-white/5 transition-colors cursor-pointer"
         >
           Cancelar
         </button>
 
         <button
           type="submit"
-          className="px-6 py-2.5 rounded-xl text-xs font-bold text-slate-950 flex items-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95"
-          style={{
-            background: 'linear-gradient(135deg, #00E5FF 0%, #38BDF8 100%)',
-            boxShadow: '0 0 20px rgba(0, 229, 255, 0.35)',
-          }}
+          className="btn-primary px-6 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer"
         >
           <Check className="w-4 h-4 stroke-[2.5]" />
           <span>{submitButtonLabel || (initialProperty ? 'Salvar Alterações' : 'Adicionar imóvel')}</span>

@@ -28,17 +28,10 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
       {/* ── Topo da Seção ── */}
       <div className="flex items-center justify-between mb-2 px-1">
         <div className="flex items-center gap-2.5">
-          {/* Botão circular azul com relógio branco (idêntico à referência) */}
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{
-              background: '#0284C7',
-              boxShadow: '0 0 14px rgba(2, 132, 199, 0.6)',
-            }}
-          >
-            <Clock className="text-white" style={{ width: '14px', height: '14px' }} strokeWidth={2.4} />
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-accent-soft">
+            <Clock className="text-accent" style={{ width: '14px', height: '14px' }} strokeWidth={2.2} />
           </div>
-          <h3 className="text-[13px] font-bold text-white tracking-tight">
+          <h3 className="text-[13px] font-bold text-ink-primary tracking-tight">
             Adicionados recentemente
           </h3>
         </div>
@@ -46,32 +39,24 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onViewAll}
-            className="text-[11px] font-medium text-slate-400 hover:text-cyan-400 flex items-center gap-1 transition-colors"
+            className="text-[11px] font-medium text-ink-secondary hover:text-accent flex items-center gap-1 transition-colors"
           >
             <span>Ver todos</span>
             <ArrowRight style={{ width: '12px', height: '12px' }} />
           </button>
 
-          {/* Botões circulares de Navegação < e > */}
-          <div className="flex items-center gap-1 pl-1.5 border-l border-white/[0.08]">
+          {/* Botões de Navegação < e > */}
+          <div className="flex items-center gap-1 pl-1.5 border-l border-line-subtle">
             <button
               onClick={() => scroll('left')}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-all"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-              }}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-ink-secondary hover:text-ink-primary transition-colors pill-surface"
               aria-label="Anterior"
             >
               <ChevronLeft style={{ width: '12px', height: '12px' }} strokeWidth={2.4} />
             </button>
             <button
               onClick={() => scroll('right')}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-all"
-              style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.12)',
-              }}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-ink-secondary hover:text-ink-primary transition-colors pill-surface"
               aria-label="Próximo"
             >
               <ChevronRight style={{ width: '12px', height: '12px' }} strokeWidth={2.4} />
@@ -80,7 +65,7 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
         </div>
       </div>
 
-      {/* ── Carrossel Horizontal com 4 Cards Visíveis ── */}
+      {/* ── Carrossel Horizontal ── */}
       <div className="relative">
         <div
           ref={scrollRef}
@@ -94,14 +79,11 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
               <div
                 key={property.id || idx}
                 onClick={() => onSelectProperty(property)}
-                className="w-[230px] sm:w-[240px] lg:w-[250px] flex-shrink-0 snap-start glass-property-card overflow-hidden cursor-pointer group flex flex-col justify-between"
+                className="w-[230px] sm:w-[240px] lg:w-[250px] flex-shrink-0 snap-start card-surface overflow-hidden cursor-pointer group flex flex-col justify-between"
                 style={{ padding: '7px 7px 9px' }}
               >
                 {/* Foto com Overlay Escuro */}
-                <div
-                  className="relative aspect-[16/10] overflow-hidden bg-black/60"
-                  style={{ borderRadius: '13px' }}
-                >
+                <div className="relative aspect-[16/10] overflow-hidden bg-black/40 rounded-lg">
                   <img
                     src={imageUrl}
                     alt={property.neighborhood}
@@ -109,49 +91,37 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
                     loading="lazy"
                   />
 
-                  {/* Dark gradient overlay na base da foto */}
                   <div
                     className="absolute inset-0 pointer-events-none"
-                    style={{
-                      background: 'linear-gradient(to top, rgba(4, 8, 18, 0.85) 0%, transparent 45%)',
-                    }}
+                    style={{ background: 'linear-gradient(to top, rgba(4, 8, 18, 0.75) 0%, transparent 45%)' }}
                   />
 
-                  {/* Botão Circular de Favorito (Coração) no Canto Superior Direito */}
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-2 right-2 w-6.5 h-6.5 rounded-full flex items-center justify-center text-white/90 hover:text-white transition-colors backdrop-blur-md"
-                    style={{
-                      background: 'rgba(0, 0, 0, 0.45)',
-                      border: '1px solid rgba(255, 255, 255, 0.20)',
-                    }}
+                    className="absolute top-2 right-2 w-6.5 h-6.5 rounded-full flex items-center justify-center text-ink-primary/90 hover:text-ink-primary transition-colors bg-black/50 border border-line-strong"
                   >
                     <Heart style={{ width: '11px', height: '11px' }} strokeWidth={2} />
                   </button>
                 </div>
 
-                {/* Informações: Bairro, Metragem, Preço e Badge Próprio/Parceiro */}
+                {/* Informações */}
                 <div className="px-1 pt-2">
-                  <h4 className="font-bold text-[13px] text-white truncate group-hover:text-cyan-300 transition-colors leading-tight">
+                  <h4 className="font-bold text-[13px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight">
                     {property.neighborhood}
                   </h4>
 
-                  <p className="text-[10px] text-slate-400 mt-0.5 truncate">
+                  <p className="text-[10px] text-ink-secondary mt-0.5 truncate">
                     {property.type === 'Studio'
                       ? `Studio • ${property.area_m2} m²`
                       : `${property.bedrooms} quartos • ${property.area_m2} m²`}
                   </p>
 
-                  <div
-                    className="flex items-center justify-between mt-2 pt-1.5"
-                    style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}
-                  >
-                    <span className="font-black text-[13px] text-white tabular tracking-tight">
+                  <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-line-subtle">
+                    <span className="font-black text-[13px] text-ink-primary tabular tracking-tight">
                       {formatPrice(property.price)}
                     </span>
 
-                    {/* Selo Próprio / Parceiro em vidro neutro e elegante */}
-                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.08] text-slate-300 border border-white/12">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.05] text-ink-secondary border border-line-subtle">
                       {property.source_type}
                     </span>
                   </div>

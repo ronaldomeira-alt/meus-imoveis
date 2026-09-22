@@ -420,7 +420,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
       particleCount: 80,
       spread: 70,
       origin: { y: 0.6 },
-      colors: ['#00E5FF', '#38BDF8', '#818CF8', '#10B981'],
+      colors: ['#3B82F6', '#60A5FA', '#93C5FD', '#10B981'],
     });
 
     onClose();
@@ -441,24 +441,21 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
   const missingMandatoryKeys: MandatoryPropertyFieldKey[] = requiredValidation.missing;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 animate-fade-in">
       <div
-        className={`relative w-full glass-modal rounded-3xl flex flex-col overflow-hidden border border-white/15 transition-all duration-300 ease-in-out ${
+        className={`relative w-full modal-surface rounded-3xl flex flex-col overflow-hidden border border-line-strong transition-all duration-300 ease-in-out ${
           mode === 'manual'
             ? 'max-w-5xl h-[750px] max-h-[90vh]'
             : 'max-w-3xl h-[580px] max-h-[92vh]'
         }`}
-        style={{
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 50px -10px rgba(0, 229, 255, 0.15)',
-        }}
       >
         {/* ── HEADER DO MODAL ── */}
         <div className="px-6 pt-5 pb-3 flex items-start justify-between flex-shrink-0">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-ink-primary tracking-tight flex items-center gap-2">
               Adicionar imóvel
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-ink-secondary mt-0.5">
               Adicione um imóvel do jeito que preferir.
             </p>
           </div>
@@ -466,7 +463,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
           <button
             type="button"
             onClick={handleModalClose}
-            className="p-2 -mr-2 -mt-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-2 -mr-2 -mt-1 rounded-xl text-ink-secondary hover:text-ink-primary hover:bg-white/10 transition-colors cursor-pointer"
             title="Fechar"
             aria-label="Fechar"
           >
@@ -475,18 +472,18 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
         </div>
 
         {/* ── SELETOR DE MODO: SEGMENTED CONTROL COMPACTO ── */}
-        <div className="px-6 pb-3 flex-shrink-0 border-b border-white/10">
-          <div className="p-1 bg-slate-900/80 border border-white/10 rounded-2xl inline-flex items-center gap-1 w-full sm:w-auto">
+        <div className="px-6 pb-3 flex-shrink-0 border-b border-line-subtle">
+          <div className="p-1 bg-surface-1 border border-line-subtle rounded-2xl inline-flex items-center gap-1 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setMode('ai')}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-1.5 rounded-xl text-xs transition-all duration-200 cursor-pointer ${
                 mode === 'ai'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+                  ? 'bg-accent/20 text-accent border border-accent/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
+                  : 'text-ink-secondary hover:text-ink-primary hover:bg-white/5 border border-transparent font-medium'
               }`}
             >
-              <Sparkles className={`w-3.5 h-3.5 ${mode === 'ai' ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <Sparkles className={`w-3.5 h-3.5 ${mode === 'ai' ? 'text-accent' : 'text-ink-secondary'}`} />
               <span>Com IA</span>
             </button>
 
@@ -498,11 +495,11 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
               }}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-1.5 rounded-xl text-xs transition-all duration-200 cursor-pointer ${
                 mode === 'manual'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent font-medium'
+                  ? 'bg-accent/20 text-accent border border-accent/40 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold'
+                  : 'text-ink-secondary hover:text-ink-primary hover:bg-white/5 border border-transparent font-medium'
               }`}
             >
-              <PenSquare className={`w-3.5 h-3.5 ${mode === 'manual' ? 'text-cyan-400' : 'text-slate-400'}`} />
+              <PenSquare className={`w-3.5 h-3.5 ${mode === 'manual' ? 'text-accent' : 'text-ink-secondary'}`} />
               <span>Manual</span>
             </button>
           </div>
@@ -525,15 +522,15 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
 
             {/* Mensagem de Erro / Alerta com botão de fechar */}
             {errorMessage && (
-              <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-3 text-amber-200 text-xs animate-fade-in flex-shrink-0">
+              <div className="mb-3 p-3 rounded-xl bg-status-warning/10 border border-status-warning/25 flex items-center justify-between gap-3 text-status-warning text-xs animate-fade-in flex-shrink-0">
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <AlertCircle className="w-4 h-4 text-status-warning flex-shrink-0" />
                   <span>{errorMessage}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setErrorMessage(null)}
-                  className="p-1 text-amber-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                  className="p-1 text-status-warning hover:text-ink-primary rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -544,12 +541,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
             <div
               className={`w-full h-[112px] rounded-2xl border flex flex-col overflow-hidden transition-all duration-200 ${
                 isRecording
-                  ? 'bg-white/[0.04] border-cyan-400/40 shadow-[0_0_20px_rgba(0,229,255,0.08)]'
+                  ? 'bg-white/[0.04] border-accent/40 shadow-[0_0_20px_rgba(0,229,255,0.08)]'
                   : isTranscribing
-                  ? 'bg-white/[0.04] border-cyan-400/30'
+                  ? 'bg-white/[0.04] border-accent/30'
                   : isProcessing
-                  ? 'bg-white/[0.04] border-cyan-400/40'
-                  : 'bg-white/[0.03] border-white/12 focus-within:border-cyan-400/50 focus-within:bg-white/[0.05]'
+                  ? 'bg-white/[0.04] border-accent/40'
+                  : 'bg-white/[0.03] border-line-strong focus-within:border-accent/50 focus-within:bg-white/[0.05]'
               }`}
             >
               {/* CONTEÚDO SUPERIOR DO COMPOSER: Altura 70px */}
@@ -557,24 +554,24 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 {isRecording ? (
                   /* Estado RECORDING: 'Ouvindo...' em ciano suave com tipografia premium */
                   <div className="flex-1 px-4 py-3 select-none animate-fade-in flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(0,229,255,0.7)]" />
-                    <span className="text-cyan-300/90 italic text-sm font-normal tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse shadow-[0_0_8px_rgba(0,229,255,0.7)]" />
+                    <span className="text-accent/90 italic text-sm font-normal tracking-wide">
                       Ouvindo...
                     </span>
                   </div>
                 ) : isTranscribing ? (
                   /* Estado TRANSCRIBING: processando áudio para colocar no textarea */
-                  <div className="flex-1 px-4 py-3 select-none animate-fade-in flex items-center gap-2.5 text-cyan-300">
-                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-                    <span className="text-sm italic font-normal text-slate-300">Transcrevendo áudio com IA...</span>
+                  <div className="flex-1 px-4 py-3 select-none animate-fade-in flex items-center gap-2.5 text-accent">
+                    <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                    <span className="text-sm italic font-normal text-ink-secondary">Transcrevendo áudio com IA...</span>
                   </div>
                 ) : (
                   /* Estado NORMAL / DIGITAÇÃO: Anexos de fotos + Textarea */
                   <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
                     {/* Overlay de processamento de envio à IA */}
                     {isProcessing && (
-                      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-20 flex items-center justify-center gap-2 text-cyan-300 text-xs font-medium animate-fade-in">
-                        <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                      <div className="absolute inset-0 bg-surface-2 z-20 flex items-center justify-center gap-2 text-accent text-xs font-medium animate-fade-in">
+                        <Loader2 className="w-4 h-4 animate-spin text-accent" />
                         <span>{processingStatus || 'Analisando com IA...'}</span>
                       </div>
                     )}
@@ -585,7 +582,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         {images.map((img, idx) => (
                           <div
                             key={idx}
-                            className="relative flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden group border border-white/15 bg-slate-900/60 shadow-md"
+                            className="relative flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden group border border-line-strong bg-surface-2 shadow-md"
                           >
                             <img
                               src={img.previewUrl}
@@ -593,7 +590,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                               className="w-full h-full object-cover"
                             />
                             {img.isCover && (
-                              <span className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded bg-cyan-500 text-[7px] font-bold text-slate-950 flex items-center gap-0.5 shadow">
+                              <span className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded bg-accent text-[7px] font-bold text-white flex items-center gap-0.5 shadow">
                                 <Star className="w-1.5 h-1.5 fill-current" />
                               </span>
                             )}
@@ -603,7 +600,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                                   type="button"
                                   onClick={() => handleSetCover(idx)}
                                   title="Definir como capa"
-                                  className="p-0.5 rounded bg-white/20 hover:bg-cyan-500 hover:text-slate-950 text-white transition-colors cursor-pointer"
+                                  className="p-0.5 rounded bg-white/20 hover:bg-accent hover:text-white text-ink-primary transition-colors cursor-pointer"
                                 >
                                   <Star className="w-2.5 h-2.5" />
                                 </button>
@@ -612,7 +609,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                                 type="button"
                                 onClick={() => handleRemoveImage(idx)}
                                 title="Remover foto"
-                                className="p-0.5 rounded bg-white/20 hover:bg-slate-700 text-white transition-colors cursor-pointer"
+                                className="p-0.5 rounded bg-white/20 hover:bg-surface-2 text-ink-primary transition-colors cursor-pointer"
                               >
                                 <X className="w-2.5 h-2.5" />
                               </button>
@@ -623,7 +620,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
                           title="Adicionar mais fotos"
-                          className="flex-shrink-0 w-10 h-10 rounded-lg border border-dashed border-white/20 hover:border-cyan-400/50 hover:bg-cyan-500/5 flex items-center justify-center text-slate-400 hover:text-cyan-300 transition-all cursor-pointer"
+                          className="flex-shrink-0 w-10 h-10 rounded-lg border border-dashed border-line-strong hover:border-accent/50 hover:bg-accent/5 flex items-center justify-center text-ink-secondary hover:text-accent transition-all cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -645,14 +642,14 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                           ? "Fale ou digite informações complementares (ex: 'Valor de venda 420 mil')..."
                           : "Escreva os dados do imóvel..."
                       }
-                      className="w-full flex-1 px-3 py-2 bg-transparent text-white placeholder-slate-500 text-sm focus:outline-none resize-none leading-relaxed overflow-y-auto disabled:opacity-50"
+                      className="w-full flex-1 px-3 py-2 bg-transparent text-ink-primary placeholder-ink-secondary text-sm focus:outline-none resize-none leading-relaxed overflow-y-auto disabled:opacity-50"
                     />
                   </div>
                 )}
               </div>
 
               {/* BARRA DE CONTROLES INFERIOR DO COMPOSER: Altura travada em 42px */}
-              <div className="h-[42px] px-3 sm:px-3.5 flex items-center justify-between gap-2 border-t border-white/5 flex-shrink-0">
+              <div className="h-[42px] px-3 sm:px-3.5 flex items-center justify-between gap-2 border-t border-line-subtle flex-shrink-0">
                 {isRecording ? (
                   /* Controles da Gravação: [ + ] na esquerda | [ dots ciano ] [ ✕ ] [ ✓ ] na direita */
                   <>
@@ -660,7 +657,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       <button
                         type="button"
                         disabled
-                        className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 bg-white/[0.02] border border-white/5 opacity-40 cursor-not-allowed"
+                        className="w-8 h-8 rounded-xl flex items-center justify-center text-ink-muted bg-white/[0.02] border border-line-subtle opacity-40 cursor-not-allowed"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -672,7 +669,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         {[...Array(15)].map((_, i) => (
                           <span
                             key={i}
-                            className="w-1 h-1 rounded-full bg-cyan-400/80 shadow-[0_0_6px_rgba(0,229,255,0.45)] animate-pulse"
+                            className="w-1 h-1 rounded-full bg-accent/80 shadow-[0_0_6px_rgba(0,229,255,0.45)] animate-pulse"
                             style={{
                               animationDelay: `${(i % 5) * 0.16}s`,
                               animationDuration: '1.1s',
@@ -687,7 +684,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         onClick={handleCancelRecording}
                         title="Cancelar gravação"
                         aria-label="Cancelar gravação"
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-line-subtle text-ink-secondary hover:text-ink-primary flex items-center justify-center transition-all cursor-pointer active:scale-95"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -698,7 +695,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         onClick={handleStopAndTranscribeRecording}
                         title="Finalizar gravação e transcrever"
                         aria-label="Finalizar gravação"
-                        className="w-8 h-8 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-500 hover:from-cyan-400 hover:to-sky-400 text-slate-950 font-bold flex items-center justify-center transition-all cursor-pointer shadow-md shadow-cyan-500/25 active:scale-95"
+                        className="w-8 h-8 rounded-xl bg-accent hover:bg-accent-hover text-white font-bold flex items-center justify-center transition-all cursor-pointer shadow-md shadow-accent/25 active:scale-95"
                       >
                         <Check className="w-4 h-4 stroke-[2.5]" />
                       </button>
@@ -710,12 +707,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                     <button
                       type="button"
                       disabled
-                      className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 bg-transparent opacity-40 cursor-not-allowed"
+                      className="w-8 h-8 rounded-xl flex items-center justify-center text-ink-muted bg-transparent opacity-40 cursor-not-allowed"
                     >
                       <Plus className="w-4 h-4" />
                     </button>
-                    <div className="flex items-center gap-2 text-xs text-cyan-300 font-medium">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                    <div className="flex items-center gap-2 text-xs text-accent font-medium">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
                       <span>Transcrevendo áudio...</span>
                     </div>
                   </div>
@@ -729,9 +726,9 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         disabled={isProcessing}
                         title="Anexar fotos do imóvel"
                         aria-label="Anexar fotos"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group disabled:opacity-40"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group disabled:opacity-40"
                       >
-                        <Plus className="w-3.5 h-3.5 text-slate-300 group-hover:text-cyan-400 transition-colors" />
+                        <Plus className="w-3.5 h-3.5 text-ink-secondary group-hover:text-accent transition-colors" />
                       </button>
 
                       <button
@@ -740,9 +737,9 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         disabled={isProcessing}
                         title="Gravar áudio narrando os detalhes"
                         aria-label="Gravar áudio"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer group disabled:opacity-40"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group disabled:opacity-40"
                       >
-                        <Mic className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                        <Mic className="w-3.5 h-3.5 text-accent group-hover:scale-110 transition-transform" />
                       </button>
                     </div>
 
@@ -752,14 +749,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       disabled={isProcessing || (!textInput.trim() && images.length === 0)}
                       title="Enviar para análise e extração com IA"
                       aria-label="Enviar dados do imóvel"
-                      className="h-7 px-3.5 rounded-lg text-xs font-bold text-slate-950 flex items-center gap-1.5 transition-all cursor-pointer shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{
-                        background: 'linear-gradient(135deg, #00E5FF 0%, #38BDF8 100%)',
-                        boxShadow:
-                          !textInput.trim() && images.length === 0
-                            ? 'none'
-                            : '0 0 14px rgba(0, 229, 255, 0.4)',
-                      }}
+                      className="btn-primary h-7 px-3.5 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isProcessing ? (
                         <>
@@ -784,8 +774,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
               {/* Indicador Geral de Campos Obrigatórios (Topo) */}
               {!requiredValidation.valid ? (
-                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 space-y-2.5">
-                  <div className="flex items-center gap-2 text-rose-400 text-xs font-bold">
+                <div className="p-4 rounded-2xl bg-status-danger/10 border border-status-danger/30 space-y-2.5">
+                  <div className="flex items-center gap-2 text-status-danger text-xs font-bold">
                     <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                     <span>
                       Faltam {missingMandatoryKeys.length}{' '}
@@ -795,29 +785,29 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       para adicionar este imóvel.
                     </span>
                   </div>
-                  <p className="text-xs text-rose-200/90 leading-relaxed">
+                  <p className="text-xs text-status-danger/90 leading-relaxed">
                     Para garantir a confiabilidade dos dados no estoque, preencha os 5 campos essenciais destacados abaixo ou retorne ao composer para falar/digitar:
                   </p>
                   <div className="flex flex-wrap gap-2 pt-0.5">
                     {missingMandatoryKeys.map((key: MandatoryPropertyFieldKey) => (
                       <span
                         key={key}
-                        className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-400/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                        className="px-2.5 py-1 rounded-lg bg-status-danger/20 text-status-danger border border-status-danger/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                       >
-                        <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                        <AlertCircle className="w-3.5 h-3.5 text-status-danger" />
                         {MANDATORY_FIELD_LABELS[key]}
                       </span>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-400/30 flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                <div className="p-3.5 rounded-2xl bg-status-success/10 border border-status-success/30 flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-status-success flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-bold text-emerald-300">
+                    <p className="text-xs font-bold text-status-success">
                       Todas as informações obrigatórias foram preenchidas!
                     </p>
-                    <p className="text-[11px] text-emerald-200/80">
+                    <p className="text-[11px] text-status-success/80">
                       O imóvel atende a todos os requisitos do estoque e está pronto para ser salvo.
                     </p>
                   </div>
@@ -830,22 +820,22 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                   <HelpCircle className="w-4 h-4 text-purple-400 flex-shrink-0" />
                   <span>
                     Campos com fala ambígua ou incerta:{' '}
-                    <strong className="text-white">{reviewData.ambiguous_fields.join(', ')}</strong>. Por favor confira os valores.
+                    <strong className="text-ink-primary">{reviewData.ambiguous_fields.join(', ')}</strong>. Por favor confira os valores.
                   </span>
                 </div>
               )}
 
               {/* Fotos Anexadas no Composer (exibidas na revisão para conferência) */}
               {images.length > 0 && (
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2.5">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-line-subtle space-y-2.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-ink-secondary block">
                     Fotos Anexadas ({images.length})
                   </label>
                   <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none">
                     {images.map((img, idx) => (
                       <div
                         key={idx}
-                        className="relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-white/15 shadow-md"
+                        className="relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border border-line-strong shadow-md"
                       >
                         <img
                           src={img.previewUrl}
@@ -853,7 +843,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                           className="w-full h-full object-cover"
                         />
                         {img.isCover && (
-                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-cyan-500 text-[8px] font-bold text-slate-950 flex items-center gap-0.5 shadow">
+                          <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-accent text-[8px] font-bold text-white flex items-center gap-0.5 shadow">
                             <Star className="w-2 h-2 fill-current" /> Capa
                           </span>
                         )}
@@ -864,15 +854,15 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
               )}
 
               {/* ── SEÇÃO 1: INFORMAÇÕES ESSENCIAIS (Obrigatórias) ── */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-line-subtle space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-line-subtle">
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,229,255,0.8)]" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-ink-primary flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_rgba(0,229,255,0.8)]" />
                       Informações Essenciais
-                      <span className="text-[11px] text-rose-400 font-normal lowercase">(obrigatórias)</span>
+                      <span className="text-[11px] text-status-danger font-normal lowercase">(obrigatórias)</span>
                     </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-[11px] text-ink-secondary mt-0.5">
                       Os 5 dados fundamentais exigidos para salvar no estoque.
                     </p>
                   </div>
@@ -881,14 +871,14 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* 1. Tipo de Imóvel * */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                      <span>Tipo do Imóvel <span className="text-rose-400">*</span></span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Tipo do Imóvel <span className="text-status-danger">*</span></span>
                       {!requiredValidation.errors.type ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                           <Check className="w-3 h-3" /> Preenchido
                         </span>
                       ) : (
-                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                        <span className="text-[10px] text-status-danger font-bold flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" /> Obrigatório
                         </span>
                       )}
@@ -898,8 +888,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) => handleUpdateReviewField('type', (e.target.value || null) as PropertyType)}
                       className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
                         requiredValidation.errors.type
-                          ? 'border-2 border-rose-500/70 text-rose-200 bg-rose-500/5 focus:border-rose-400'
-                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                          ? 'border-2 border-status-danger/70 text-status-danger bg-status-danger/5 focus:border-status-danger'
+                          : 'border border-line-subtle text-ink-primary bg-surface-1 focus:border-accent'
                       }`}
                     >
                       <option value="" disabled>Selecione o tipo do imóvel...</option>
@@ -916,14 +906,14 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
 
                   {/* 2. Bairro * */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                      <span>Bairro <span className="text-rose-400">*</span></span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Bairro <span className="text-status-danger">*</span></span>
                       {!requiredValidation.errors.neighborhood ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                           <Check className="w-3 h-3" /> Preenchido
                         </span>
                       ) : (
-                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                        <span className="text-[10px] text-status-danger font-bold flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" /> Obrigatório
                         </span>
                       )}
@@ -935,31 +925,31 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) => handleUpdateReviewField('neighborhood', e.target.value || null)}
                       className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
                         requiredValidation.errors.neighborhood
-                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
-                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                          ? 'border-2 border-status-danger/70 text-ink-primary placeholder-rose-400/50 bg-status-danger/5 focus:border-status-danger'
+                          : 'border border-line-subtle text-ink-primary bg-surface-1 focus:border-accent'
                       }`}
                     />
                   </div>
 
                   {/* 3. Valor do Imóvel * */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
                       <span>
                         {reviewData.purpose === 'Locação' ? 'Valor do Aluguel (R$)' : 'Valor do Imóvel (R$)'}{' '}
-                        <span className="text-rose-400">*</span>
+                        <span className="text-status-danger">*</span>
                       </span>
                       <div className="flex items-center gap-1.5">
                         {reviewData.is_approximate_price && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-status-warning/20 text-status-warning border border-status-warning/30">
                             ~ Aproximado
                           </span>
                         )}
                         {!requiredValidation.errors.price ? (
-                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                             <Check className="w-3 h-3" /> Preenchido
                           </span>
                         ) : (
-                          <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                          <span className="text-[10px] text-status-danger font-bold flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" /> Obrigatório
                           </span>
                         )}
@@ -974,22 +964,22 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       }
                       className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold focus:outline-none transition-colors ${
                         requiredValidation.errors.price
-                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
-                          : 'border border-white/10 text-cyan-400 bg-slate-900/80 focus:border-cyan-400'
+                          ? 'border-2 border-status-danger/70 text-ink-primary placeholder-rose-400/50 bg-status-danger/5 focus:border-status-danger'
+                          : 'border border-line-subtle text-accent bg-surface-1 focus:border-accent'
                       }`}
                     />
                   </div>
 
                   {/* 4. Quartos * (aceita 0, ex: studio/comercial) */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                      <span>Quartos <span className="text-rose-400">*</span></span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Quartos <span className="text-status-danger">*</span></span>
                       {!requiredValidation.errors.bedrooms ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                           <Check className="w-3 h-3" /> Preenchido
                         </span>
                       ) : (
-                        <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                        <span className="text-[10px] text-status-danger font-bold flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" /> Obrigatório
                         </span>
                       )}
@@ -1007,31 +997,31 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       }
                       className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
                         requiredValidation.errors.bedrooms
-                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
-                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                          ? 'border-2 border-status-danger/70 text-ink-primary placeholder-rose-400/50 bg-status-danger/5 focus:border-status-danger'
+                          : 'border border-line-subtle text-ink-primary bg-surface-1 focus:border-accent'
                       }`}
                     />
-                    <p className="text-[10px] text-slate-500 mt-1">
+                    <p className="text-[10px] text-ink-secondary mt-1">
                       Informe 0 para salas comerciais ou studios.
                     </p>
                   </div>
 
                   {/* 5. Área Privativa (m²) * */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                      <span>Área (m²) <span className="text-rose-400">*</span></span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                      <span>Área (m²) <span className="text-status-danger">*</span></span>
                       <div className="flex items-center gap-1.5">
                         {reviewData.is_approximate_area && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-status-warning/20 text-status-warning border border-status-warning/30">
                             ~ Aproximado
                           </span>
                         )}
                         {!requiredValidation.errors.area_m2 ? (
-                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                          <span className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                             <Check className="w-3 h-3" /> Preenchido
                           </span>
                         ) : (
-                          <span className="text-[10px] text-rose-400 font-bold flex items-center gap-1">
+                          <span className="text-[10px] text-status-danger font-bold flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" /> Obrigatório
                           </span>
                         )}
@@ -1050,8 +1040,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       }
                       className={`w-full px-3.5 py-2.5 rounded-xl text-xs focus:outline-none transition-colors ${
                         requiredValidation.errors.area_m2
-                          ? 'border-2 border-rose-500/70 text-white placeholder-rose-400/50 bg-rose-500/5 focus:border-rose-400'
-                          : 'border border-white/10 text-white bg-slate-900/80 focus:border-cyan-400'
+                          ? 'border-2 border-status-danger/70 text-ink-primary placeholder-rose-400/50 bg-status-danger/5 focus:border-status-danger'
+                          : 'border border-line-subtle text-ink-primary bg-surface-1 focus:border-accent'
                       }`}
                     />
                   </div>
@@ -1059,15 +1049,15 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
               </div>
 
               {/* ── SEÇÃO 2: INFORMAÇÕES ADICIONAIS (Opcionais) ── */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="p-4 sm:p-5 rounded-2xl bg-white/[0.02] border border-line-subtle space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-line-subtle">
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-slate-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-ink-muted" />
                       Informações Adicionais
-                      <span className="text-[11px] text-slate-400 font-normal lowercase">(opcionais)</span>
+                      <span className="text-[11px] text-ink-secondary font-normal lowercase">(opcionais)</span>
                     </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-[11px] text-ink-secondary mt-0.5">
                       Campos complementares que enriquecem o anúncio do imóvel.
                     </p>
                   </div>
@@ -1077,7 +1067,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Finalidade (Venda / Locação) */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5">
                       Finalidade
                     </label>
                     <div className="grid grid-cols-2 gap-2">
@@ -1086,8 +1076,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         onClick={() => handleUpdateReviewField('purpose', 'Venda')}
                         className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           reviewData.purpose === 'Venda' || !reviewData.purpose
-                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
-                            : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+                            ? 'bg-accent/20 border-accent text-accent font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                            : 'bg-surface-1 border-line-subtle text-ink-secondary hover:text-ink-primary'
                         }`}
                       >
                         Venda
@@ -1097,8 +1087,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         onClick={() => handleUpdateReviewField('purpose', 'Locação')}
                         className={`py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           reviewData.purpose === 'Locação'
-                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
-                            : 'bg-slate-900/80 border-white/10 text-slate-400 hover:text-white'
+                            ? 'bg-accent/20 border-accent text-accent font-bold shadow-[0_0_12px_rgba(0,229,255,0.2)]'
+                            : 'bg-surface-1 border-line-subtle text-ink-secondary hover:text-ink-primary'
                         }`}
                       >
                         Locação
@@ -1108,16 +1098,16 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
 
                   {/* Condomínio e Condomínio Incluso */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
                       <span>Condomínio (R$)</span>
                       {reviewData.condo_included ? (
-                        <span className="text-[10px] text-cyan-300 font-semibold">Incluso</span>
+                        <span className="text-[10px] text-accent font-semibold">Incluso</span>
                       ) : reviewData.condo_fee ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold">
+                        <span className="text-[10px] text-status-success font-semibold">
                           R$ {reviewData.condo_fee}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-slate-500">Opcional</span>
+                        <span className="text-[10px] text-ink-secondary">Opcional</span>
                       )}
                     </label>
                     <div className="flex items-center gap-2">
@@ -1132,7 +1122,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                             e.target.value !== '' ? parseFloat(e.target.value) : null
                           )
                         }
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 disabled:opacity-50 disabled:bg-slate-950"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent disabled:opacity-50 disabled:bg-surface-2"
                       />
                       <button
                         type="button"
@@ -1143,8 +1133,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                         }}
                         className={`px-3 py-2.5 rounded-xl text-[11px] font-bold border whitespace-nowrap transition-colors cursor-pointer ${
                           reviewData.condo_included
-                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300'
-                            : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                            ? 'bg-accent/20 border-accent text-accent'
+                            : 'bg-white/5 border-line-subtle text-ink-secondary hover:text-ink-primary'
                         }`}
                         title="Marcar condomínio incluso"
                       >
@@ -1155,9 +1145,9 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
 
                   {/* IPTU Anual (R$) */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1.5 flex items-center justify-between">
                       <span>IPTU Anual (R$)</span>
-                      <span className="text-[10px] text-slate-500">Opcional</span>
+                      <span className="text-[10px] text-ink-secondary">Opcional</span>
                     </label>
                     <input
                       type="number"
@@ -1166,7 +1156,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('iptu', e.target.value !== '' ? parseFloat(e.target.value) : null)
                       }
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     />
                   </div>
                 </div>
@@ -1174,8 +1164,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 {/* Cômodos Complementares: Suítes, Banheiros, Vagas */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Suítes <span className="text-slate-500 font-normal">(Opcional)</span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
+                      Suítes <span className="text-ink-secondary font-normal">(Opcional)</span>
                     </label>
                     <input
                       type="number"
@@ -1184,12 +1174,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('suites', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Banheiros <span className="text-slate-500 font-normal">(Opcional)</span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
+                      Banheiros <span className="text-ink-secondary font-normal">(Opcional)</span>
                     </label>
                     <input
                       type="number"
@@ -1198,12 +1188,12 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('bathrooms', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Vagas <span className="text-slate-500 font-normal">(Opcional)</span>
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
+                      Vagas <span className="text-ink-secondary font-normal">(Opcional)</span>
                     </label>
                     <input
                       type="number"
@@ -1212,7 +1202,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('parking_spaces', e.target.value !== '' ? parseInt(e.target.value, 10) : null)
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     />
                   </div>
                 </div>
@@ -1220,7 +1210,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 {/* Posição Solar, Condição e Mobiliado */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
                       Posição Solar
                     </label>
                     <select
@@ -1228,7 +1218,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('position', (e.target.value || null) as PropertyPosition)
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     >
                       <option value="">Não informada</option>
                       <option value="Nascente">Nascente</option>
@@ -1239,7 +1229,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
                       Condição
                     </label>
                     <select
@@ -1247,7 +1237,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onChange={(e) =>
                         handleUpdateReviewField('condition', (e.target.value || null) as PropertyCondition)
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     >
                       <option value="">Não informada</option>
                       <option value="Novo">Novo</option>
@@ -1258,7 +1248,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    <label className="text-[11px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
                       Mobiliado
                     </label>
                     <select
@@ -1269,7 +1259,7 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                           e.target.value === 'true' ? true : e.target.value === 'false' ? false : null
                         )
                       }
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
                     >
                       <option value="">Não informado</option>
                       <option value="true">Sim (Mobiliado)</option>
@@ -1279,8 +1269,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 </div>
 
                 {/* Origem do Imóvel & Contatos */}
-                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/8 space-y-3">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-line-subtle space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-wider text-ink-secondary block">
                     Origem do Imóvel
                   </label>
                   <div className="flex gap-3">
@@ -1289,8 +1279,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onClick={() => handleUpdateReviewField('source_type', 'Próprio')}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         reviewData.source_type === 'Próprio' || !reviewData.source_type
-                          ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-bold'
-                          : 'bg-white/5 text-slate-400 hover:text-white'
+                          ? 'bg-accent text-white shadow-lg shadow-accent/20 font-bold'
+                          : 'bg-white/5 text-ink-secondary hover:text-ink-primary'
                       }`}
                     >
                       Captação Própria
@@ -1300,8 +1290,8 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                       onClick={() => handleUpdateReviewField('source_type', 'Parceiro')}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         reviewData.source_type === 'Parceiro'
-                          ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/20 font-bold'
-                          : 'bg-white/5 text-slate-400 hover:text-white'
+                          ? 'bg-status-partner text-ink-primary shadow-lg shadow-violet-500/20 font-bold'
+                          : 'bg-white/5 text-ink-secondary hover:text-ink-primary'
                       }`}
                     >
                       Parceria com Corretor
@@ -1311,46 +1301,46 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                   {reviewData.source_type === 'Parceiro' ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div>
-                        <label className="text-[11px] text-slate-400 block mb-1">Nome do Parceiro</label>
+                        <label className="text-[11px] text-ink-secondary block mb-1">Nome do Parceiro</label>
                         <input
                           type="text"
                           placeholder="Ex: Corretor Marcos Santos"
                           value={reviewData.partner_name || ''}
                           onChange={(e) => handleUpdateReviewField('partner_name', e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                          className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-400 block mb-1">Telefone do Parceiro</label>
+                        <label className="text-[11px] text-ink-secondary block mb-1">Telefone do Parceiro</label>
                         <input
                           type="text"
                           placeholder="(83) 98888-1111"
                           value={reviewData.partner_phone || ''}
                           onChange={(e) => handleUpdateReviewField('partner_phone', e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                          className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs"
                         />
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                       <div>
-                        <label className="text-[11px] text-slate-400 block mb-1">Nome do Proprietário</label>
+                        <label className="text-[11px] text-ink-secondary block mb-1">Nome do Proprietário</label>
                         <input
                           type="text"
                           placeholder="Ex: Roberto Silva"
                           value={reviewData.owner_name || ''}
                           onChange={(e) => handleUpdateReviewField('owner_name', e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                          className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-400 block mb-1">Telefone do Proprietário</label>
+                        <label className="text-[11px] text-ink-secondary block mb-1">Telefone do Proprietário</label>
                         <input
                           type="text"
                           placeholder="(83) 99999-0000"
                           value={reviewData.owner_phone || ''}
                           onChange={(e) => handleUpdateReviewField('owner_phone', e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-900/80 border border-white/10 text-white text-xs"
+                          className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs"
                         />
                       </div>
                     </div>
@@ -1360,11 +1350,11 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
             </div>
 
             {/* ── RODAPÉ DA ETAPA DE REVISÃO: Altura fixa estrutural de 68px ── */}
-            <div className="h-[68px] flex items-center justify-between px-6 border-t border-white/10 bg-slate-950/60 flex-shrink-0">
+            <div className="h-[68px] flex items-center justify-between px-6 border-t border-line-subtle bg-surface-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setStep('composer')}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors flex items-center gap-2 cursor-pointer border border-cyan-500/20"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-accent hover:text-accent hover:bg-accent/10 transition-colors flex items-center gap-2 cursor-pointer border border-accent/20"
                 title="Voltar ao composer para adicionar mais detalhes por voz ou texto"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -1375,17 +1365,11 @@ export const CaptureModal: React.FC<CaptureModalProps> = ({
                 type="button"
                 onClick={handleConfirmSave}
                 disabled={!requiredValidation.valid}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold text-slate-950 flex items-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-                style={{
-                  background:
-                    !requiredValidation.valid
-                      ? '#64748B'
-                      : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                  boxShadow:
-                    !requiredValidation.valid
-                      ? 'none'
-                      : '0 0 20px rgba(16, 185, 129, 0.4)',
-                }}
+                className={`px-6 py-2.5 rounded-xl text-xs font-bold text-white flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                  !requiredValidation.valid
+                    ? 'bg-ink-muted'
+                    : 'bg-status-success hover:bg-status-success/90'
+                }`}
               >
                 <Check className="w-4 h-4 stroke-[2.5]" />
                 <span>

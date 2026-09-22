@@ -62,22 +62,22 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
   );
 
   return (
-    <div className="glass-panel p-4 mb-4 space-y-3">
+    <div className="panel-surface p-4 mb-4 space-y-3">
       {/* Linha Superior: Filtros em Cápsulas Glass */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
         {/* Bairro */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Bairro
           </label>
           <select
             value={filters.neighborhood}
             onChange={(e) => onFilterChange({ ...filters, neighborhood: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="w-full px-3 py-1.5 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="" className="bg-[#0A101E]">Todos os bairros</option>
+            <option value="" className="bg-[#15181D]">Todos os bairros</option>
             {availableNeighborhoods.map((n) => (
-              <option key={n} value={n} className="bg-[#0A101E]">
+              <option key={n} value={n} className="bg-[#15181D]">
                 {n}
               </option>
             ))}
@@ -86,17 +86,17 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
 
         {/* Tipo */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Tipo
           </label>
           <select
             value={filters.type}
             onChange={(e) => onFilterChange({ ...filters, type: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="w-full px-3 py-1.5 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="" className="bg-[#0A101E]">Todos os tipos</option>
+            <option value="" className="bg-[#15181D]">Todos os tipos</option>
             {propertyTypes.map((t) => (
-              <option key={t} value={t} className="bg-[#0A101E]">
+              <option key={t} value={t} className="bg-[#15181D]">
                 {t}
               </option>
             ))}
@@ -105,25 +105,25 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
 
         {/* Quartos */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Quartos
           </label>
           <select
             value={filters.bedrooms}
             onChange={(e) => onFilterChange({ ...filters, bedrooms: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="w-full px-3 py-1.5 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="" className="bg-[#0A101E]">Qualquer</option>
-            <option value="1" className="bg-[#0A101E]">1+ quartos</option>
-            <option value="2" className="bg-[#0A101E]">2+ quartos</option>
-            <option value="3" className="bg-[#0A101E]">3+ quartos</option>
-            <option value="4" className="bg-[#0A101E]">4+ quartos</option>
+            <option value="" className="bg-[#15181D]">Qualquer</option>
+            <option value="1" className="bg-[#15181D]">1+ quartos</option>
+            <option value="2" className="bg-[#15181D]">2+ quartos</option>
+            <option value="3" className="bg-[#15181D]">3+ quartos</option>
+            <option value="4" className="bg-[#15181D]">4+ quartos</option>
           </select>
         </div>
 
         {/* Preço Mínimo */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Preço Mínimo
           </label>
           <input
@@ -131,13 +131,13 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
             placeholder="Ex: 300000"
             value={filters.minPrice}
             onChange={(e) => onFilterChange({ ...filters, minPrice: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400/50"
+            className="w-full input-field rounded-xl text-xs px-3 py-1.5"
           />
         </div>
 
         {/* Preço Máximo */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Preço Máximo
           </label>
           <input
@@ -145,39 +145,39 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
             placeholder="Ex: 800000"
             value={filters.maxPrice}
             onChange={(e) => onFilterChange({ ...filters, maxPrice: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400/50"
+            className="w-full input-field rounded-xl text-xs px-3 py-1.5"
           />
         </div>
 
         {/* Origem */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Origem
           </label>
           <select
             value={filters.sourceType}
             onChange={(e) => onFilterChange({ ...filters, sourceType: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="w-full px-3 py-1.5 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="" className="bg-[#0A101E]">Todos</option>
-            <option value="Próprio" className="bg-[#0A101E]">Próprio</option>
-            <option value="Parceiro" className="bg-[#0A101E]">Parceiro</option>
+            <option value="" className="bg-[#15181D]">Todos</option>
+            <option value="Próprio" className="bg-[#15181D]">Próprio</option>
+            <option value="Parceiro" className="bg-[#15181D]">Parceiro</option>
           </select>
         </div>
 
         {/* Status */}
         <div>
-          <label className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          <label className="text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1">
             Status
           </label>
           <select
             value={filters.status}
             onChange={(e) => onFilterChange({ ...filters, status: e.target.value })}
-            className="w-full px-3 py-1.5 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="w-full px-3 py-1.5 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="Ativo" className="bg-[#0A101E]">Ativo</option>
-            <option value="Vendido" className="bg-[#0A101E]">Vendido</option>
-            <option value="Arquivado" className="bg-[#0A101E]">Arquivado</option>
+            <option value="Ativo" className="bg-[#15181D]">Ativo</option>
+            <option value="Vendido" className="bg-[#15181D]">Vendido</option>
+            <option value="Arquivado" className="bg-[#15181D]">Arquivado</option>
           </select>
         </div>
       </div>
@@ -185,13 +185,13 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
       {/* Linha Inferior: Contagem e Ordenação */}
       <div className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-xs">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-white tabular">
+          <span className="font-bold text-ink-primary tabular">
             {totalResults} {totalResults === 1 ? 'imóvel' : 'imóveis'} no catálogo
           </span>
           {hasActiveFilters && (
             <button
               onClick={handleReset}
-              className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold px-2 py-0.5 rounded-lg bg-cyan-500/10 border border-cyan-400/20 transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] text-accent hover:text-accent font-semibold px-2 py-0.5 rounded-lg bg-accent/10 border border-accent/20 transition-colors"
             >
               <X className="w-3 h-3" />
               Limpar filtros
@@ -200,20 +200,20 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+          <label className="text-[11px] font-semibold text-ink-secondary flex items-center gap-1">
             <ArrowUpDown className="w-3.5 h-3.5" />
             Ordenar:
           </label>
           <select
             value={filters.sortBy}
             onChange={(e) => onFilterChange({ ...filters, sortBy: e.target.value as SortOption })}
-            className="px-3 py-1 glass-pill rounded-xl text-xs text-white focus:outline-none focus:border-cyan-400/50"
+            className="px-3 py-1 pill-surface rounded-xl text-xs text-ink-primary focus:outline-none focus:border-accent/50"
           >
-            <option value="recent" className="bg-[#0A101E]">Mais recentes</option>
-            <option value="price_asc" className="bg-[#0A101E]">Menor preço</option>
-            <option value="price_desc" className="bg-[#0A101E]">Maior preço</option>
-            <option value="area_asc" className="bg-[#0A101E]">Menor área (m²)</option>
-            <option value="area_desc" className="bg-[#0A101E]">Maior área (m²)</option>
+            <option value="recent" className="bg-[#15181D]">Mais recentes</option>
+            <option value="price_asc" className="bg-[#15181D]">Menor preço</option>
+            <option value="price_desc" className="bg-[#15181D]">Maior preço</option>
+            <option value="area_asc" className="bg-[#15181D]">Menor área (m²)</option>
+            <option value="area_desc" className="bg-[#15181D]">Maior área (m²)</option>
           </select>
         </div>
       </div>

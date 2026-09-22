@@ -108,20 +108,6 @@ export interface DashboardStats {
   totalPortfolioValue: number;
 }
 
-export interface AppearanceSettings {
-  bgImage: string | null;
-  bgBlur: number;        // em px (default: 16)
-  bgOpacity: number;     // 0.0 a 1.0 (default: 1.0)
-  bgDarkness: number;    // 0.0 a 1.0 (0.0 = sem escurecimento, padrão: 0.25)
-  bgBrightness: number;  // 0.5 a 1.8 (default: 1.0 = brilho natural 100%)
-  bgSaturation: number;  // 0.5 a 2.0 (default: 1.1)
-  cardOpacity: number;   // 0.05 a 0.95 (default: 0.18) -> Transparência dos Cards
-  glassIntensity: number;// 0.2 a 2.0 (default: 1.0) -> Intensidade do Vidro
-  lightPrimary?: string; // Hex ou rgba
-  lightSecondary?: string;// Hex ou rgba
-  lightIntensity?: number;// 0.2 a 2.0 (default: 1.0)
-}
-
 export interface NotificationItem {
   id: string;
   title: string;

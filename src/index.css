@@ -3,40 +3,25 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MEUS IMÓVEIS — DESIGN SYSTEM IDÊNTICO À REFERÊNCIA VISUAL
-   Vidro translúcido ultra transparente (baixa opacidade) + Fundo fotográfico editável
+   MEUS IMÓVEIS — DESIGN SYSTEM
+   Superfícies sólidas, dark premium, zero glassmorphism/blur/imagem de fundo.
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
   color-scheme: dark;
 
-  /* Fundo Padrão (Editável em Configurações) */
-  --bg-image: url('https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=2560&q=85');
-  --bg-blur: 16px;
-  --bg-opacity: 1.0;
-  --bg-darkness: 0.25;
-  --bg-brightness: 1.0;
-  --bg-saturation: 1.10;
-
-  /* Opacidade dos Cards Translúcidos (Controlado via Slider "Transparência dos Cards") */
-  --card-opacity: 0.18;
-
-  /* Intensidade do Vidro: Presença visual, highlight interno e definição de bordas */
-  --glass-intensity: 1.0;
-
-  /* Superfícies de Vidro Translúcido Neutro Escuro (Escaladas por --card-opacity) */
-  --glass-panel: rgba(8, 14, 28, var(--card-opacity));
-  --glass-kpi: rgba(8, 14, 28, var(--card-opacity));
-  --glass-card: rgba(8, 14, 28, calc(var(--card-opacity) * 1.25));
-  --glass-sidebar: rgba(6, 11, 22, calc(var(--card-opacity) * 1.5 + 0.12));
-  --glass-pill: rgba(255, 255, 255, 0.05);
-
-  /* Bordas, Highlights e Blur Escalados por --glass-intensity */
-  --border-glass: rgba(255, 255, 255, calc(0.10 * var(--glass-intensity)));
-  --border-glass-top: rgba(255, 255, 255, calc(0.24 * var(--glass-intensity)));
-  --border-glass-left: rgba(255, 255, 255, calc(0.15 * var(--glass-intensity)));
-  --glass-specular-opacity: calc(0.20 * var(--glass-intensity));
-  --glass-blur: calc(20px * var(--glass-intensity));
+  --bg-base: #0D0F12;
+  --bg-base-alt: #101216;
+  --surface-1: #15181D;
+  --surface-2: #191C22;
+  --surface-3: #1D2026;
+  --border-subtle: #252A32;
+  --border-strong: #2A3038;
+  --text-primary: #F5F6F7;
+  --text-secondary: #8B92A0;
+  --accent-blue: #3B82F6;
+  --accent-blue-hover: #2F6FE0;
+  --accent-blue-soft: rgba(59, 130, 246, 0.12);
 }
 
 html, body, #root {
@@ -45,170 +30,108 @@ html, body, #root {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #030611;
-  color: #f8fafc;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   ATMOSFERA E PLANO DE FUNDO EDITÁVEL (AZUL-MARINHO ESCURO NEUTRO)
-   ───────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  /* Painéis (gráficos, blocos de configurações, estados vazios) */
+  .panel-surface {
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    box-shadow: var(--tw-shadow, none);
+  }
 
-/* Fundo abstrato azul-marinho escuro e neutro */
-.app-atmosphere {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 20%, #0d1933 0%, #060d1f 45%, #030612 100%);
-}
+  /* Cards de conteúdo (KPI, imóvel) */
+  .card-surface {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .card-surface:hover {
+    border-color: var(--border-strong);
+  }
 
-/* Foto do fundo de alto padrão (editável em Configurações) */
-.app-wallpaper-bg {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image: var(--bg-image);
-  background-size: cover;
-  background-position: center;
-  filter: blur(var(--bg-blur)) saturate(var(--bg-saturation)) brightness(var(--bg-brightness, 1));
-  opacity: var(--bg-opacity);
-  transition: filter 0.15s ease, opacity 0.15s ease;
-}
+  /* Sidebar */
+  .sidebar-surface {
+    background: var(--bg-base-alt);
+    border-right: 1px solid var(--border-subtle);
+  }
 
-/* Overlay de escurecimento neutro — pode ser zerado (0%) para remover totalmente a camada escura */
-.app-wallpaper-overlay {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(ellipse at 50% 25%, rgba(6, 12, 26, 0.70) 0%, rgba(2, 4, 12, 0.95) 100%);
-  opacity: var(--bg-darkness, 0.25);
-  transition: opacity 0.15s ease;
-}
+  /* Modais */
+  .modal-surface {
+    background: var(--surface-3);
+    border: 1px solid var(--border-strong);
+  }
 
-/* Texture Noise */
-.app-noise {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  opacity: 0.022;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-}
+  /* Pills: busca, badges, avatar container */
+  .pill-surface {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+  }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   CLASSES DE VIDRO TRANSLÚCIDO NEUTRO ESCURO (GLASSMORPHISM PURO)
-   ───────────────────────────────────────────────────────────────────────────── */
+  /* Botões */
+  .btn-primary {
+    background: var(--accent-blue);
+    color: #F8FAFC;
+    font-weight: 600;
+    transition: background-color 0.15s ease;
+  }
+  .btn-primary:hover {
+    background: var(--accent-blue-hover);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-/* Sidebar Glass */
-.glass-sidebar {
-  background: var(--glass-sidebar);
-  backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(140%);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 6px)) saturate(140%);
-  border-right: 1px solid var(--border-glass);
-  box-shadow: 6px 0 30px rgba(0, 0, 0, 0.40);
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
+  .btn-secondary {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .btn-secondary:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
 
-/* Painéis Bento de Vidro Translúcido Neutro */
-.glass-panel {
-  position: relative;
-  background: var(--glass-panel);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  border-radius: 20px;
-  border: 1px solid var(--border-glass);
-  border-top: 1px solid var(--border-glass-top);
-  border-left: 1px solid var(--border-glass-left);
-  box-shadow:
-    inset 0 1px 1px 0 rgba(255, 255, 255, var(--glass-specular-opacity)),
-    0 16px 40px -12px rgba(0, 0, 0, 0.65);
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
+  /* Inputs / Selects */
+  .input-field {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease;
+  }
+  .input-field::placeholder {
+    color: var(--text-secondary);
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+  }
 
-/* KPI Cards com Vidro Neutro Escuro Translúcido */
-.glass-kpi {
-  position: relative;
-  overflow: hidden;
-  background: var(--glass-kpi);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  border-radius: 18px;
-  border: 1px solid var(--border-glass);
-  border-top: 1px solid var(--border-glass-top);
-  border-left: 1px solid var(--border-glass-left);
-  box-shadow:
-    inset 0 1px 1px 0 rgba(255, 255, 255, var(--glass-specular-opacity)),
-    0 14px 34px -10px rgba(0, 0, 0, 0.60);
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.glass-kpi:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, calc(0.18 * var(--glass-intensity)));
-  border-top-color: rgba(255, 255, 255, calc(0.35 * var(--glass-intensity)));
-}
-
-/* Classes dos KPIs para compatibilidade estrutural — sem overlays ou gradientes coloridos */
-.glass-kpi-1,
-.glass-kpi-2,
-.glass-kpi-3,
-.glass-kpi-4 {
-  background: var(--glass-kpi);
-}
-
-/* Property Card com Vidro Translúcido Neutro */
-.glass-property-card {
-  position: relative;
-  background: var(--glass-card);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  border: 1px solid var(--border-glass);
-  border-top: 1px solid var(--border-glass-top);
-  border-left: 1px solid var(--border-glass-left);
-  border-radius: 18px;
-  box-shadow:
-    inset 0 1px 1px 0 rgba(255, 255, 255, var(--glass-specular-opacity)),
-    0 16px 36px -12px rgba(0, 0, 0, 0.65);
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.glass-property-card:hover {
-  transform: translateY(-2.5px);
-  border-color: rgba(255, 255, 255, calc(0.20 * var(--glass-intensity)));
-  border-top-color: rgba(255, 255, 255, calc(0.35 * var(--glass-intensity)));
-}
-
-/* Glass Pill / Input / Button */
-.glass-pill {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-top: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Modal */
-.glass-modal {
-  background: rgba(5, 10, 24, 0.92);
-  backdrop-filter: blur(60px) saturate(180%);
-  -webkit-backdrop-filter: blur(60px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-top: 1px solid rgba(255, 255, 255, 0.32);
-  box-shadow: 0 35px 90px -20px rgba(0, 0, 0, 0.95);
+  .select-field {
+    background: var(--surface-1);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease;
+  }
+  .select-field:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+  }
 }
 
 .tabular { font-variant-numeric: tabular-nums; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Animação das barras de onda sonora idênticas à referência */
+/* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {
     transform: scaleY(0.35);
