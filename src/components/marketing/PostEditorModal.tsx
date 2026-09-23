@@ -22,7 +22,8 @@ import type {
   MarketingPost,
   RegenerationOption,
   PostStatus,
-  PostType
+  PostType,
+  InstagramAccount
 } from '../../types/marketing';
 import {
   generateEditorialCaption,
@@ -87,7 +88,15 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   const [regenDropdownOpen, setRegenDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [previewPhotoIndex, setPreviewPhotoIndex] = useState(0);
+  const [igAccount, setIgAccount] = useState<InstagramAccount | null>(null);
   const isLockedPublishing = existingPost?.status === 'publishing';
+
+  // Carregar conta real do Instagram
+  useEffect(() => {
+    if (isOpen) {
+      getInstagramAccount().then((acc) => setIgAccount(acc)).catch(() => {});
+    }
+  }, [isOpen]);
 
   // Initialize or reset when modal opens
   useEffect(() => {
@@ -495,27 +504,52 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
             </span>
 
             {/* Instagram Mockup Card */}
-            <div className="w-full max-w-[340px] rounded-3xl bg-black border border-line-subtle shadow-modal overflow-hidden flex flex-col text-white">
+            <div className="w-full max-w-[340px] rounded-2xl bg-black border border-white/15 shadow-2xl overflow-hidden flex flex-col text-white font-sans select-none">
               {/* Instagram Card Header */}
-              <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-amber-500 p-0.5">
-                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-[10px] font-black">
-                      MI
+              <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Story Ring / Profile Avatar */}
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#f99b4a] via-[#dd2a7b] to-[#8134af] p-[1.5px] flex-shrink-0">
+                    <div className="w-full h-full rounded-full bg-black overflow-hidden flex items-center justify-center p-[1px]">
+                      {igAccount?.profile_picture_url ? (
+                        <img
+                          src={igAccount.profile_picture_url}
+                          alt={igAccount.instagram_username || 'Perfil'}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-[#1c1c1c] flex items-center justify-center text-[10px] font-black text-white">
+                          RM
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold leading-none">meusimoveis</span>
-                    <span className="text-[10px] text-white/50 leading-none mt-0.5">
-                      {property.neighborhood || 'Bairro'}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[12.5px] font-semibold text-white leading-tight truncate">
+                      {igAccount?.instagram_username || 'ronaldomeiracorretor'}
+                    </span>
+                    <span className="text-[10px] text-white/60 leading-tight truncate mt-0.5">
+                      {property.neighborhood ? `${property.neighborhood}, João Pessoa` : 'João Pessoa, Paraíba'}
                     </span>
                   </div>
                 </div>
-                <span className="text-white/40 text-xs">•••</span>
+
+                {/* Instagram 3-dots icon */}
+                <button
+                  type="button"
+                  className="text-white/80 hover:text-white p-1 transition-colors"
+                  title="Mais opções"
+                >
+                  <svg aria-label="Mais opções" fill="currentColor" height="20" role="img" viewBox="0 0 24 24" width="20">
+                    <circle cx="12" cy="12" r="1.5" />
+                    <circle cx="6" cy="12" r="1.5" />
+                    <circle cx="18" cy="12" r="1.5" />
+                  </svg>
+                </button>
               </div>
 
               {/* Photo Viewport */}
-              <div className="relative aspect-square bg-[#050505] flex items-center justify-center overflow-hidden">
+              <div className="relative aspect-square bg-[#0a0a0a] flex items-center justify-center overflow-hidden">
                 {selectedPhotos.length > 0 ? (
                   <>
                     <img
@@ -526,26 +560,28 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                     {selectedPhotos.length > 1 && (
                       <>
                         <button
+                          type="button"
                           onClick={() =>
                             setPreviewPhotoIndex(
                               (prev) => (prev > 0 ? prev - 1 : selectedPhotos.length - 1)
                             )
                           }
-                          className="absolute left-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                          className="absolute left-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() =>
                             setPreviewPhotoIndex(
                               (prev) => (prev < selectedPhotos.length - 1 ? prev + 1 : 0)
                             )
                           }
-                          className="absolute right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                          className="absolute right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
-                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/70 text-[10px] font-bold tracking-wider">
+                        <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-black/75 text-[10px] font-bold tracking-wider">
                           {previewPhotoIndex + 1}/{selectedPhotos.length}
                         </div>
                       </>
@@ -556,20 +592,52 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
                 )}
               </div>
 
-              {/* Caption & Actions */}
-              <div className="p-3.5 space-y-2 text-xs bg-black">
-                <div className="flex items-center justify-between text-white/70">
-                  <div className="flex items-center gap-3">
-                    <span>❤️</span>
-                    <span>💬</span>
-                    <span>✈️</span>
+              {/* Instagram Action Buttons (Ipsis Litteris SVG) */}
+              <div className="px-3 pt-2.5 pb-2 space-y-2 bg-black">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3.5 text-white">
+                    {/* Heart / Curtir */}
+                    <button type="button" className="hover:opacity-70 transition-opacity" title="Curtir">
+                      <svg aria-label="Curtir" fill="currentColor" height="22" role="img" viewBox="0 0 24 24" width="22">
+                        <path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.84 1.175.98 1.763 1.12 1.763s.278-.588 1.11-1.766a4.17 4.17 0 0 1 3.679-1.938m0-2a6.04 6.04 0 0 0-4.797 2.127 6.052 6.052 0 0 0-4.787-2.127A6.985 6.985 0 0 0 .5 9.122c0 3.61 2.55 5.827 5.015 7.97.283.246.569.494.853.747l1.027.918a44.998 44.998 0 0 0 3.518 3.018 2 2 0 0 0 2.174 0 45.263 45.263 0 0 0 3.626-3.115l.922-.824c.293-.26.59-.519.885-.774 2.334-2.025 4.98-4.32 4.98-7.94a6.985 6.985 0 0 0-6.708-7.218Z" />
+                      </svg>
+                    </button>
+
+                    {/* Comment / Comentar */}
+                    <button type="button" className="hover:opacity-70 transition-opacity" title="Comentar">
+                      <svg aria-label="Comentar" fill="currentColor" height="22" role="img" viewBox="0 0 24 24" width="22">
+                        <path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+                      </svg>
+                    </button>
+
+                    {/* Share / Compartilhar (Avião) */}
+                    <button type="button" className="hover:opacity-70 transition-opacity" title="Compartilhar">
+                      <svg aria-label="Compartilhar" fill="currentColor" height="22" role="img" viewBox="0 0 24 24" width="22">
+                        <line fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" x1="22" x2="9.218" y1="2" y2="10.083" />
+                        <polygon fill="none" points="11.698 20.334 22 2.001 2 3.01 9.218 10.084 11.698 20.334" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+                      </svg>
+                    </button>
                   </div>
-                  <span>🔖</span>
+
+                  {/* Bookmark / Salvar */}
+                  <button type="button" className="hover:opacity-70 transition-opacity text-white" title="Salvar">
+                    <svg aria-label="Salvar" fill="currentColor" height="22" role="img" viewBox="0 0 24 24" width="22">
+                      <polygon fill="none" points="20 21 12 13.44 4 21 4 3 20 3 20 21" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                    </svg>
+                  </button>
                 </div>
 
-                <div className="text-[11px] leading-relaxed max-h-36 overflow-y-auto pr-1">
-                  <span className="font-bold mr-1">meusimoveis</span>
-                  <span className="text-white/80 whitespace-pre-wrap">
+                {/* Curtidas simuladas */}
+                <div className="text-[12px] font-semibold text-white">
+                  Curtido por pessoas interessadas
+                </div>
+
+                {/* Legenda com o usuário real */}
+                <div className="text-[11.5px] leading-relaxed max-h-36 overflow-y-auto pr-1">
+                  <span className="font-bold text-white mr-1.5">
+                    {igAccount?.instagram_username || 'ronaldomeiracorretor'}
+                  </span>
+                  <span className="text-white/90 whitespace-pre-wrap">
                     {caption || 'A legenda gerada aparecerá aqui...'}
                   </span>
                 </div>
