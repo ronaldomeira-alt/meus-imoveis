@@ -41,7 +41,6 @@ const getStatValue = (id: SummaryFilterType, stats: DashboardStats): number => {
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
   stats,
-  activeFilter = 'all',
   onSelectFilter,
 }) => {
   return (
@@ -49,15 +48,12 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
       {CARDS_CONFIG.map((card) => {
         const Icon = card.icon;
         const value = getStatValue(card.id, stats);
-        const isActive = activeFilter === card.id;
 
         return (
           <button
             key={card.id}
             onClick={() => onSelectFilter(card.id)}
-            className={`card-surface text-left p-3.5 lg:p-4 flex flex-col justify-between group cursor-pointer ${
-              isActive ? 'border-accent/60' : ''
-            }`}
+            className="card-surface hover:!border-accent/60 text-left p-3.5 lg:p-4 flex flex-col justify-between group cursor-pointer"
             style={{ minHeight: '120px' }}
           >
             <div className="flex items-center justify-between">

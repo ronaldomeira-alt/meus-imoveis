@@ -71,13 +71,15 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
   // 4: R$ 500 – 700 mil
   // 5: R$ 700 mil – 1 mi
   // 6: Acima de R$ 1 mi
+  // Paleta categórica validada (CVD-safe) — mesma ordem fixa de
+  // src/components/dashboard/PriceRangeChart.tsx; não reordenar sem revalidar.
   const rangesDef = [
-    { id: 'r1', label: 'Até R$ 300 mil',    min: 0,       max: 300000,  color: '#00E5FF' },
-    { id: 'r2', label: 'R$ 300 – 400 mil',  min: 300000,  max: 400000,  color: '#38BDF8' },
-    { id: 'r3', label: 'R$ 400 – 500 mil',  min: 400000,  max: 500000,  color: '#2563EB' },
-    { id: 'r4', label: 'R$ 500 – 700 mil',  min: 500000,  max: 700000,  color: '#D946EF' },
-    { id: 'r5', label: 'R$ 700 mil – 1 mi', min: 700000,  max: 1000000, color: '#F97316' },
-    { id: 'r6', label: 'Acima de R$ 1 mi',  min: 1000000, max: Infinity,color: '#FBBF24' },
+    { id: 'r1', label: 'Até R$ 300 mil',    min: 0,       max: 300000,  color: '#3987E5' },
+    { id: 'r2', label: 'R$ 300 – 400 mil',  min: 300000,  max: 400000,  color: '#D95926' },
+    { id: 'r3', label: 'R$ 400 – 500 mil',  min: 400000,  max: 500000,  color: '#199E70' },
+    { id: 'r4', label: 'R$ 500 – 700 mil',  min: 500000,  max: 700000,  color: '#C98500' },
+    { id: 'r5', label: 'R$ 700 mil – 1 mi', min: 700000,  max: 1000000, color: '#D55181' },
+    { id: 'r6', label: 'Acima de R$ 1 mi',  min: 1000000, max: Infinity,color: '#008300' },
   ];
 
   const byPriceRange: PriceRangeStat[] = rangesDef.map((def) => {

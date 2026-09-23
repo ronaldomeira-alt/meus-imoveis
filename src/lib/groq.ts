@@ -1,5 +1,4 @@
 import type {
-  PropertyType,
   PropertyPosition,
   PropertyCondition,
   PropertyPurpose,
@@ -142,32 +141,47 @@ DIRETRIZES FUNDAMENTAIS DE CONFIABILIDADE (REGRA ZERO ALUCINAÇÃO):
    - Se disser "com condomínio incluso" ou "já com condomínio", defina condo_included = true e condo_fee = null.
    - Se disser "condomínio de 450", defina condo_fee = 450 e condo_included = false.
    - Se não mencionar nada sobre condomínio, defina condo_fee = null e condo_included = false.
-5. ÁREA:
-   - Se disser área/metragem aproximada ("em torno de 60m²"), defina is_approximate_area = true e area_m2 = 60. Se não informado, retorne area_m2 = null.
+5. ÁREA E METRAGEM (com suporte a faixa e empreendimento):
+   - Se disser área única ("60m²" ou "cerca de 60m²"), defina area_m2 = 60.
+   - Se disser FAIXA de metragem (ex: "de 19 a 39 metros", "19 a 39m²", "unidades de 25 a 45m²"), defina is_development = true, area_range = { "min": 19, "max": 39 }, e area_m2 = 19 (menor área).
+   - Se não informado, retorne area_m2 = null e area_range = null.
 6. CARACTERÍSTICAS (quartos, suítes, banheiros, vagas):
+   - Se for faixa ou opções de quartos (ex: "studios e opções de 1, 2 e 3 quartos", "1 e 2 quartos", "2 ou 3 quartos"), defina is_development = true, bedrooms_options = [1, 2, 3] e bedrooms = 1 (menor número).
    - Extraia APENAS números explicitamente informados. Se não citado, retorne null.
-7. AMBIGUIDADES:
+   - IMPORTANTE: "não tem suíte", "sem vaga", "não possui banheiro extra" são respostas VÁLIDAS e EXPLÍCITAS — retorne 0 (zero), NUNCA null.
+7. CONDOMÍNIO NÃO SE APLICA:
+   - Se o usuário disser explicitamente que o imóvel não paga condomínio, ou que condomínio "não se aplica" (comum em casas e terrenos), defina condo_not_applicable = true e condo_fee = null.
+8. ÁREA DE LAZER/COMODIDADES:
+   - Se o usuário disser explicitamente que não há área de lazer ou comodidades ("sem lazer", "não tem área de lazer"), retorne building_features e apartment_features como arrays vazios [] normalmente.
+9. OBSERVAÇÕES E NOTAS (CRÍTICO - NUNCA DESPEJE O TEXTO INTEIRO):
+   - O campo "notes" SÓ DEVE SER PREENCHIDO se o usuário der uma instrução explícita de anotação, como: "guarde nas observações que...", "anota aí que...", "observações: ...", "adicione na descrição que...".
+   - Se não houver pedido expresso de anotação, RETORNE notes = null. NUNCA coloque a fala ou descrição geral do imóvel em notes.
+10. AMBIGUIDADES:
    - Se houver termos conflitantes ou ininteligíveis, adicione o nome do campo na lista "ambiguous_fields".
 
 Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao redor:
 {
   "purpose": "Venda" | "Locação" | null,
   "type": "Apartamento" | "Casa" | "Cobertura" | "Flat" | "Studio" | "Terreno" | "Comercial" | "Outro" | null,
+  "is_development": boolean,
   "neighborhood": string | null,
   "address": string | null,
   "number": string | null,
   "complement": string | null,
   "condominium_name": string | null,
   "bedrooms": number | null,
+  "bedrooms_options": number[] | null,
   "suites": number | null,
   "bathrooms": number | null,
   "parking_spaces": number | null,
   "area_m2": number | null,
+  "area_range": { "min": number, "max": number } | null,
   "is_approximate_area": boolean,
   "price": number | null,
   "is_approximate_price": boolean,
   "condo_fee": number | null,
   "condo_included": boolean,
+  "condo_not_applicable": boolean,
   "iptu": number | null,
   "floor": number | null,
   "position": "Nascente" | "Poente" | "Norte" | "Sul" | null,
@@ -175,6 +189,7 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
   "condition": "Novo" | "Usado" | "Em construção" | "Reformado" | null,
   "building_features": string[],
   "apartment_features": string[],
+  "notes": string | null,
   "source_type": "Próprio" | "Parceiro",
   "owner_name": string | null,
   "owner_phone": string | null,
@@ -299,16 +314,28 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
     number: parsed.number ? String(parsed.number).trim() : null,
     complement: parsed.complement ? String(parsed.complement).trim() : null,
     condominium_name: parsed.condominium_name ? String(parsed.condominium_name).trim() : null,
+    is_development: Boolean(parsed.is_development),
     bedrooms: parseNullableNumber(parsed.bedrooms),
+    bedrooms_options: Array.isArray(parsed.bedrooms_options)
+      ? parsed.bedrooms_options.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
+      : null,
     suites: parseNullableNumber(parsed.suites),
     bathrooms: parseNullableNumber(parsed.bathrooms),
     parking_spaces: parseNullableNumber(parsed.parking_spaces),
     area_m2: parseNullableNumber(parsed.area_m2),
+    area_range:
+      parsed.area_range && (parsed.area_range.min || parsed.area_range.max)
+        ? {
+            min: parseNullableNumber(parsed.area_range.min) || 0,
+            max: parseNullableNumber(parsed.area_range.max) || 0,
+          }
+        : null,
     is_approximate_area: Boolean(parsed.is_approximate_area),
     price: parseNullableNumber(parsed.price),
     is_approximate_price: Boolean(parsed.is_approximate_price),
     condo_fee: parseNullableNumber(parsed.condo_fee),
     condo_included: Boolean(parsed.condo_included),
+    condo_not_applicable: Boolean(parsed.condo_not_applicable),
     iptu: parseNullableNumber(parsed.iptu),
     floor: parseNullableNumber(parsed.floor),
     position: parsed.position && parsed.position !== 'Não informado' ? (parsed.position as PropertyPosition) : null,
@@ -322,7 +349,10 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
     partner_name: parsed.partner_name ? String(parsed.partner_name).trim() : null,
     partner_phone: parsed.partner_phone ? String(parsed.partner_phone).trim() : null,
     ambiguous_fields: ambiguousFields,
-    notes: text,
+    notes:
+      typeof parsed.notes === 'string' && parsed.notes.trim() && parsed.notes.trim().toLowerCase() !== 'null'
+        ? parsed.notes.trim()
+        : undefined,
   };
 
   // Validação do núcleo obrigatório e campos desejáveis
@@ -356,6 +386,16 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
       field_states[key] = 'missing';
     }
   }
+
+  // Comodidades e Lazer: marcado como 'informed' se houver itens OU se o usuário disser que não possui lazer
+  const textLower = text.toLowerCase();
+  const hasNoAmenitiesMention = /(?:n[ãa]o (?:tem|possui|há)|sem)\s+(?:\w+\s+){0,4}(?:lazer|comodidades?|[áa]rea de lazer)/.test(textLower);
+  if (result.building_features && result.building_features.length > 0) {
+    field_states.building_features = 'informed';
+  } else if (hasNoAmenitiesMention) {
+    field_states.building_features = 'informed';
+  }
+
   result.field_states = field_states;
 
   return result;

@@ -11,16 +11,21 @@ import { PropertyFilters, FilterState } from './components/properties/PropertyFi
 import { PropertySummaryModal } from './components/properties/PropertySummaryModal';
 import { PropertyDetailPage } from './components/properties/PropertyDetailPage';
 import { PropertyEditModal } from './components/properties/PropertyEditModal';
-import { CaptureModal } from './components/capture/CaptureModal';
+import { AddPropertyPage } from './components/capture/AddPropertyPage';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { SettingsView } from './components/settings/SettingsView';
 import { ReportsView } from './components/reports/ReportsView';
+import { PilotoAutomaticoView } from './components/marketing/PilotoAutomaticoView';
+import { MarketingCalendarView } from './components/marketing/MarketingCalendarView';
+import { PostEditorModal } from './components/marketing/PostEditorModal';
 import { initialProperties } from './data/initialProperties';
 import { calculateDashboardStats } from './lib/supabase';
+import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
 import type { PreferredAIProvider } from './lib/ai-provider';
 import { PlusCircle, Building2, Users, Archive } from 'lucide-react';
+import { InstagramIcon } from './components/ui/InstagramIcon';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -61,6 +66,9 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 ];
 
 export const App: React.FC = () => {
+  // ── Usuário Ativo (Ronaldo/Thatianna, trocado no dropdown do Header) ──
+  const [currentUser, setCurrentUserId] = useCurrentUser();
+
   // ── Navegação Ativa ──
   const [activeSection, setActiveSection] = useState<NavSection>('dashboard');
 
@@ -118,7 +126,6 @@ export const App: React.FC = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   // ── Modais e Visualização em Dois Níveis (Modal Resumo → Página Completa) ──
-  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
   const [summaryProperty, setSummaryProperty] = useState<Property | null>(null);
   const [viewingPropertyId, setViewingPropertyId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
@@ -128,6 +135,12 @@ export const App: React.FC = () => {
     return null;
   });
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+
+  // ── Marketing & Post Studio (Fase 13, 14, 15) ──
+  const [marketingPostProperty, setMarketingPostProperty] = useState<Property | null>(null);
+  const [savedPropertyPrompt, setSavedPropertyPrompt] = useState<Property | null>(null);
+
+
 
   const viewingProperty = useMemo(() => {
     if (!viewingPropertyId) return null;
@@ -292,6 +305,9 @@ export const App: React.FC = () => {
       created_at: 'Agora mesmo',
     };
     setNotifications((prev) => [newNotification, ...prev]);
+
+    // Pergunta 1-Click: deseja agendar/criar publicação no Instagram para o imóvel?
+    setSavedPropertyPrompt(newProperty);
   };
 
   const handleArchiveProperty = async (id: string) => {
@@ -409,21 +425,30 @@ export const App: React.FC = () => {
           setActiveSection(section);
           setIsMobileNavOpen(false);
         }}
-        onOpenCapture={() => {
-          setIsCaptureOpen(true);
-          setIsMobileNavOpen(false);
-        }}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
+        currentUser={currentUser}
       />
 
-      {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA DO IMÓVEL (NÍVEL 2) ── */}
-      <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden p-3.5 sm:p-5 lg:p-6 min-w-0">
-        {viewingProperty ? (
+      {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA (NÍVEL 2) ── */}
+      <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden py-3.5 pr-3.5 pl-3.5 sm:py-5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:py-6 lg:pr-6 lg:pl-[96px] min-w-0">
+        {activeSection === 'captar' ? (
+          <AddPropertyPage
+            onSaveProperty={(p) => {
+              handleSaveNewProperty(p);
+              setActiveSection('estoque');
+            }}
+            onBack={() => setActiveSection('dashboard')}
+            geminiApiKey={geminiApiKey}
+            groqApiKey={groqApiKey}
+            preferredAIProvider={preferredAIProvider}
+          />
+        ) : viewingProperty ? (
           <PropertyDetailPage
             property={viewingProperty}
             onBack={handleBackToInventory}
             onEdit={(p) => setEditingProperty(p)}
+            onUpdateProperty={handleUpdateProperty}
             onArchive={handleArchiveProperty}
             onMarkAsSold={handleMarkAsSold}
             onDelete={handleDeleteProperty}
@@ -443,7 +468,8 @@ export const App: React.FC = () => {
           onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
           onOpenSettings={() => setActiveSection('configuracoes')}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
-          currentUser={{ name: 'Ronaldo Meira', email: 'ronaldomeira@gmail.com' }}
+          currentUser={currentUser}
+          onChangeUser={setCurrentUserId}
         />
 
         {/* ── CORPO PRINCIPAL: ALTERNA ENTRE COCKPIT DASHBOARD E OUTRAS VIEWS ── */}
@@ -549,7 +575,7 @@ export const App: React.FC = () => {
         {(activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados') && (
           <div className="flex-1 flex flex-col min-h-0 space-y-4 overflow-hidden animate-fade-in">
             {/* Barra de Filtros Sticky */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 sticky top-0 z-20 bg-[var(--bg-base)]/95 backdrop-blur-md pt-1 pb-2">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h2 className="text-xl font-extrabold text-ink-primary flex items-center gap-2">
@@ -566,7 +592,7 @@ export const App: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => setIsCaptureOpen(true)}
+                  onClick={() => setActiveSection('captar')}
                   className="btn-primary px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer"
                 >
                   <PlusCircle className="w-4 h-4" />
@@ -582,7 +608,7 @@ export const App: React.FC = () => {
               />
             </div>
 
-            {/* Grid de Imóveis com Scroll Vertical */}
+            {/* Grid de Imóveis com Scroll Vertical e respiro aprimorado */}
             <div className="flex-1 overflow-y-auto pr-1">
               {filteredProperties.length === 0 ? (
                 <div className="h-64 flex flex-col items-center justify-center text-center p-8 panel-surface">
@@ -599,7 +625,7 @@ export const App: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-8">
                   {filteredProperties.map((property) => (
                     <PropertyCard
                       key={property.id}
@@ -617,6 +643,26 @@ export const App: React.FC = () => {
         {activeSection === 'relatorios' && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <ReportsView properties={properties} stats={stats} />
+          </div>
+        )}
+
+        {/* ── VIEW PILOTO AUTOMÁTICO (INSTAGRAM) ── */}
+        {activeSection === 'piloto' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <PilotoAutomaticoView
+              properties={properties}
+              onOpenProperty={(p) => handleOpenDetail(p)}
+            />
+          </div>
+        )}
+
+        {/* ── VIEW CALENDÁRIO EDITORIAL ── */}
+        {activeSection === 'calendario' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MarketingCalendarView
+              properties={properties}
+              onOpenPiloto={() => setActiveSection('piloto')}
+            />
           </div>
         )}
 
@@ -656,16 +702,6 @@ export const App: React.FC = () => {
         onSaveProperty={handleUpdateProperty}
       />
 
-      {/* ── MODAL COMPOSER IA DE CAPTAÇÃO ── */}
-      <CaptureModal
-        isOpen={isCaptureOpen}
-        onClose={() => setIsCaptureOpen(false)}
-        onSaveProperty={handleSaveNewProperty}
-        geminiApiKey={geminiApiKey}
-        groqApiKey={groqApiKey}
-        preferredAIProvider={preferredAIProvider}
-      />
-
       {/* ── DRAWER LATERAL DE NOTIFICAÇÕES ── */}
       <NotificationDrawer
         isOpen={isNotificationDrawerOpen}
@@ -683,6 +719,67 @@ export const App: React.FC = () => {
         }}
         onClearNotifications={() => setNotifications([])}
       />
+
+      {/* ── MODAL 1-CLICK: CONFIRMAÇÃO APÓS SALVAR IMÓVEL (FASE 13) ── */}
+      {savedPropertyPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-line-strong p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-pink-500/20">
+              <InstagramIcon className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-extrabold text-ink-primary">
+                Imóvel Salvo no Catálogo!
+              </h3>
+              <p className="text-xs text-ink-secondary mt-1">
+                Deseja criar a publicação para o Instagram e agendar no piloto automático agora?
+              </p>
+              <div className="mt-3 p-3 rounded-xl bg-white/[0.03] border border-line-subtle text-left">
+                <p className="text-xs font-bold text-ink-primary truncate">
+                  {savedPropertyPrompt.type} · {savedPropertyPrompt.neighborhood}
+                </p>
+                <p className="text-[11px] text-accent">
+                  R$ {savedPropertyPrompt.price.toLocaleString('pt-BR')} • {savedPropertyPrompt.area_m2}m²
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                onClick={() => setSavedPropertyPrompt(null)}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 border border-line-subtle text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:bg-white/10 transition-colors"
+              >
+                Agora não
+              </button>
+
+              <button
+                onClick={() => {
+                  const targetProp = savedPropertyPrompt;
+                  setSavedPropertyPrompt(null);
+                  setMarketingPostProperty(targetProp);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white text-xs font-bold shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all"
+              >
+                Criar Post com IA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL POST STUDIO (CRIAR / EDITAR POST) ── */}
+      {marketingPostProperty && (
+        <PostEditorModal
+          isOpen={Boolean(marketingPostProperty)}
+          onClose={() => setMarketingPostProperty(null)}
+          property={marketingPostProperty}
+          onSaved={() => {
+            // Notifica atualização dos posts
+            window.dispatchEvent(new CustomEvent('marketing-posts-updated'));
+          }}
+        />
+      )}
     </div>
   );
 };

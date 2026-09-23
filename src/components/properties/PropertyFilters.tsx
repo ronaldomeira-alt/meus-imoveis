@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, X, Filter } from 'lucide-react';
+import { ArrowUpDown, X } from 'lucide-react';
 import type { PropertyType } from '../../types/property';
 
 export type SortOption = 'recent' | 'price_asc' | 'price_desc' | 'area_asc' | 'area_desc';
@@ -62,7 +62,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
   );
 
   return (
-    <div className="panel-surface p-4 mb-4 space-y-3">
+    <div className="panel-surface p-3 mb-2.5 space-y-2.5 rounded-2xl">
       {/* Linha Superior: Filtros em Cápsulas Glass */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
         {/* Bairro */}

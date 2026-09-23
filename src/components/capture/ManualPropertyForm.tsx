@@ -18,6 +18,7 @@ import {
   validateRequiredPropertyFields,
   MandatoryPropertyFieldKey,
 } from '../../lib/property-validation';
+import { VoiceNotesInput } from '../ui/VoiceNotesInput';
 import type {
   Property,
   PropertyType,
@@ -130,7 +131,6 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   const [notes, setNotes] = useState(initialProperty?.notes || '');
 
   // Validação dos 5 campos obrigatórios
-  const [submitted, setSubmitted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<MandatoryPropertyFieldKey, string>>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -209,7 +209,6 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   // ── Salvar Imóvel Manualmente (Sem IA) ──
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
 
     // Validação centralizada com a regra dos 5 campos obrigatórios
     const validation = validateRequiredPropertyFields({
@@ -972,15 +971,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
           )}
 
           <div className="pt-2">
-            <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
-              Observações / Notas Internas
-            </label>
-            <textarea
-              rows={2}
+            <VoiceNotesInput
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Informações adicionais, chaves, horários para visitação..."
-              className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent resize-none"
+              onChange={(val) => setNotes(val)}
+              label="Observações / Percepções do Imóvel"
+              placeholder="Informações adicionais, vizinhança, proximidade do mar, rotina local, comércio ou pontos fortes da negociação..."
+              rows={3}
             />
           </div>
         </div>

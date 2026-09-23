@@ -1,5 +1,4 @@
 import type {
-  Property,
   PropertyType,
   PropertyPosition,
   PropertyCondition,
@@ -26,8 +25,13 @@ export interface ExtractedPropertyData {
   is_approximate_area?: boolean;
   price?: number | null;
   is_approximate_price?: boolean;
+  is_development?: boolean;
+  area_range?: { min: number; max: number } | null;
+  bedrooms_options?: number[] | null;
+  social_publications?: any;
   condo_fee?: number | null;
   condo_included?: boolean;
+  condo_not_applicable?: boolean;
   iptu?: number | null;
   floor?: number | null;
   position?: PropertyPosition | null;
@@ -154,22 +158,54 @@ export const extractPropertyWithGemini = async (
     field_states.type = 'missing';
   }
 
-  // 4. Quartos e Suítes (sem defaults)
+  // 4. Quartos e Suítes (sem defaults, com suporte a multiunidades / empreendimentos)
   let bedrooms: number | null = null;
-  const matchQuartos = textLower.match(/(\d+|um|dois|três|tres|quatro|cinco)\s*(?:quartos?|qts?|dorms?)/);
-  if (matchQuartos) {
-    const wordMap: Record<string, number> = { um: 1, dois: 2, três: 3, tres: 3, quatro: 4, cinco: 5 };
-    bedrooms = wordMap[matchQuartos[1]] || parseInt(matchQuartos[1], 10) || null;
-    field_states.bedrooms = 'informed';
-  } else {
-    field_states.bedrooms = 'missing';
+  let bedrooms_options: number[] | null = null;
+  let is_development =
+    textLower.includes('empreendimento') ||
+    textLower.includes('na planta') ||
+    textLower.includes('lançamento') ||
+    textLower.includes('lancamento') ||
+    textLower.includes('unidades de');
+
+  // Detecta opções de quartos como "1, 2 e 3 quartos", "2 ou 3 quartos", "1 e 2 quartos"
+  const multiBedroomsMatch = textLower.match(/([1-4])\s*(?:,|\s*e|\s*ou)\s*([1-4])(?:\s*(?:e|ou|,)\s*([1-4]))?\s*(?:quartos?|qts?|dorms?)/);
+  if (multiBedroomsMatch) {
+    const rawOpts = [multiBedroomsMatch[1], multiBedroomsMatch[2], multiBedroomsMatch[3]]
+      .filter(Boolean)
+      .map((n) => parseInt(n, 10));
+    const uniqueOpts = Array.from(new Set(rawOpts)).sort((a, b) => a - b);
+    if (uniqueOpts.length > 1) {
+      bedrooms_options = uniqueOpts;
+      bedrooms = uniqueOpts[0]; // fallback escalar para o menor
+      is_development = true;
+      field_states.bedrooms = 'informed';
+    }
   }
+
+  if (!bedrooms_options) {
+    const matchQuartos = textLower.match(/(\d+|um|dois|três|tres|quatro|cinco)\s*(?:quartos?|qts?|dorms?)/);
+    if (matchQuartos) {
+      const wordMap: Record<string, number> = { um: 1, dois: 2, três: 3, tres: 3, quatro: 4, cinco: 5 };
+      bedrooms = wordMap[matchQuartos[1]] || parseInt(matchQuartos[1], 10) || null;
+      field_states.bedrooms = 'informed';
+    } else {
+      field_states.bedrooms = 'missing';
+    }
+  }
+
+  // Negações explícitas ("não tem suíte", "sem vaga"): resposta válida = 0, não "faltando"
+  const isNegated = (subject: string) =>
+    new RegExp(`(?:n[ãa]o (?:tem|possui|há)|sem)\\s+(?:\\w+\\s+){0,2}${subject}`).test(textLower);
 
   let suites: number | null = null;
   const matchSuites = textLower.match(/(\d+|uma?|dois|duas|três|tres|quatro)\s*su[íi]tes?/);
   if (matchSuites) {
     const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3, quatro: 4 };
     suites = wordMap[matchSuites[1]] || parseInt(matchSuites[1], 10) || null;
+    field_states.suites = 'informed';
+  } else if (isNegated('su[íi]tes?')) {
+    suites = 0;
     field_states.suites = 'informed';
   } else {
     field_states.suites = 'missing';
@@ -193,30 +229,49 @@ export const extractPropertyWithGemini = async (
     const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3 };
     parking_spaces = wordMap[matchVagas[1]] || parseInt(matchVagas[1], 10) || null;
     field_states.parking_spaces = 'informed';
+  } else if (isNegated('vagas?|garagens?')) {
+    parking_spaces = 0;
+    field_states.parking_spaces = 'informed';
   } else {
     field_states.parking_spaces = 'missing';
   }
 
-  // 5. Área m² (com detecção de incerteza/aproximação)
+  // 5. Área m² (com suporte a faixa ex: 19 a 39 m² ou 19–39 metros e incerteza)
   let area_m2: number | null = null;
+  let area_range: { min: number; max: number } | null = null;
   let is_approximate_area = false;
-  if (
-    textLower.includes('por volta de') ||
-    textLower.includes('mais ou menos') ||
-    textLower.includes('cerca de') ||
-    textLower.includes('acho que') ||
-    textLower.includes('uns')
-  ) {
-    is_approximate_area = true;
+
+  const matchAreaRange = textLower.match(/(?:de\s+)?(\d+)\s*(?:a|até|-)\s*(\d+)\s*(?:m²|m2|metros(?:\s*quadrados)?)/);
+  if (matchAreaRange) {
+    const min = parseInt(matchAreaRange[1], 10);
+    const max = parseInt(matchAreaRange[2], 10);
+    if (!isNaN(min) && !isNaN(max)) {
+      area_range = { min: Math.min(min, max), max: Math.max(min, max) };
+      area_m2 = area_range.min; // fallback escalar
+      is_development = true;
+      field_states.area_m2 = 'informed';
+    }
   }
 
-  const matchArea = textLower.match(/(\d+)\s*(?:m²|m2|metros(?:\s*quadrados)?)/);
-  if (matchArea) {
-    area_m2 = parseInt(matchArea[1], 10);
-    field_states.area_m2 = is_approximate_area ? 'ambiguous' : 'informed';
-    if (is_approximate_area) ambiguous_fields.push('Área (aproximada)');
-  } else {
-    field_states.area_m2 = 'missing';
+  if (!area_range) {
+    if (
+      textLower.includes('por volta de') ||
+      textLower.includes('mais ou menos') ||
+      textLower.includes('cerca de') ||
+      textLower.includes('acho que') ||
+      textLower.includes('uns')
+    ) {
+      is_approximate_area = true;
+    }
+
+    const matchArea = textLower.match(/(\d+)\s*(?:m²|m2|metros(?:\s*quadrados)?)/);
+    if (matchArea) {
+      area_m2 = parseInt(matchArea[1], 10);
+      field_states.area_m2 = is_approximate_area ? 'ambiguous' : 'informed';
+      if (is_approximate_area) ambiguous_fields.push('Área (aproximada)');
+    } else {
+      field_states.area_m2 = 'missing';
+    }
   }
 
   // 6. Preço / Aluguel (NUNCA assume 450.000)
@@ -259,9 +314,10 @@ export const extractPropertyWithGemini = async (
     field_states.price = 'missing';
   }
 
-  // 7. Condomínio (Especial para locação com condomínio incluso)
+  // 7. Condomínio (Especial para locação com condomínio incluso, ou "não se aplica")
   let condo_fee: number | null = null;
   let condo_included = false;
+  let condo_not_applicable = false;
   if (
     textLower.includes('com condomínio incluso') ||
     textLower.includes('com condominio incluso') ||
@@ -271,6 +327,14 @@ export const extractPropertyWithGemini = async (
     textLower.includes('com condomínio incluído')
   ) {
     condo_included = true;
+    condo_fee = null;
+    field_states.condo_fee = 'informed';
+  } else if (
+    /(?:n[ãa]o (?:tem|possui|paga)|sem)\s+(?:\w+\s+){0,2}condom[íi]nio/.test(textLower) ||
+    textLower.includes('condomínio não se aplica') ||
+    textLower.includes('condominio nao se aplica')
+  ) {
+    condo_not_applicable = true;
     condo_fee = null;
     field_states.condo_fee = 'informed';
   } else {
@@ -316,27 +380,52 @@ export const extractPropertyWithGemini = async (
   if (textLower.includes('ar-condicionado') || textLower.includes('ar condicionado')) apartment_features.push('Ar-condicionado');
   if (textLower.includes('projetado') || textLower.includes('planejado')) apartment_features.push('Móveis projetados');
 
+  // "Sem área de lazer" é uma resposta válida (não "faltando") — marca o campo como resolvido
+  if (building_features.length > 0 || apartment_features.length > 0) {
+    field_states.building_features = 'informed';
+  } else if (
+    /(?:n[ãa]o (?:tem|possui|há)|sem)\s+(?:\w+\s+){0,3}(?:lazer|comodidades?|[áa]rea de lazer)/.test(textLower)
+  ) {
+    field_states.building_features = 'informed';
+  }
+
+  // 11. Observações e Notas (SEM POLUIÇÃO AUTOMÁTICA)
+  // Só extrai se o usuário der comando explícito como:
+  // "guarde nas observações que...", "anota aí que...", "observações: ...", "adicione na descrição que..."
+  let notes: string | undefined = undefined;
+  const explicitNoteMatch =
+    text.match(/(?:guarde|coloque|anot[ea]|registr[ea]|observa[çc][ãa]o)\s*(?:nas?\s*)?(?:observa[çc][õo]es?|notas?|descri[çc][ãa]o)[:\s]+([^.\n]+)/i) ||
+    text.match(/(?:observa[çc][õo]es?|anota[çc][õo]es?|descri[çc][ãa]o)[:\s]+([^.\n]+)/i);
+
+  if (explicitNoteMatch && explicitNoteMatch[1]) {
+    notes = explicitNoteMatch[1].trim();
+  }
+
   const resultData: ExtractedPropertyData = {
     purpose,
     type,
     neighborhood,
     bedrooms,
+    bedrooms_options,
     suites,
     bathrooms,
     parking_spaces,
     area_m2,
+    area_range,
     is_approximate_area,
+    is_development,
     price,
     is_approximate_price,
     condo_fee,
     condo_included,
+    condo_not_applicable,
     iptu,
     position,
     furnished: textLower.includes('mobiliado') || textLower.includes('porteira fechada') ? true : null,
     condition: textLower.includes('novo') ? 'Novo' : textLower.includes('reformado') ? 'Reformado' : null,
     building_features,
     apartment_features,
-    notes: text,
+    notes,
     source_type: textLower.includes('parceir') ? 'Parceiro' : 'Próprio',
     field_states,
     ambiguous_fields,

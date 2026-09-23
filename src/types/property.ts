@@ -25,6 +25,17 @@ export type SourceType = 'Próprio' | 'Parceiro';
 
 export type PropertyStatus = 'Ativo' | 'Vendido' | 'Arquivado';
 
+export type SocialPlatform = 'instagram' | 'tiktok' | 'facebook';
+export type SocialPublishStatus = 'not_published' | 'published';
+
+export interface SocialPublication {
+  status: SocialPublishStatus;
+  published_at?: string;
+  url?: string;
+}
+
+export type SocialPublications = Partial<Record<SocialPlatform, SocialPublication>>;
+
 export interface PropertyPhoto {
   id: string;
   property_id: string;
@@ -35,6 +46,7 @@ export interface PropertyPhoto {
 
 export interface Property {
   id: string;
+  title?: string;
   purpose?: PropertyPurpose;
   type: PropertyType;
   neighborhood: string;
@@ -49,6 +61,10 @@ export interface Property {
   bathrooms: number;
   parking_spaces: number;
   area_m2: number;
+  is_development?: boolean;
+  area_range?: { min: number; max: number } | null;
+  bedrooms_options?: number[] | null;
+  social_publications?: SocialPublications;
   price: number;
   condo_fee?: number;
   iptu?: number;

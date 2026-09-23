@@ -90,7 +90,7 @@ export const validateRequiredPropertyFields = (
     errors.price = MANDATORY_FIELD_ERROR_MESSAGES.price;
   }
 
-  // 3. QUARTOS: número >= 0 (não confundir 'vazio' com 0)
+  // 3. QUARTOS: número >= 0 (não confundir 'vazio' com 0) ou opções de quartos (empreendimentos)
   const rawBedrooms = data.bedrooms;
   let numBedrooms: number | null = null;
   if (typeof rawBedrooms === 'number') {
@@ -100,12 +100,19 @@ export const validateRequiredPropertyFields = (
     numBedrooms = isNaN(parsed) ? null : parsed;
   }
 
-  if (numBedrooms === null || isNaN(numBedrooms) || numBedrooms < 0) {
+  const hasBedroomsOptions =
+    Array.isArray(data.bedrooms_options) &&
+    data.bedrooms_options.length > 0 &&
+    data.bedrooms_options.some((n: any) => typeof n === 'number' && !isNaN(n) && n >= 0);
+
+  const hasValidBedrooms = (numBedrooms !== null && !isNaN(numBedrooms) && numBedrooms >= 0) || hasBedroomsOptions;
+
+  if (!hasValidBedrooms) {
     missing.push('bedrooms');
     errors.bedrooms = MANDATORY_FIELD_ERROR_MESSAGES.bedrooms;
   }
 
-  // 4. ÁREA / METRAGEM: número estritamente positivo (> 0)
+  // 4. ÁREA / METRAGEM: número estritamente positivo (> 0) ou faixa de área (empreendimentos)
   const rawArea = data.area_m2;
   let numArea: number | null = null;
   if (typeof rawArea === 'number') {
@@ -115,7 +122,14 @@ export const validateRequiredPropertyFields = (
     numArea = isNaN(parsed) ? null : parsed;
   }
 
-  if (numArea === null || isNaN(numArea) || numArea <= 0) {
+  const hasAreaRange =
+    data.area_range &&
+    ((typeof data.area_range.min === 'number' && data.area_range.min > 0) ||
+      (typeof data.area_range.max === 'number' && data.area_range.max > 0));
+
+  const hasValidArea = (numArea !== null && !isNaN(numArea) && numArea > 0) || Boolean(hasAreaRange);
+
+  if (!hasValidArea) {
     missing.push('area_m2');
     errors.area_m2 = MANDATORY_FIELD_ERROR_MESSAGES.area_m2;
   }
@@ -153,6 +167,7 @@ export const getMissingDesirableFields = (data: Record<string, any>): string[] =
   if (
     !data.condo_fee &&
     !data.condo_included &&
+    !data.condo_not_applicable &&
     (data.type === 'Apartamento' || data.type === 'Flat' || data.type === 'Studio')
   ) {
     desirable.push('Taxa de condomínio');

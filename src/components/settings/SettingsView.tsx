@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { testGroqConnection, GROQ_MODELS } from '../../lib/groq';
 import type { PreferredAIProvider } from '../../lib/ai-provider';
+import { MarketingSettingsTab } from './MarketingSettingsTab';
 
 interface SettingsViewProps {
   geminiApiKey: string;
@@ -36,7 +37,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onExportJSON,
   onExportCSV,
 }) => {
-  const [activeTab, setActiveTab] = useState<'gemini' | 'usuarios' | 'conta'>('gemini');
+  const [activeTab, setActiveTab] = useState<'gemini' | 'usuarios' | 'conta' | 'marketing'>('gemini');
   const [showKey, setShowKey] = useState(false);
   const [keyInput, setKeyInput] = useState(geminiApiKey);
   const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash');
@@ -139,6 +140,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             Conta & Dados
+          </button>
+
+          <button
+            onClick={() => setActiveTab('marketing')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'marketing'
+                ? 'bg-accent-soft text-accent border border-accent/40'
+                : 'text-ink-secondary hover:text-ink-primary'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-accent" />
+            Inteligência de Marketing
           </button>
         </div>
       </div>
@@ -574,6 +587,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
         )}
+
+        {/* 4. ABA INTELIGÊNCIA DE MARKETING */}
+        {activeTab === 'marketing' && <MarketingSettingsTab />}
       </div>
     </div>
   );

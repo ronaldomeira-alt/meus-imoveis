@@ -2,6 +2,7 @@ import React from 'react';
 import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
 import { Heart } from 'lucide-react';
+import { InstagramIcon } from '../ui/InstagramIcon';
 
 interface PropertyCardProps {
   property: Property;
@@ -15,14 +16,29 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
   const coverPhoto = property.photos?.find((p) => p.is_cover) || property.photos?.[0];
   const imageUrl = coverPhoto ? getPhotoUrl(coverPhoto.storage_path) : '';
 
+  const instagramStatus = property.social_publications?.instagram?.status || 'not_published';
+  const isInstaPublished = instagramStatus === 'published';
+
+  const areaText =
+    property.area_range && (property.area_range.min || property.area_range.max)
+      ? `${property.area_range.min}–${property.area_range.max} m²`
+      : `${property.area_m2} m²`;
+
+  const bedroomsText =
+    property.bedrooms_options && property.bedrooms_options.length > 0
+      ? `${property.bedrooms_options.join(', ')} qts`
+      : property.type === 'Studio'
+      ? 'Studio'
+      : `${property.bedrooms} quartos · ${property.suites} suíte${property.suites > 1 ? 's' : ''}`;
+
   return (
     <div
       onClick={onClick}
-      className="card-surface overflow-hidden cursor-pointer group flex flex-col justify-between"
+      className="card-surface overflow-hidden cursor-pointer group flex flex-col justify-between transition-all duration-200 hover:border-accent/40"
       style={{ padding: '8px 8px 10px' }}
     >
-      {/* Foto com Overlay Escuro */}
-      <div className="relative aspect-[16/11] overflow-hidden bg-black/40 rounded-lg">
+      {/* Foto com proporção leve 16:9 */}
+      <div className="relative aspect-[16/9] overflow-hidden bg-black/40 rounded-lg">
         <img
           src={imageUrl}
           alt={property.neighborhood}
@@ -53,18 +69,37 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
 
       {/* Informações */}
       <div className="px-1 pt-2">
-        <h4
-          className="font-bold text-[12.5px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight"
-          style={{ letterSpacing: '-0.01em' }}
-        >
-          {property.neighborhood}
-        </h4>
+        <div className="flex items-center justify-between gap-1">
+          <h4
+            className="font-bold text-[12.5px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight"
+            style={{ letterSpacing: '-0.01em' }}
+          >
+            {property.neighborhood}
+          </h4>
+          {property.is_development && (
+            <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold uppercase tracking-wider bg-accent/15 text-accent border border-accent/30 flex-shrink-0">
+              Planta
+            </span>
+          )}
+        </div>
 
         <p className="text-[10px] text-ink-secondary mt-0.5 truncate">
-          {property.type === 'Studio'
-            ? `Studio · ${property.area_m2} m²`
-            : `${property.bedrooms} quartos · ${property.suites} suíte${property.suites > 1 ? 's' : ''} · ${property.area_m2} m²`}
+          {bedroomsText} · {areaText}
         </p>
+
+        {/* Badge discreto de rede social */}
+        <div className="mt-1.5">
+          <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold tracking-tight border ${
+              isInstaPublished
+                ? 'bg-status-success/15 border-status-success/35 text-status-success'
+                : 'bg-white/[0.03] border-line-subtle text-ink-secondary/70'
+            }`}
+          >
+            <InstagramIcon className="w-2.5 h-2.5 flex-shrink-0" />
+            <span>{isInstaPublished ? 'Instagram · Publicado' : 'Instagram · Não publicado'}</span>
+          </span>
+        </div>
 
         {/* Preço + Origem */}
         <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-line-subtle">

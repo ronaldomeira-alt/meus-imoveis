@@ -11,8 +11,12 @@ interface PriceRangeChartProps {
   onViewAll: () => void;
 }
 
-// Escala sequencial azul (accent) — do mais claro (faixas baratas) ao mais escuro (faixas caras)
-const BLUE_SCALE = ['#93C5FD', '#60A5FA', '#3B82F6', '#2F6FE0', '#2354B8', '#1B3F8C'];
+// Paleta categórica (identidade por faixa, não magnitude) — 6 matizes validados
+// para separação sob daltonismo (protan/deutan/tritan ΔE >= 8) e contraste na
+// superfície escura do app. Uma rampa mono-hue "clara→escura" ou um degradê
+// frio→quente reprovam nesse teste (laranja/amarelo/vermelho colidem quando
+// adjacentes), então a ordem abaixo é fixa — não reordenar sem revalidar.
+const RANGE_COLORS = ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181', '#008300'];
 
 export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
   data,
@@ -23,17 +27,17 @@ export const PriceRangeChart: React.FC<PriceRangeChartProps> = ({
   onViewAll,
 }) => {
   const defaultRanges: PriceRangeStat[] = [
-    { id: 'r1', label: 'Até R$ 300 mil',    minPrice: 0,       maxPrice: 300000,   count: 4, pct: 16.7, color: BLUE_SCALE[0] },
-    { id: 'r2', label: 'R$ 300 – 400 mil',  minPrice: 300000,  maxPrice: 400000,   count: 6, pct: 25.0, color: BLUE_SCALE[1] },
-    { id: 'r3', label: 'R$ 400 – 500 mil',  minPrice: 400000,  maxPrice: 500000,   count: 7, pct: 29.2, color: BLUE_SCALE[2] },
-    { id: 'r4', label: 'R$ 500 – 700 mil',  minPrice: 500000,  maxPrice: 700000,   count: 4, pct: 16.7, color: BLUE_SCALE[3] },
-    { id: 'r5', label: 'R$ 700 mil – 1 mi', minPrice: 700000,  maxPrice: 1000000,  count: 2, pct: 8.3,  color: BLUE_SCALE[4] },
-    { id: 'r6', label: 'Acima de R$ 1 mi',  minPrice: 1000000, maxPrice: Infinity, count: 1, pct: 4.2,  color: BLUE_SCALE[5] },
+    { id: 'r1', label: 'Até R$ 300 mil',    minPrice: 0,       maxPrice: 300000,   count: 4, pct: 16.7, color: RANGE_COLORS[0] },
+    { id: 'r2', label: 'R$ 300 – 400 mil',  minPrice: 300000,  maxPrice: 400000,   count: 6, pct: 25.0, color: RANGE_COLORS[1] },
+    { id: 'r3', label: 'R$ 400 – 500 mil',  minPrice: 400000,  maxPrice: 500000,   count: 7, pct: 29.2, color: RANGE_COLORS[2] },
+    { id: 'r4', label: 'R$ 500 – 700 mil',  minPrice: 500000,  maxPrice: 700000,   count: 4, pct: 16.7, color: RANGE_COLORS[3] },
+    { id: 'r5', label: 'R$ 700 mil – 1 mi', minPrice: 700000,  maxPrice: 1000000,  count: 2, pct: 8.3,  color: RANGE_COLORS[4] },
+    { id: 'r6', label: 'Acima de R$ 1 mi',  minPrice: 1000000, maxPrice: Infinity, count: 1, pct: 4.2,  color: RANGE_COLORS[5] },
   ];
 
   const ranges = (data.length > 0 ? data : defaultRanges).map((seg, i) => ({
     ...seg,
-    color: BLUE_SCALE[i % BLUE_SCALE.length],
+    color: RANGE_COLORS[i % RANGE_COLORS.length],
   }));
   const countTotal = totalActive || 24;
 

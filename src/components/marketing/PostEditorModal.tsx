@@ -1,0 +1,612 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Sparkles,
+  RefreshCw,
+  Calendar,
+  Send,
+  Save,
+  CheckCircle2,
+  AlertCircle,
+  Image as ImageIcon,
+  ChevronDown,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Eye
+} from 'lucide-react';
+import { InstagramIcon } from '../ui/InstagramIcon';
+import type { Property } from '../../types/property';
+import type {
+  MarketingPost,
+  RegenerationOption,
+  PostStatus,
+  PostType
+} from '../../types/marketing';
+import {
+  generateEditorialCaption,
+  REGENERATION_OPTIONS
+} from '../../lib/editorial-ai';
+import {
+  saveMarketingPost,
+  getInstagramAccount
+} from '../../lib/marketing-db';
+import { publishMarketingPostNow } from '../../lib/marketing-scheduler';
+import { getPhotoUrl } from '../../lib/supabase';
+
+interface PostEditorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  property: Property;
+  existingPost?: MarketingPost | null;
+  onSaved?: (post: MarketingPost) => void;
+}
+
+const extractPhotoUrls = (photos?: any[]): string[] => {
+  if (!photos || !Array.isArray(photos)) return [];
+  return photos
+    .map((p) => {
+      if (typeof p === 'string') return getPhotoUrl(p);
+      if (p && p.storage_path) return getPhotoUrl(p.storage_path);
+      return '';
+    })
+    .filter(Boolean);
+};
+
+export const PostEditorModal: React.FC<PostEditorModalProps> = ({
+  isOpen,
+  onClose,
+  property,
+  existingPost,
+  onSaved,
+}) => {
+  const normalizedPhotos = extractPhotoUrls(property.photos);
+  const [caption, setCaption] = useState(existingPost?.caption || '');
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>(
+    existingPost?.media_urls && existingPost.media_urls.length > 0
+      ? existingPost.media_urls
+      : normalizedPhotos
+  );
+  const [selectedCover, setSelectedCover] = useState<string>(
+    existingPost?.cover_url || normalizedPhotos[0] || ''
+  );
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    if (existingPost?.scheduled_at) {
+      return new Date(existingPost.scheduled_at).toISOString().slice(0, 16);
+    }
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+    return tomorrow.toISOString().slice(0, 16);
+  });
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [regenDropdownOpen, setRegenDropdownOpen] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [previewPhotoIndex, setPreviewPhotoIndex] = useState(0);
+  const isLockedPublishing = existingPost?.status === 'publishing';
+
+  // Initialize or reset when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (existingPost) {
+        setCaption(existingPost.caption);
+        setSelectedPhotos(existingPost.media_urls || []);
+        setSelectedCover(existingPost.cover_url || (existingPost.media_urls?.[0] || ''));
+        if (existingPost.scheduled_at) {
+          setScheduledDate(new Date(existingPost.scheduled_at).toISOString().slice(0, 16));
+        }
+      } else {
+        const norm = extractPhotoUrls(property.photos);
+        setSelectedPhotos(norm);
+        setSelectedCover(norm[0] || '');
+        // If caption is empty, auto-generate initial caption
+        if (!caption) {
+          handleGenerateCaption('default');
+        }
+      }
+      setStatusMessage(null);
+    }
+  }, [isOpen, property.id, existingPost?.id]);
+
+  if (!isOpen) return null;
+
+  const togglePhoto = (url: string) => {
+    if (selectedPhotos.includes(url)) {
+      if (selectedPhotos.length === 1) return; // Keep at least one
+      const updated = selectedPhotos.filter((p) => p !== url);
+      setSelectedPhotos(updated);
+      if (selectedCover === url) {
+        setSelectedCover(updated[0] || '');
+      }
+    } else {
+      setSelectedPhotos([...selectedPhotos, url]);
+      if (!selectedCover) setSelectedCover(url);
+    }
+  };
+
+  const handleGenerateCaption = async (option: RegenerationOption = 'default') => {
+    setIsGenerating(true);
+    setStatusMessage(null);
+    try {
+      const generated = await generateEditorialCaption({
+        property,
+        option,
+      });
+      setCaption(generated);
+    } catch (err: any) {
+      setStatusMessage({
+        type: 'error',
+        text: `Erro ao gerar legenda: ${err.message || 'Falha na IA'}`,
+      });
+    } finally {
+      setIsGenerating(false);
+      setRegenDropdownOpen(false);
+    }
+  };
+
+  const buildPostPayload = (status: PostStatus, scheduleISO?: string): MarketingPost => {
+    const postType: PostType = selectedPhotos.length > 1 ? 'carousel' : 'feed';
+    const snapshot = (existingPost?.property_snapshot && Object.keys(existingPost.property_snapshot).length > 0)
+      ? existingPost.property_snapshot
+      : {
+          title: property.title || `${property.type} em ${property.neighborhood}`,
+          price: property.price,
+          neighborhood: property.neighborhood,
+          bedrooms: property.bedrooms,
+          bathrooms: property.bathrooms,
+          suites: property.suites,
+          parking_spaces: property.parking_spaces,
+          area_m2: property.area_m2,
+          notes: property.notes,
+          photos: property.photos,
+        };
+
+    return {
+      id: existingPost?.id,
+      listing_id: property.id,
+      property_snapshot: snapshot,
+      caption,
+      media_urls: selectedPhotos,
+      cover_url: selectedCover || selectedPhotos[0] || '',
+      post_type: postType,
+      channel: 'instagram',
+      status,
+      scheduled_at: scheduleISO || null,
+      published_at: existingPost?.published_at || null,
+      provider: 'instagram',
+      external_media_id: existingPost?.external_media_id || null,
+      last_error: null,
+      retry_count: 0,
+      publishing_lock_until: null,
+    };
+  };
+
+  const handleSaveDraft = async () => {
+    setIsSaving(true);
+    setStatusMessage(null);
+    try {
+      const payload = buildPostPayload('draft');
+      const saved = await saveMarketingPost(payload);
+      setStatusMessage({ type: 'success', text: 'Rascunho salvo com sucesso!' });
+      onSaved?.(saved);
+      setTimeout(() => onClose(), 1200);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: `Erro ao salvar rascunho: ${err.message}` });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSchedulePost = async () => {
+    if (!scheduledDate) {
+      setStatusMessage({ type: 'error', text: 'Selecione data e horário para a programação.' });
+      return;
+    }
+    const scheduleTime = new Date(scheduledDate).getTime();
+    if (isNaN(scheduleTime)) {
+      setStatusMessage({ type: 'error', text: 'Data de agendamento inválida.' });
+      return;
+    }
+    if (scheduleTime <= Date.now() + 60000) {
+      setStatusMessage({ type: 'error', text: 'A data de programação deve estar no mínimo 2 minutos no futuro.' });
+      return;
+    }
+
+    setIsSaving(true);
+    setStatusMessage(null);
+    try {
+      const scheduleISO = new Date(scheduledDate).toISOString();
+      const payload = buildPostPayload('approved', scheduleISO);
+      const saved = await saveMarketingPost(payload);
+      setStatusMessage({
+        type: 'success',
+        text: `Post aprovado e programado com sucesso para ${new Date(scheduledDate).toLocaleString('pt-BR')}!`,
+      });
+      onSaved?.(saved);
+      setTimeout(() => onClose(), 1500);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: `Erro ao programar: ${err.message}` });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePublishNow = async () => {
+    const account = await getInstagramAccount();
+    if (!account || account.status !== 'connected' || !account.instagram_user_id) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Instagram não conectado! Configure sua conta em Configurações > Inteligência de Marketing.',
+      });
+      return;
+    }
+
+    if (!confirm('Deseja publicar este post no Instagram agora imediatamente?')) {
+      return;
+    }
+
+    setIsPublishing(true);
+    setStatusMessage(null);
+    try {
+      // First save as approved
+      const payload = buildPostPayload('approved');
+      const saved = await saveMarketingPost(payload);
+
+      // Now invoke publisher
+      const result = await publishMarketingPostNow(saved);
+      if (result.success) {
+        setStatusMessage({
+          type: 'success',
+          text: `Publicado com sucesso no Instagram! ID: ${result.mediaId}`,
+        });
+        onSaved?.({
+          ...saved,
+          status: 'published',
+          published_at: new Date().toISOString(),
+          external_media_id: result.mediaId,
+        });
+        setTimeout(() => onClose(), 2000);
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: `Falha na publicação: ${result.error}`,
+        });
+      }
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: `Erro na publicação: ${err.message}` });
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in">
+      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-[#0f172a] border border-line-strong shadow-2xl overflow-hidden text-ink-primary">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line-subtle bg-slate-900/60 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white shadow-lg">
+              <InstagramIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-extrabold flex items-center gap-2">
+                Post Studio · Instagram
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-accent-soft text-accent border border-accent/30">
+                  {selectedPhotos.length > 1 ? `Carrossel (${selectedPhotos.length})` : 'Foto Única'}
+                </span>
+              </h2>
+              <p className="text-xs text-ink-secondary truncate max-w-md">
+                {property.title} · {property.neighborhood || 'Bairro'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-ink-tertiary hover:text-ink-primary hover:bg-white/5 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Status Alert Banner */}
+        {statusMessage && (
+          <div
+            className={`px-6 py-3 flex items-center gap-3 text-xs font-semibold ${
+              statusMessage.type === 'success'
+                ? 'bg-emerald-500/10 text-emerald-400 border-b border-emerald-500/20'
+                : 'bg-red-500/10 text-red-400 border-b border-red-500/20'
+            }`}
+          >
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            )}
+            <span>{statusMessage.text}</span>
+          </div>
+        )}
+
+        {isLockedPublishing && (
+          <div className="px-6 py-3 flex items-center gap-3 text-xs font-semibold bg-amber-500/10 text-amber-400 border-b border-amber-500/20">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>Este post está sendo publicado no momento e está bloqueado contra edições concorrentes.</span>
+          </div>
+        )}
+
+        {/* Content Body: Two Columns (Editor & Live Preview) */}
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Form & Controls (7 cols) */}
+          <div className="lg:col-span-7 space-y-5">
+            {/* 1. Mídia Selector */}
+            <div className="panel-surface p-4 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-accent" />
+                  Mídias do Imóvel ({selectedPhotos.length} selecionada{selectedPhotos.length !== 1 ? 's' : ''})
+                </span>
+                <span className="text-[11px] text-ink-tertiary">
+                  Clique para marcar/desmarcar
+                </span>
+              </div>
+
+              {normalizedPhotos && normalizedPhotos.length > 0 ? (
+                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-36 overflow-y-auto p-1">
+                  {normalizedPhotos.map((photo: string, index: number) => {
+                    const isSelected = selectedPhotos.includes(photo);
+                    const isCover = selectedCover === photo;
+                    return (
+                      <div
+                        key={index}
+                        onClick={() => togglePhoto(photo)}
+                        className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all group ${
+                          isSelected
+                            ? 'border-accent shadow-md shadow-accent/20'
+                            : 'border-transparent opacity-40 hover:opacity-75'
+                        }`}
+                      >
+                        <img
+                          src={photo}
+                          alt={`Foto ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {isSelected && (
+                          <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[10px] text-white font-bold">
+                            ✓
+                          </div>
+                        )}
+                        {isCover && (
+                          <div className="absolute bottom-0 inset-x-0 bg-accent text-[9px] text-white font-bold text-center py-0.5 uppercase tracking-tighter">
+                            Capa
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl border border-dashed border-line-subtle text-center text-xs text-ink-tertiary">
+                  Nenhuma foto cadastrada neste imóvel.
+                </div>
+              )}
+            </div>
+
+            {/* 2. Legenda e IA Prompt Engine */}
+            <div className="panel-surface p-4 rounded-2xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-accent" />
+                  Legenda do Post
+                </span>
+
+                {/* Regenerate Dropdown */}
+                <div className="relative">
+                  <div className="inline-flex rounded-xl bg-accent-soft border border-accent/30 overflow-hidden shadow-sm">
+                    <button
+                      onClick={() => handleGenerateCaption('default')}
+                      disabled={isGenerating}
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+                      {isGenerating ? 'Criando...' : 'Regenerar'}
+                    </button>
+                    <button
+                      onClick={() => setRegenDropdownOpen(!regenDropdownOpen)}
+                      className="px-1.5 py-1 text-accent border-l border-accent/20 hover:bg-accent/10 transition-colors"
+                      title="Opções de Refinamento de Tom"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  {regenDropdownOpen && (
+                    <div className="absolute right-0 mt-1.5 w-60 rounded-2xl bg-slate-900 border border-line-strong shadow-2xl p-1.5 z-20 animate-fade-in space-y-1">
+                      <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-tertiary">
+                        Estilos & Ângulos
+                      </div>
+                      {REGENERATION_OPTIONS.map((opt: { id: RegenerationOption; label: string; desc: string }) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => handleGenerateCaption(opt.id)}
+                          className="w-full text-left px-3 py-2 rounded-xl text-xs hover:bg-accent-soft hover:text-accent transition-colors flex flex-col"
+                        >
+                          <span className="font-semibold">{opt.label}</span>
+                          <span className="text-[10px] text-ink-tertiary">{opt.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Textarea */}
+              <div className="relative">
+                <textarea
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  rows={9}
+                  placeholder="Escreva ou gere com IA a legenda perfeita..."
+                  className="w-full p-3.5 rounded-xl bg-surface-subtle border border-line-subtle text-xs text-ink-primary focus:border-accent focus:ring-1 focus:ring-accent outline-none leading-relaxed transition-all resize-none"
+                />
+                <div className="flex items-center justify-between text-[11px] text-ink-tertiary px-1 pt-1">
+                  <span>
+                    Dica: Baseada nos dados do imóvel, observações e na sua Skill Editorial.
+                  </span>
+                  <span className={caption.length > 2200 ? 'text-red-400 font-bold' : ''}>
+                    {caption.length}/2200 caracteres
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Programação Temporal */}
+            <div className="panel-surface p-4 rounded-2xl space-y-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-accent" />
+                Agendamento de Publicação
+              </span>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <input
+                  type="datetime-local"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="flex-1 p-2.5 rounded-xl bg-surface-subtle border border-line-subtle text-xs text-ink-primary focus:border-accent outline-none"
+                />
+                <span className="text-[11px] text-ink-tertiary self-center">
+                  Fuso horário: Horário de Brasília
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Instagram Live Preview (5 cols) */}
+          <div className="lg:col-span-5 flex flex-col items-center">
+            <span className="text-xs font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5 mb-3 self-start">
+              <Eye className="w-3.5 h-3.5 text-accent" />
+              Pré-visualização do Feed
+            </span>
+
+            {/* Instagram Mockup Card */}
+            <div className="w-full max-w-[340px] rounded-3xl bg-black border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white">
+              {/* Instagram Card Header */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-amber-500 p-0.5">
+                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-[10px] font-black">
+                      MI
+                    </div>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold leading-none">meusimoveis</span>
+                    <span className="text-[10px] text-white/50 leading-none mt-0.5">
+                      {property.neighborhood || 'Fortaleza'}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-white/40 text-xs">•••</span>
+              </div>
+
+              {/* Photo Viewport */}
+              <div className="relative aspect-square bg-slate-950 flex items-center justify-center overflow-hidden">
+                {selectedPhotos.length > 0 ? (
+                  <>
+                    <img
+                      src={selectedPhotos[previewPhotoIndex] || selectedPhotos[0]}
+                      alt="Visualização"
+                      className="w-full h-full object-cover transition-all"
+                    />
+                    {selectedPhotos.length > 1 && (
+                      <>
+                        <button
+                          onClick={() =>
+                            setPreviewPhotoIndex(
+                              (prev) => (prev > 0 ? prev - 1 : selectedPhotos.length - 1)
+                            )
+                          }
+                          className="absolute left-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPreviewPhotoIndex(
+                              (prev) => (prev < selectedPhotos.length - 1 ? prev + 1 : 0)
+                            )
+                          }
+                          className="absolute right-2 p-1 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/70 text-[10px] font-bold tracking-wider">
+                          {previewPhotoIndex + 1}/{selectedPhotos.length}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-white/40">Sem imagem selecionada</span>
+                )}
+              </div>
+
+              {/* Caption & Actions */}
+              <div className="p-3.5 space-y-2 text-xs bg-slate-950/80">
+                <div className="flex items-center justify-between text-white/70">
+                  <div className="flex items-center gap-3">
+                    <span>❤️</span>
+                    <span>💬</span>
+                    <span>✈️</span>
+                  </div>
+                  <span>🔖</span>
+                </div>
+
+                <div className="text-[11px] leading-relaxed max-h-36 overflow-y-auto pr-1">
+                  <span className="font-bold mr-1">meusimoveis</span>
+                  <span className="text-white/80 whitespace-pre-wrap">
+                    {caption || 'A legenda gerada aparecerá aqui...'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-line-subtle bg-slate-900/80">
+          <button
+            onClick={handleSaveDraft}
+            disabled={isSaving || isPublishing || isLockedPublishing}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-line-strong text-xs font-bold text-ink-primary hover:bg-white/10 transition-colors disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            Salvar Rascunho
+          </button>
+
+          <div className="w-full sm:w-auto flex items-center gap-2.5">
+            <button
+              onClick={handleSchedulePost}
+              disabled={isSaving || isPublishing || isLockedPublishing}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent-soft text-accent border border-accent/40 text-xs font-bold hover:bg-accent/20 transition-all disabled:opacity-50"
+            >
+              <Calendar className="w-4 h-4" />
+              Aprovar & Programar
+            </button>
+
+            <button
+              onClick={handlePublishNow}
+              disabled={isSaving || isPublishing || isLockedPublishing}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white font-bold text-xs shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all disabled:opacity-50"
+            >
+              <Send className={`w-4 h-4 ${isPublishing ? 'animate-bounce' : ''}`} />
+              {isPublishing ? 'Publicando...' : 'Publicar Agora'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

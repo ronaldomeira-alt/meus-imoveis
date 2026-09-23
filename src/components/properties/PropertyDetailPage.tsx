@@ -24,15 +24,18 @@ import {
   Home,
   MoreHorizontal,
 } from 'lucide-react';
+import { InstagramIcon } from '../ui/InstagramIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
 import { sharePropertySafely } from '../../lib/share-sanitizer';
+import { PostEditorModal } from '../marketing/PostEditorModal';
 
 interface PropertyDetailPageProps {
   property: Property;
   onBack: () => void;
   onEdit: (property: Property) => void;
+  onUpdateProperty?: (property: Property) => void;
   onArchive: (id: string) => Promise<void>;
   onMarkAsSold: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -42,6 +45,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   property,
   onBack,
   onEdit,
+  onUpdateProperty,
   onArchive,
   onMarkAsSold,
   onDelete,
@@ -50,6 +54,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
   // Fecha o menu de ações ao clicar fora
@@ -112,6 +117,26 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
   const cleanPhone = (phone?: string) => (phone ? phone.replace(/\D/g, '') : '');
 
+  const instagramStatus = property.social_publications?.instagram?.status || 'not_published';
+  const isInstaPublished = instagramStatus === 'published';
+
+  const handleToggleInstagramStatus = () => {
+    const nextStatus = isInstaPublished ? 'not_published' : 'published';
+    const updated: Property = {
+      ...property,
+      social_publications: {
+        ...(property.social_publications || {}),
+        instagram: {
+          status: nextStatus,
+          published_at: nextStatus === 'published' ? new Date().toISOString() : undefined,
+        },
+      },
+    };
+    if (onUpdateProperty) {
+      onUpdateProperty(updated);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
       {/* ── 1. HEADER SUPERIOR DE NAVEGAÇÃO & AÇÕES ── */}
@@ -126,6 +151,16 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
         {/* Grupo de Ações do Imóvel */}
         <div className="flex items-center gap-2">
+          {/* Criar Post Instagram com IA */}
+          <button
+            onClick={() => setIsPostEditorOpen(true)}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 shadow-md shadow-pink-500/20 hover:opacity-95 flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+            title="Criar publicação no Instagram com IA"
+          >
+            <InstagramIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Criar Post IA</span>
+          </button>
+
           {/* Editar */}
           <button
             onClick={() => onEdit(property)}
@@ -133,6 +168,22 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Editar imóvel</span>
+          </button>
+
+          {/* Status Instagram */}
+          <button
+            onClick={handleToggleInstagramStatus}
+            title={isInstaPublished ? 'Clique para marcar como não publicado no Instagram' : 'Clique para marcar como publicado no Instagram'}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border active:scale-[0.98] ${
+              isInstaPublished
+                ? 'bg-status-success/15 border-status-success/40 text-status-success hover:bg-status-success/25'
+                : 'bg-white/5 hover:bg-white/10 text-ink-secondary hover:text-ink-primary border-line-subtle'
+            }`}
+          >
+            <InstagramIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">
+              {isInstaPublished ? 'Instagram · Publicado' : 'Instagram · Não publicado'}
+            </span>
           </button>
 
           {/* Compartilhar */}
@@ -667,6 +718,18 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal Post Studio Instagram */}
+      {isPostEditorOpen && (
+        <PostEditorModal
+          isOpen={isPostEditorOpen}
+          onClose={() => setIsPostEditorOpen(false)}
+          property={property}
+          onSaved={() => {
+            window.dispatchEvent(new CustomEvent('marketing-posts-updated'));
+          }}
+        />
+      )}
     </div>
   );
 };
