@@ -21,13 +21,6 @@ const MONTHS_PT = [
 
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-// Horários estratégicos de maior conversão imobiliária no Instagram
-const ENGAGEMENT_PRESETS = [
-  { label: '09:00', desc: 'Manhã', hour: 9, min: 0 },
-  { label: '12:30', desc: 'Almoço', hour: 12, min: 30 },
-  { label: '18:00', desc: 'Tarde', hour: 18, min: 0 },
-  { label: '20:30', desc: 'Pico', hour: 20, min: 30 },
-];
 
 export const DateTimePicker: React.FC<DateTimePickerProps> = ({
   value,
@@ -87,17 +80,27 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
   const [hourAnim, setHourAnim] = useState<'up' | 'down' | null>(null);
   const [minAnim, setMinAnim] = useState<'up' | 'down' | null>(null);
+  const hourAnimTimer = useRef<any>(null);
+  const minAnimTimer = useRef<any>(null);
 
   const handleHourStep = (delta: number) => {
-    setHourAnim(delta > 0 ? 'up' : 'down');
-    setTimeout(() => setHourAnim(null), 200);
+    if (hourAnimTimer.current) clearTimeout(hourAnimTimer.current);
+    setHourAnim(null);
+    requestAnimationFrame(() => {
+      setHourAnim(delta > 0 ? 'up' : 'down');
+      hourAnimTimer.current = setTimeout(() => setHourAnim(null), 180);
+    });
     const next = (selectedHour + delta + 24) % 24;
     updateDate(selectedYear, selectedMonth, selectedDay, next, selectedMinute);
   };
 
   const handleMinuteStep = (delta: number, step = 5) => {
-    setMinAnim(delta > 0 ? 'up' : 'down');
-    setTimeout(() => setMinAnim(null), 200);
+    if (minAnimTimer.current) clearTimeout(minAnimTimer.current);
+    setMinAnim(null);
+    requestAnimationFrame(() => {
+      setMinAnim(delta > 0 ? 'up' : 'down');
+      minAnimTimer.current = setTimeout(() => setMinAnim(null), 180);
+    });
     const rounded = Math.round(selectedMinute / step) * step;
     const next = (rounded + delta * step + 60) % 60;
     updateDate(selectedYear, selectedMonth, selectedDay, selectedHour, next);
@@ -111,18 +114,6 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const handleMinuteChange = (newMin: number) => {
     const clamped = Math.max(0, Math.min(59, newMin));
     updateDate(selectedYear, selectedMonth, selectedDay, selectedHour, clamped);
-  };
-
-  const handlePresetClick = (preset: typeof ENGAGEMENT_PRESETS[0]) => {
-    updateDate(selectedYear, selectedMonth, selectedDay, preset.hour, preset.min);
-  };
-
-  const handleQuickDay = (daysOffset: number) => {
-    const target = new Date();
-    target.setDate(target.getDate() + daysOffset);
-    setViewYear(target.getFullYear());
-    setViewMonth(target.getMonth());
-    updateDate(target.getFullYear(), target.getMonth(), target.getDate(), selectedHour, selectedMinute);
   };
 
   // Cálculos do calendário do mês corrente
@@ -189,7 +180,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
         }`}
       >
         {/* 1. Esquerda: Ícone + Data + Horário */}
-        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-surface-2 border border-line-subtle flex items-center justify-center text-ink-primary group-hover:border-line-strong transition-colors flex-shrink-0">
             <CalendarIcon className="w-4 h-4 text-ink-primary" />
           </div>
@@ -204,17 +195,13 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
           </div>
         </div>
 
-        {/* 2. Centro: Badge "AMANHÃ" / "HOJE" Rigorosamente Centralizado no Meio Exato do Card */}
-        {relativeLabel && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-            <span className="px-3 py-1 rounded-full text-[10.5px] font-bold uppercase tracking-wider bg-surface-2 text-ink-primary border border-line-strong shadow-sm whitespace-nowrap">
+        {/* 2. Direita: Badge do lado esquerdo do nome "Alterar" */}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {relativeLabel && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-surface-2 text-ink-secondary border border-line-subtle whitespace-nowrap">
               {relativeLabel}
             </span>
-          </div>
-        )}
-
-        {/* 3. Direita: Ação Alterar */}
-        <div className="flex items-center justify-end flex-shrink-0 pl-2">
+          )}
           <span className="text-[11px] font-semibold text-ink-secondary group-hover:text-ink-primary transition-colors">
             Alterar
           </span>
@@ -223,41 +210,9 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
       {/* ── Popover Minimalista Fluido ── */}
       {isOpen && (
-        <div className="absolute left-0 bottom-full mb-2 w-full sm:w-[380px] p-4 rounded-2xl bg-surface-3 border border-line-strong shadow-modal z-50 animate-scale-in text-ink-primary">
-          {/* Topo: Atalhos Rápidos */}
-          <div className="flex items-center gap-1.5 pb-3 border-b border-line-subtle">
-            <button
-              type="button"
-              onClick={() => handleQuickDay(0)}
-              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-1 hover:bg-surface-2 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors"
-            >
-              Hoje
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDay(1)}
-              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-1 hover:bg-surface-2 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors"
-            >
-              Amanhã
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDay(2)}
-              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-1 hover:bg-surface-2 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors"
-            >
-              +2 dias
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDay(7)}
-              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-1 hover:bg-surface-2 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors"
-            >
-              +1 semana
-            </button>
-          </div>
-
+        <div className="absolute left-0 bottom-full mb-2 w-full sm:w-[370px] p-3 rounded-2xl bg-surface-3 border border-line-strong shadow-modal z-50 animate-scale-in text-ink-primary">
           {/* Navegação do Mês */}
-          <div className="flex items-center justify-between pt-3 pb-2">
+          <div className="flex items-center justify-between pb-1.5">
             <span className="text-xs font-bold text-ink-primary">
               {MONTHS_PT[viewMonth]} <span className="text-ink-secondary font-normal">{viewYear}</span>
             </span>
@@ -265,26 +220,26 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
               <button
                 type="button"
                 onClick={prevMonth}
-                className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-secondary hover:text-ink-primary transition-colors"
+                className="p-1 rounded-lg hover:bg-surface-2 text-ink-secondary hover:text-ink-primary transition-colors"
                 title="Mês anterior"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={nextMonth}
-                className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-secondary hover:text-ink-primary transition-colors"
+                className="p-1 rounded-lg hover:bg-surface-2 text-ink-secondary hover:text-ink-primary transition-colors"
                 title="Próximo mês"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Dias da Semana */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          <div className="grid grid-cols-7 gap-1 text-center mb-0.5">
             {WEEKDAYS_PT.map((w, i) => (
-              <span key={i} className="text-[10px] font-bold text-ink-muted uppercase tracking-wider py-1">
+              <span key={i} className="text-[9.5px] font-bold text-ink-muted uppercase tracking-wider py-0.5">
                 {w}
               </span>
             ))}
@@ -298,7 +253,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
               return (
                 <span
                   key={`prev-${i}`}
-                  className="h-8 flex items-center justify-center text-xs text-ink-muted/30 select-none"
+                  className="h-7 flex items-center justify-center text-[11px] text-ink-muted/30 select-none"
                 >
                   {prevDay}
                 </span>
@@ -323,7 +278,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   key={day}
                   type="button"
                   onClick={() => handleSelectDay(day)}
-                  className={`h-8 rounded-lg text-xs font-medium flex items-center justify-center transition-all cursor-pointer relative ${
+                  className={`h-7 rounded-lg text-xs font-medium flex items-center justify-center transition-all cursor-pointer relative ${
                     isSelected
                       ? 'bg-ink-primary text-base font-bold shadow-sm'
                       : isToday
@@ -333,7 +288,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                 >
                   {day}
                   {isToday && !isSelected && (
-                    <span className="absolute bottom-1 w-1 h-1 rounded-full bg-ink-primary" />
+                    <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-ink-primary" />
                   )}
                 </button>
               );
@@ -341,25 +296,43 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
           </div>
 
           {/* ── Divisor & Seletor de Hora / Minuto com Scroll do Mouse ── */}
-          <div className="mt-3.5 pt-3 border-t border-line-subtle space-y-3">
+          <div className="mt-2.5 pt-2 border-t border-line-subtle space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-ink-primary" />
                 Horário da Postagem
               </span>
-              <span className="text-[10px] text-ink-muted">
+              <span className="text-[9.5px] text-ink-muted">
                 Role o mouse para ajustar
               </span>
             </div>
 
-            {/* Controles de Hora e Minuto Centralizados com onWheel */}
-            <div className="flex items-center justify-center gap-2 py-1">
+            {/* Keyframes de rotação mecânica do tambor (efeito de rolagem cilíndrica real) */}
+            <style>{`
+              @keyframes drumRollUp {
+                0% { transform: translateY(14px) rotateX(24deg); }
+                100% { transform: translateY(0px) rotateX(0deg); }
+              }
+              @keyframes drumRollDown {
+                0% { transform: translateY(-14px) rotateX(-24deg); }
+                100% { transform: translateY(0px) rotateX(0deg); }
+              }
+              .animate-drum-up {
+                animation: drumRollUp 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+              }
+              .animate-drum-down {
+                animation: drumRollDown 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+              }
+            `}</style>
+
+            {/* Controles de Hora e Minuto com Cilindro Estilo Apple (iOS Drum Wheel) */}
+            <div className="flex items-center justify-center gap-2.5 py-0.5">
               {/* Bloco de Horas */}
               <div className="flex flex-col items-center">
                 <button
                   type="button"
                   onClick={() => handleHourStep(1)}
-                  className="p-0.5 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
+                  className="p-1 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
                   title="Aumentar hora (+1h)"
                 >
                   <ChevronRight className="w-3.5 h-3.5 -rotate-90" />
@@ -370,22 +343,41 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                     e.preventDefault();
                     handleHourStep(e.deltaY < 0 ? 1 : -1);
                   }}
-                  className={`w-12 h-10 rounded-xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
-                    hourAnim ? 'ring-1 ring-white/20' : ''
+                  className={`relative w-14 h-14 rounded-2xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
+                    hourAnim ? 'ring-1 ring-white/30 border-white/20' : ''
                   }`}
-                  title="Role a rodinha do mouse para cima ou para baixo"
+                  style={{
+                    maskImage: 'linear-gradient(to bottom, transparent, black 22%, black 78%, transparent)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 22%, black 78%, transparent)',
+                    perspective: '140px',
+                  }}
+                  title="Role a rodinha do mouse para girar o tambor de horas"
                 >
-                  <span
-                    className={`font-mono text-base font-black text-ink-primary tracking-wider text-center transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                  <div
+                    className={`w-full flex flex-col items-center justify-center select-none pointer-events-none ${
                       hourAnim === 'up'
-                        ? '-translate-y-1 scale-105 text-white'
+                        ? 'animate-drum-up'
                         : hourAnim === 'down'
-                        ? 'translate-y-1 scale-105 text-white'
-                        : 'translate-y-0 scale-100'
+                        ? 'animate-drum-down'
+                        : ''
                     }`}
+                    style={{ transformStyle: 'preserve-3d' }}
                   >
-                    {String(selectedHour).padStart(2, '0')}
-                  </span>
+                    {/* Número Anterior (curvado no topo do cilindro) */}
+                    <span className="font-mono text-[11px] font-semibold text-ink-muted/40 h-4 flex items-center justify-center select-none transform -rotate-x-25 scale-90">
+                      {String((selectedHour - 1 + 24) % 24).padStart(2, '0')}
+                    </span>
+
+                    {/* Número Atual (centro do cilindro) */}
+                    <span className="font-mono text-base font-black text-ink-primary tracking-wider h-5 flex items-center justify-center">
+                      {String(selectedHour).padStart(2, '0')}
+                    </span>
+
+                    {/* Número Próximo (curvado na base do cilindro) */}
+                    <span className="font-mono text-[11px] font-semibold text-ink-muted/40 h-4 flex items-center justify-center select-none transform rotate-x-25 scale-90">
+                      {String((selectedHour + 1) % 24).padStart(2, '0')}
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -402,7 +394,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
               </div>
 
               {/* Separador Central dos Dois Pontos */}
-              <div className="flex flex-col items-center pb-4">
+              <div className="flex flex-col items-center pb-3">
                 <span className="font-mono text-xl font-black text-ink-secondary select-none">
                   :
                 </span>
@@ -424,22 +416,41 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                     e.preventDefault();
                     handleMinuteStep(e.deltaY < 0 ? 1 : -1, 5);
                   }}
-                  className={`w-12 h-10 rounded-xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
-                    minAnim ? 'ring-1 ring-white/20' : ''
+                  className={`relative w-14 h-14 rounded-2xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
+                    minAnim ? 'ring-1 ring-white/30 border-white/20' : ''
                   }`}
-                  title="Role a rodinha do mouse para cima ou para baixo"
+                  style={{
+                    maskImage: 'linear-gradient(to bottom, transparent, black 22%, black 78%, transparent)',
+                    WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 22%, black 78%, transparent)',
+                    perspective: '140px',
+                  }}
+                  title="Role a rodinha do mouse para girar o tambor de minutos"
                 >
-                  <span
-                    className={`font-mono text-base font-black text-ink-primary tracking-wider text-center transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                  <div
+                    className={`w-full flex flex-col items-center justify-center select-none pointer-events-none ${
                       minAnim === 'up'
-                        ? '-translate-y-1 scale-105 text-white'
+                        ? 'animate-drum-up'
                         : minAnim === 'down'
-                        ? 'translate-y-1 scale-105 text-white'
-                        : 'translate-y-0 scale-100'
+                        ? 'animate-drum-down'
+                        : ''
                     }`}
+                    style={{ transformStyle: 'preserve-3d' }}
                   >
-                    {String(selectedMinute).padStart(2, '0')}
-                  </span>
+                    {/* Número Anterior (curvado no topo do cilindro) */}
+                    <span className="font-mono text-[11px] font-semibold text-ink-muted/40 h-4 flex items-center justify-center select-none transform -rotate-x-25 scale-90">
+                      {String((selectedMinute - 5 + 60) % 60).padStart(2, '0')}
+                    </span>
+
+                    {/* Número Atual (centro do cilindro) */}
+                    <span className="font-mono text-base font-black text-ink-primary tracking-wider h-5 flex items-center justify-center">
+                      {String(selectedMinute).padStart(2, '0')}
+                    </span>
+
+                    {/* Número Próximo (curvado na base do cilindro) */}
+                    <span className="font-mono text-[11px] font-semibold text-ink-muted/40 h-4 flex items-center justify-center select-none transform rotate-x-25 scale-90">
+                      {String((selectedMinute + 5) % 60).padStart(2, '0')}
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -454,29 +465,6 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
                   Minutos
                 </span>
               </div>
-            </div>
-
-            {/* Presets estratégicos de horário */}
-            <div className="grid grid-cols-4 gap-1.5">
-              {ENGAGEMENT_PRESETS.map((preset) => {
-                const isActive =
-                  selectedHour === preset.hour && selectedMinute === preset.min;
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => handlePresetClick(preset)}
-                    className={`py-1.5 px-2 rounded-lg text-center transition-all flex flex-col items-center justify-center border cursor-pointer ${
-                      isActive
-                        ? 'bg-surface-1 border-line-strong text-ink-primary shadow-sm ring-1 ring-white/10'
-                        : 'bg-surface-2/40 border-line-subtle text-ink-secondary hover:text-ink-primary hover:bg-surface-2'
-                    }`}
-                  >
-                    <span className="text-xs font-bold leading-tight">{preset.label}</span>
-                    <span className="text-[9px] text-ink-muted leading-none mt-0.5">{preset.desc}</span>
-                  </button>
-                );
-              })}
             </div>
           </div>
 
