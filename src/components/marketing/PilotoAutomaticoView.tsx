@@ -18,11 +18,12 @@ import {
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import type { Property } from '../../types/property';
-import type { MarketingPost, PostStatus } from '../../types/marketing';
+import type { MarketingPost, PostStatus, InstagramAccount } from '../../types/marketing';
 import {
   getMarketingPosts,
   deleteMarketingPost,
-  saveMarketingPost
+  saveMarketingPost,
+  getInstagramAccount
 } from '../../lib/marketing-db';
 import { publishMarketingPostNow } from '../../lib/marketing-scheduler';
 import { PostEditorModal } from './PostEditorModal';
@@ -44,12 +45,17 @@ export const PilotoAutomaticoView: React.FC<PilotoAutomaticoViewProps> = ({
   const [editingPost, setEditingPost] = useState<MarketingPost | null>(null);
   const [isPropertyPickerOpen, setIsPropertyPickerOpen] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [igAccount, setIgAccount] = useState<InstagramAccount | null>(null);
 
   const fetchPosts = async () => {
     setIsLoading(true);
     try {
-      const data = await getMarketingPosts();
+      const [data, account] = await Promise.all([
+        getMarketingPosts(),
+        getInstagramAccount()
+      ]);
       setPosts(data);
+      setIgAccount(account);
     } catch (err) {
       console.error('Erro ao carregar posts:', err);
     } finally {
@@ -258,10 +264,61 @@ export const PilotoAutomaticoView: React.FC<PilotoAutomaticoViewProps> = ({
             className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white text-xs font-bold shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all"
           >
             <Plus className="w-4 h-4" />
-            Criar Post com IA
+            <span>Criar Novo Post</span>
           </button>
         </div>
       </div>
+
+      {/* ── Banner de Alerta de Conexão / Expiração do Instagram ── */}
+      {igAccount && igAccount.status === 'connected' && igAccount.token_expires_at && (() => {
+        const expiresAt = new Date(igAccount.token_expires_at);
+        const now = new Date();
+        const diffMs = expiresAt.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const expiresFormatted = expiresAt.toLocaleDateString('pt-BR', {
+          day: '2-digit', month: 'long', year: 'numeric',
+        });
+
+        if (diffDays <= 0) {
+          return (
+            <div className="p-3.5 rounded-xl border bg-status-danger/10 border-status-danger/30 text-status-danger flex items-center justify-between gap-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <p className="text-xs">
+                  <strong>Token do Instagram expirado em {expiresFormatted}.</strong> O Piloto Automático está pausado até você reconectar.
+                </p>
+              </div>
+              <a
+                href="/?tab=settings"
+                className="px-3 py-1 rounded-lg bg-status-danger/20 hover:bg-status-danger/30 border border-status-danger/40 text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                Reconectar nas Configurações
+              </a>
+            </div>
+          );
+        }
+
+        if (diffDays <= 7) {
+          return (
+            <div className="p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400 flex items-center justify-between gap-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Clock className="w-4 h-4 flex-shrink-0" />
+                <p className="text-xs">
+                  <strong>Atenção:</strong> A autorização do Instagram (@{igAccount.instagram_username}) expira em {diffDays} {diffDays === 1 ? 'dia' : 'dias'} ({expiresFormatted}).
+                </p>
+              </div>
+              <a
+                href="/?tab=settings"
+                className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                Renovar nas Configurações
+              </a>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* ── Barra de Filtros por Status & Busca ── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-shrink-0">

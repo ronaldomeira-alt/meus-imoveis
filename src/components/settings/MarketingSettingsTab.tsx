@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import type {
@@ -480,6 +482,65 @@ export const MarketingSettingsTab: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Banner de Aviso de Expiração do Token */}
+        {igAccount.status === 'connected' && igAccount.token_expires_at && (() => {
+          const expiresAt = new Date(igAccount.token_expires_at);
+          const now = new Date();
+          const diffMs = expiresAt.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          const expiresFormatted = expiresAt.toLocaleDateString('pt-BR', {
+            day: '2-digit', month: 'long', year: 'numeric',
+          });
+
+          if (diffDays <= 0) {
+            return (
+              <div className="p-4 rounded-xl border bg-status-danger/10 border-status-danger/30 text-status-danger flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold">Token do Instagram expirado!</p>
+                  <p className="text-[11px] leading-relaxed opacity-90">
+                    A autorização expirou em {expiresFormatted}. As publicações automáticas estão paradas.
+                    Clique em <strong>"Conectar Instagram"</strong> para renovar a autorização em segundos.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleStartInstagramOAuth}
+                    className="mt-2 px-4 py-1.5 rounded-lg bg-status-danger/20 hover:bg-status-danger/30 border border-status-danger/40 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Reconectar Agora
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (diffDays <= 7) {
+            return (
+              <div className="p-4 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400 flex items-start gap-3">
+                <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold">
+                    Token expira em {diffDays} {diffDays === 1 ? 'dia' : 'dias'}
+                  </p>
+                  <p className="text-[11px] leading-relaxed opacity-90">
+                    A autorização do Instagram expira em {expiresFormatted}. Reconecte antes dessa data para
+                    evitar interrupção no Piloto Automático.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleStartInstagramOAuth}
+                    className="mt-2 px-4 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Renovar Autorização
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        })()}
 
         {igTestMessage && (
           <div
