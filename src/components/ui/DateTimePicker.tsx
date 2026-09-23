@@ -85,6 +85,24 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
     updateDate(viewYear, viewMonth, day, selectedHour, selectedMinute);
   };
 
+  const [hourAnim, setHourAnim] = useState<'up' | 'down' | null>(null);
+  const [minAnim, setMinAnim] = useState<'up' | 'down' | null>(null);
+
+  const handleHourStep = (delta: number) => {
+    setHourAnim(delta > 0 ? 'up' : 'down');
+    setTimeout(() => setHourAnim(null), 200);
+    const next = (selectedHour + delta + 24) % 24;
+    updateDate(selectedYear, selectedMonth, selectedDay, next, selectedMinute);
+  };
+
+  const handleMinuteStep = (delta: number, step = 5) => {
+    setMinAnim(delta > 0 ? 'up' : 'down');
+    setTimeout(() => setMinAnim(null), 200);
+    const rounded = Math.round(selectedMinute / step) * step;
+    const next = (rounded + delta * step + 60) % 60;
+    updateDate(selectedYear, selectedMonth, selectedDay, selectedHour, next);
+  };
+
   const handleHourChange = (newHour: number) => {
     const clamped = Math.max(0, Math.min(23, newHour));
     updateDate(selectedYear, selectedMonth, selectedDay, clamped, selectedMinute);
@@ -156,7 +174,7 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      {/* ── Botão Trigger Elegante ── */}
+      {/* ── Botão Trigger Elegante com Alinhamento em 3 Zonas e Badge Centralizado ── */}
       <button
         type="button"
         onClick={() => {
@@ -164,37 +182,43 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
           setViewMonth(selectedMonth);
           setIsOpen(!isOpen);
         }}
-        className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border transition-all text-left group cursor-pointer ${
+        className={`relative w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border transition-all text-left group cursor-pointer ${
           isOpen
             ? 'bg-surface-2 border-line-strong ring-1 ring-white/10'
             : 'bg-surface-1 border-line-subtle hover:border-line-strong hover:bg-surface-2'
         }`}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        {/* 1. Esquerda: Ícone + Data + Horário */}
+        <div className="flex items-center gap-2.5 min-w-0 pr-2">
           <div className="w-8 h-8 rounded-lg bg-surface-2 border border-line-subtle flex items-center justify-center text-ink-primary group-hover:border-line-strong transition-colors flex-shrink-0">
             <CalendarIcon className="w-4 h-4 text-ink-primary" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-ink-primary truncate">
-                {formattedDayStr}
-              </span>
-              {relativeLabel && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/5 text-ink-secondary border border-line-subtle">
-                  {relativeLabel}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-ink-secondary">
+            <span className="text-xs font-semibold text-ink-primary truncate block">
+              {formattedDayStr}
+            </span>
+            <div className="flex items-center gap-1.5 text-[11px] text-ink-secondary mt-0.5">
               <Clock className="w-3 h-3 text-ink-muted" />
               <span>{formattedTimeStr} (Horário de Brasília)</span>
             </div>
           </div>
         </div>
 
-        <span className="text-[11px] font-semibold text-ink-secondary group-hover:text-ink-primary transition-colors flex-shrink-0">
-          Alterar
-        </span>
+        {/* 2. Centro: Badge "AMANHÃ" / "HOJE" Rigorosamente Centralizado no Meio Exato do Card */}
+        {relativeLabel && (
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+            <span className="px-3 py-1 rounded-full text-[10.5px] font-bold uppercase tracking-wider bg-surface-2 text-ink-primary border border-line-strong shadow-sm whitespace-nowrap">
+              {relativeLabel}
+            </span>
+          </div>
+        )}
+
+        {/* 3. Direita: Ação Alterar */}
+        <div className="flex items-center justify-end flex-shrink-0 pl-2">
+          <span className="text-[11px] font-semibold text-ink-secondary group-hover:text-ink-primary transition-colors">
+            Alterar
+          </span>
+        </div>
       </button>
 
       {/* ── Popover Minimalista Fluido ── */}
@@ -316,34 +340,119 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
             })}
           </div>
 
-          {/* ── Divisor & Seletor de Hora / Minuto ── */}
-          <div className="mt-3.5 pt-3 border-t border-line-subtle space-y-2.5">
+          {/* ── Divisor & Seletor de Hora / Minuto com Scroll do Mouse ── */}
+          <div className="mt-3.5 pt-3 border-t border-line-subtle space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-ink-secondary flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-ink-primary" />
                 Horário da Postagem
               </span>
-              <div className="flex items-center gap-1 bg-surface-1 border border-line-subtle rounded-lg px-2 py-1">
-                {/* Input de Hora */}
-                <input
-                  type="number"
-                  min={0}
-                  max={23}
-                  value={String(selectedHour).padStart(2, '0')}
-                  onChange={(e) => handleHourChange(parseInt(e.target.value, 10) || 0)}
-                  className="w-7 bg-transparent text-center text-xs font-bold text-ink-primary focus:outline-none"
-                />
-                <span className="text-ink-secondary font-bold">:</span>
-                {/* Input de Minuto */}
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  step={5}
-                  value={String(selectedMinute).padStart(2, '0')}
-                  onChange={(e) => handleMinuteChange(parseInt(e.target.value, 10) || 0)}
-                  className="w-7 bg-transparent text-center text-xs font-bold text-ink-primary focus:outline-none"
-                />
+              <span className="text-[10px] text-ink-muted">
+                Role o mouse para ajustar
+              </span>
+            </div>
+
+            {/* Controles de Hora e Minuto Centralizados com onWheel */}
+            <div className="flex items-center justify-center gap-2 py-1">
+              {/* Bloco de Horas */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => handleHourStep(1)}
+                  className="p-0.5 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
+                  title="Aumentar hora (+1h)"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 -rotate-90" />
+                </button>
+
+                <div
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    handleHourStep(e.deltaY < 0 ? 1 : -1);
+                  }}
+                  className={`w-12 h-10 rounded-xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
+                    hourAnim ? 'ring-1 ring-white/20' : ''
+                  }`}
+                  title="Role a rodinha do mouse para cima ou para baixo"
+                >
+                  <span
+                    className={`font-mono text-base font-black text-ink-primary tracking-wider text-center transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                      hourAnim === 'up'
+                        ? '-translate-y-1 scale-105 text-white'
+                        : hourAnim === 'down'
+                        ? 'translate-y-1 scale-105 text-white'
+                        : 'translate-y-0 scale-100'
+                    }`}
+                  >
+                    {String(selectedHour).padStart(2, '0')}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleHourStep(-1)}
+                  className="p-0.5 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
+                  title="Diminuir hora (-1h)"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 rotate-90" />
+                </button>
+                <span className="text-[9.5px] font-bold uppercase tracking-wider text-ink-muted mt-0.5">
+                  Horas
+                </span>
+              </div>
+
+              {/* Separador Central dos Dois Pontos */}
+              <div className="flex flex-col items-center pb-4">
+                <span className="font-mono text-xl font-black text-ink-secondary select-none">
+                  :
+                </span>
+              </div>
+
+              {/* Bloco de Minutos */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => handleMinuteStep(1, 5)}
+                  className="p-0.5 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
+                  title="Aumentar minutos (+5m)"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 -rotate-90" />
+                </button>
+
+                <div
+                  onWheel={(e) => {
+                    e.preventDefault();
+                    handleMinuteStep(e.deltaY < 0 ? 1 : -1, 5);
+                  }}
+                  className={`w-12 h-10 rounded-xl bg-surface-1 border border-line-strong hover:border-line-strong hover:bg-surface-2 flex items-center justify-center cursor-ns-resize shadow-inner select-none transition-all group overflow-hidden ${
+                    minAnim ? 'ring-1 ring-white/20' : ''
+                  }`}
+                  title="Role a rodinha do mouse para cima ou para baixo"
+                >
+                  <span
+                    className={`font-mono text-base font-black text-ink-primary tracking-wider text-center transition-all duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                      minAnim === 'up'
+                        ? '-translate-y-1 scale-105 text-white'
+                        : minAnim === 'down'
+                        ? 'translate-y-1 scale-105 text-white'
+                        : 'translate-y-0 scale-100'
+                    }`}
+                  >
+                    {String(selectedMinute).padStart(2, '0')}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleMinuteStep(-1, 5)}
+                  className="p-0.5 rounded text-ink-muted hover:text-ink-primary hover:bg-surface-1 transition-colors cursor-pointer"
+                  title="Diminuir minutos (-5m)"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 rotate-90" />
+                </button>
+                <span className="text-[9.5px] font-bold uppercase tracking-wider text-ink-muted mt-0.5">
+                  Minutos
+                </span>
               </div>
             </div>
 
