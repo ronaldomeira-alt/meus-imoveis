@@ -26,6 +26,8 @@ import type { PreferredAIProvider } from './lib/ai-provider';
 import { Building2 } from 'lucide-react';
 import { InstagramIcon } from './components/ui/InstagramIcon';
 import { getSavedPublicAdminToken, setPublicPage } from './lib/publicProperties';
+import { AuthProvider, useAuth } from './lib/auth';
+import { AuthGuard } from './components/auth/AuthGuard';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -65,9 +67,9 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
 ];
 
-export const App: React.FC = () => {
-  // ── Usuário Ativo (Ronaldo/Thatianna, trocado no dropdown do Header) ──
-  const [currentUser, setCurrentUserId] = useCurrentUser();
+const CrmAppContent: React.FC = () => {
+  const { signOut } = useAuth();
+  const [currentUser] = useCurrentUser();
 
   // ── Navegação Ativa ──
   const [activeSection, setActiveSection] = useState<NavSection>('dashboard');
@@ -498,7 +500,7 @@ export const App: React.FC = () => {
           onOpenSettings={() => setActiveSection('configuracoes')}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
           currentUser={currentUser}
-          onChangeUser={setCurrentUserId}
+          onLogout={signOut}
         />
 
         {/* ── CORPO PRINCIPAL: ALTERNA ENTRE COCKPIT DASHBOARD E OUTRAS VIEWS ── */}
@@ -778,6 +780,16 @@ export const App: React.FC = () => {
         />
       )}
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AuthGuard>
+        <CrmAppContent />
+      </AuthGuard>
+    </AuthProvider>
   );
 };
 

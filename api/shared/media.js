@@ -105,9 +105,36 @@ export async function handleMedia(req, res) {
     res.end(JSON.stringify(data));
   };
 
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   try {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return sendJson(503, { error: 'Backend de mídia não configurado com chave server-side.' });
+    }
+
+    // ── Validação estrita de autenticação e autorização ──
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return sendJson(401, { error: 'Não autorizado. Token de sessão não fornecido.' });
+    }
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) {
+      return sendJson(401, { error: 'Não autorizado. Token de sessão vazio.' });
+    }
+
+    const supabase = getSupabaseClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return sendJson(401, { error: 'Sessão inválida ou expirada. Faça login novamente.' });
+    }
+
+    const userEmail = (user.email || '').toLowerCase().trim();
+    if (userEmail !== 'ronaldomeira@gmail.com') {
+      return sendJson(403, { error: 'Acesso negado. Usuário não autorizado para gerenciar mídias do CRM.' });
     }
 
     if (req.method === 'GET') {
@@ -115,7 +142,6 @@ export async function handleMedia(req, res) {
       const propertyId = sanitizeId(url.searchParams.get('propertyId'));
       if (!propertyId) return sendJson(400, { error: 'propertyId é obrigatório.' });
 
-      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('property_media')
         .select('*')

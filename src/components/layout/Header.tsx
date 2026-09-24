@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Bell, ChevronDown, User, Sparkles, LogOut, Menu, Check, PlusCircle } from 'lucide-react';
-import { APP_USERS, type AppUser } from '../../lib/currentUser';
+import { Search, Bell, ChevronDown, User, Sparkles, LogOut, Menu, Check, PlusCircle, ShieldCheck } from 'lucide-react';
+import type { AppUser } from '../../lib/currentUser';
 import { getBrasiliaNow } from '../../lib/greeting';
 
 interface HeaderProps {
@@ -15,7 +15,8 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenMobileNav?: () => void;
   currentUser: AppUser;
-  onChangeUser: (id: AppUser['id']) => void;
+  onChangeUser?: (id: AppUser['id']) => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileNav,
   currentUser,
   onChangeUser,
+  onLogout,
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [now, setNow] = useState(() => getBrasiliaNow());
@@ -133,51 +135,42 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-52 modal-surface rounded-xl py-1.5 z-50 animate-scale-in shadow-modal">
-                <p className="px-4 pt-1.5 pb-1 text-[9px] font-bold uppercase tracking-wider text-ink-muted">
-                  Usuário ativo
-                </p>
-                {APP_USERS.map((user) => (
+              <div className="absolute right-0 mt-2 w-56 modal-surface rounded-xl py-2 z-50 animate-scale-in shadow-modal">
+                <div className="px-4 py-2 border-b border-line-subtle">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[12px] font-bold text-ink-primary leading-tight">{currentUser.name}</p>
+                    <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-accent/15 text-accent border border-accent/30">Admin</span>
+                  </div>
+                  <p className="text-[10px] text-ink-secondary truncate mt-0.5">{currentUser.email}</p>
+                </div>
+
+                <div className="py-1">
                   <button
-                    key={user.id}
-                    onClick={() => { setDropdownOpen(false); onChangeUser(user.id); }}
-                    className={`w-full px-4 py-1.5 text-[11px] text-left flex items-center gap-2.5 transition-colors ${
-                      user.id === currentUser.id
-                        ? 'text-ink-primary bg-white/[0.05]'
-                        : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05]'
-                    }`}
+                    onClick={() => { setDropdownOpen(false); onOpenSettings(); }}
+                    className="w-full px-4 py-2 text-[11px] text-left text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] flex items-center gap-2.5 transition-colors cursor-pointer"
                   >
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-ink-primary flex-shrink-0 ${user.avatarClassName}`}>
-                      {user.initials}
-                    </div>
-                    <span className="flex-1 truncate">{user.name}</span>
-                    {user.id === currentUser.id && (
-                      <Check className="w-3 h-3 text-accent flex-shrink-0" strokeWidth={2.5} />
-                    )}
+                    <User style={{ width: '13px', height: '13px' }} strokeWidth={1.8} />
+                    Perfil da Conta
                   </button>
-                ))}
+                  <button
+                    onClick={() => { setDropdownOpen(false); onOpenSettings(); }}
+                    className="w-full px-4 py-2 text-[11px] text-left text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <Sparkles style={{ width: '13px', height: '13px' }} className="text-accent" strokeWidth={1.8} />
+                    Configurações
+                  </button>
+                </div>
+
                 <div className="my-1 mx-3 h-px bg-line-subtle" />
                 <button
-                  onClick={() => { setDropdownOpen(false); onOpenSettings(); }}
-                  className="w-full px-4 py-2 text-[11px] text-left text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] flex items-center gap-2.5 transition-colors"
-                >
-                  <User style={{ width: '13px', height: '13px' }} strokeWidth={1.8} />
-                  Perfil da Conta
-                </button>
-                <button
-                  onClick={() => { setDropdownOpen(false); onOpenSettings(); }}
-                  className="w-full px-4 py-2 text-[11px] text-left text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] flex items-center gap-2.5 transition-colors"
-                >
-                  <Sparkles style={{ width: '13px', height: '13px' }} className="text-accent" strokeWidth={1.8} />
-                  Configurações
-                </button>
-                <div className="my-1 mx-3 h-px bg-line-subtle" />
-                <button
-                  onClick={() => setDropdownOpen(false)}
-                  className="w-full px-4 py-2 text-[11px] text-left text-status-danger hover:bg-status-danger/[0.08] flex items-center gap-2.5 transition-colors"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    if (onLogout) onLogout();
+                  }}
+                  className="w-full px-4 py-2 text-[11px] text-left text-status-danger hover:bg-status-danger/[0.08] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <LogOut style={{ width: '13px', height: '13px' }} strokeWidth={1.8} />
-                  Sair da Conta
+                  Sair do Cockpit
                 </button>
               </div>
             )}

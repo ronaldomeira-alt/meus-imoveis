@@ -1,4 +1,4 @@
-import { resolveMediaUrl } from './supabase';
+import { resolveMediaUrl, supabase } from './supabase';
 
 export interface PropertyMediaItem {
   id: string;
@@ -22,6 +22,19 @@ export interface UploadMediaProgress {
   pct: number;
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!supabase) {
+    throw new Error('Supabase client não configurado.');
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Sessão expirada ou usuário não autenticado. Faça login para continuar.');
+  }
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+  };
+}
+
 /**
  * Solicita a URL pré-assinada, envia o binário diretamente do navegador para o Cloudflare R2
  * e confirma os metadados no Supabase.
@@ -36,11 +49,15 @@ export async function uploadPropertyMedia(
   } = {}
 ): Promise<PropertyMediaItem> {
   const { sortOrder = 0, isCover = false, onProgress } = options;
+  const authHeaders = await getAuthHeaders();
 
   // 1. Obter URL pré-assinada de upload no backend
   const presignRes = await fetch('/api/media', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+    },
     body: JSON.stringify({
       action: 'get-upload-url',
       propertyId,
@@ -93,7 +110,10 @@ export async function uploadPropertyMedia(
   // 3. Confirmar metadados no Supabase pelo backend
   const confirmRes = await fetch('/api/media', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+    },
     body: JSON.stringify({
       action: 'confirm-upload',
       propertyId,
@@ -125,9 +145,13 @@ export async function deletePropertyMedia(
   propertyId: string,
   params: { mediaId?: string; objectKey?: string }
 ): Promise<void> {
+  const authHeaders = await getAuthHeaders();
   const res = await fetch('/api/media', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+    },
     body: JSON.stringify({
       action: 'delete-media',
       propertyId,
@@ -146,7 +170,16 @@ export async function deletePropertyMedia(
  * Busca todas as mídias salvas para um imóvel.
  */
 export async function fetchPropertyMedia(propertyId: string): Promise<PropertyMediaItem[]> {
-  const res = await fetch(`/api/media?propertyId=${encodeURIComponent(propertyId)}`);
+  let headers: Record<string, string> = {};
+  try {
+    headers = await getAuthHeaders();
+  } catch {
+    // se não houver sessão ativa, requisição falhará com 401
+  }
+
+  const res = await fetch(`/api/media?propertyId=${encodeURIComponent(propertyId)}`, {
+    headers,
+  });
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({ media: [] }));
   return (data.media || []).map((m: PropertyMediaItem) => ({

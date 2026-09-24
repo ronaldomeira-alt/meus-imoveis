@@ -507,33 +507,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="text-xs text-ink-secondary">Acesso Total</span>
                   </div>
                 </div>
-
-                {/* Usuário 2: Thatianna */}
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-line-subtle flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm text-ink-primary bg-status-partner"
-                    >
-                      TM
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-ink-primary">Thatianna Meira</p>
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-status-partner/10 text-status-partner border border-status-partner/30">
-                          Administradora
-                        </span>
-                      </div>
-                      <p className="text-xs text-ink-secondary">thatianna@meusimoveis.com.br</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-status-success flex items-center gap-1 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-status-success" /> Ativo
-                    </span>
-                    <span className="text-xs text-ink-secondary">Acesso Total</span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
