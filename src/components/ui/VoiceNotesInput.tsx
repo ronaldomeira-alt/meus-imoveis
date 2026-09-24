@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Mic, X, Check, Loader2 } from 'lucide-react';
 import { AudioRecorder } from '../../lib/audio-recorder';
 import { transcribeAudioMultiProvider } from '../../lib/ai-provider';
+import { AudioWaveform } from './AudioWaveform';
 
 interface VoiceNotesInputProps {
   value: string;
@@ -86,9 +87,10 @@ export const VoiceNotesInput: React.FC<VoiceNotesInputProps> = ({
 
         <div className="flex items-center gap-1.5">
           {isRecording ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs animate-pulse">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs">
+              <AudioWaveform variant="compact" />
               <span className="w-1.5 h-1.5 rounded-full bg-status-danger" />
-              <span className="text-[11px] font-semibold">Gravando...</span>
+              <span className="text-[11px] font-semibold animate-pulse">Gravando</span>
               <button
                 type="button"
                 onClick={handleStopAndTranscribe}

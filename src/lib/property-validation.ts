@@ -161,7 +161,7 @@ export const getMissingDesirableFields = (data: Record<string, any>): string[] =
   if (data.bathrooms === undefined || data.bathrooms === null || data.bathrooms === '') {
     desirable.push('Banheiros');
   }
-  if (data.parking_spaces === undefined || data.parking_spaces === null || data.parking_spaces === '') {
+  if (data.parking_spaces === undefined || data.parking_spaces === null || data.parking_spaces === '' && data.parking_spaces_type !== 'Rotativas') {
     desirable.push('Vagas de garagem');
   }
   if (

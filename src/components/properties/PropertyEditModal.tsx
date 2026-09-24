@@ -58,7 +58,7 @@ export const PropertyEditModal: React.FC<PropertyEditModalProps> = ({
               <div>
                 <h3 className="text-sm font-extrabold text-ink-primary">Editar Imóvel</h3>
                 <p className="text-[11px] text-ink-secondary">
-                  {property.neighborhood} · {property.type}
+                  {property.internal_name ? `${property.internal_name} · ` : ''}{property.neighborhood} · {property.type}
                 </p>
               </div>
             </div>

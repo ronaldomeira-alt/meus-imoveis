@@ -42,10 +42,17 @@ export interface PropertyPhoto {
   storage_path: string;
   sort_order: number;
   is_cover: boolean;
+  object_key?: string;
+  storage_provider?: 'r2' | 'supabase' | 'external';
+  media_type?: 'photo' | 'video' | 'document';
+  mime_type?: string;
+  size_bytes?: number;
 }
 
 export interface Property {
   id: string;
+  public_page_id?: string;
+  public_page_active?: boolean;
   title?: string;
   purpose?: PropertyPurpose;
   type: PropertyType;
@@ -55,11 +62,14 @@ export interface Property {
   complement?: string;
   cep?: string;
   condominium_name?: string;
+  /** Nome administrativo; nunca deve ser exposto em páginas públicas. */
+  internal_name?: string;
   unit?: string;
   bedrooms: number;
   suites: number;
   bathrooms: number;
   parking_spaces: number;
+  parking_spaces_type?: 'Rotativas';
   area_m2: number;
   is_development?: boolean;
   area_range?: { min: number; max: number } | null;

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Bell, ChevronDown, User, Sparkles, LogOut, Menu, Check } from 'lucide-react';
+import { Search, Bell, ChevronDown, User, Sparkles, LogOut, Menu, Check, PlusCircle } from 'lucide-react';
 import { APP_USERS, type AppUser } from '../../lib/currentUser';
 import { getBrasiliaNow } from '../../lib/greeting';
 
 interface HeaderProps {
   searchQuery: string;
+  showGreeting?: boolean;
+  sectionTitle?: string;
+  sectionCount?: number;
+  onAddProperty?: () => void;
   onSearchChange: (query: string) => void;
   unreadNotificationsCount: number;
   onOpenNotifications: () => void;
@@ -16,6 +20,10 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   searchQuery,
+  showGreeting = false,
+  sectionTitle,
+  sectionCount,
+  onAddProperty,
   onSearchChange,
   unreadNotificationsCount = 1,
   onOpenNotifications,
@@ -35,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   const firstName = currentUser.name.split(' ')[0];
 
   return (
-    <header className="flex-shrink-0 mb-3 select-none">
+    <header className={`flex-shrink-0 select-none ${showGreeting ? 'mb-3' : 'mb-2'}`}>
       <div className="flex items-center justify-between gap-3">
         {/* ── Esquerda: Menu mobile + Data/Saudação ── */}
         <div className="flex items-center gap-3 min-w-0">
@@ -47,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu className="w-4 h-4" />
           </button>
 
-          <div className="min-w-0">
+          {showGreeting ? <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-ink-secondary block mb-0.5">
               {now.dateLabel}
             </span>
@@ -58,7 +66,10 @@ export const Header: React.FC<HeaderProps> = ({
             <p className="text-[11px] text-ink-secondary font-medium hidden sm:block">
               Seu estoque de imóveis em um só lugar.
             </p>
-          </div>
+          </div> : sectionTitle ? <div className="min-w-0 flex items-baseline gap-3">
+            <h1 className="text-xl font-extrabold text-ink-primary truncate">{sectionTitle}</h1>
+            {sectionCount !== undefined && <span className="text-xs text-ink-secondary whitespace-nowrap">{sectionCount} {sectionCount === 1 ? 'imóvel' : 'imóveis'}</span>}
+          </div> : null}
         </div>
 
         {/* ── Direita: Busca (desktop), Notificações, Perfil ── */}
@@ -81,6 +92,11 @@ export const Header: React.FC<HeaderProps> = ({
               ⌘ K
             </kbd>
           </div>
+
+          {onAddProperty && <button onClick={onAddProperty} className="btn-primary px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 whitespace-nowrap">
+            <PlusCircle className="w-4 h-4" />
+            <span className="hidden sm:inline">Adicionar imóvel</span>
+          </button>}
 
           {/* Notificações */}
           <button

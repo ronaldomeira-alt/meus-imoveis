@@ -10,10 +10,12 @@ import {
   Check,
   Upload,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { processImageFile, ProcessedImage } from '../../lib/image-processor';
 import { getPhotoUrl } from '../../lib/supabase';
+import { uploadPropertyMedia, deletePropertyMedia } from '../../lib/r2-media';
 import {
   validateRequiredPropertyFields,
   MandatoryPropertyFieldKey,
@@ -21,9 +23,11 @@ import {
 import { VoiceNotesInput } from '../ui/VoiceNotesInput';
 import type {
   Property,
+  PropertyPhoto,
   PropertyType,
   PropertyPosition,
   PropertyCondition,
+  PropertyPurpose,
   SourceType,
 } from '../../types/property';
 
@@ -71,6 +75,17 @@ const NEIGHBORHOOD_SUGGESTIONS = [
   'Estados',
 ];
 
+const formatMoneyInput = (value: string) => {
+  const digits = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return '';
+  return (Number(digits) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+};
+
+const parseMoneyInput = (value: string) => {
+  const normalized = value.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.');
+  return normalized === '' ? '' : Number(normalized);
+};
+
 export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   onSaveProperty,
   onCancel,
@@ -79,8 +94,10 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 }) => {
   // ── Estados do Formulário (Inicialmente limpos ou preenchidos com dados do imóvel) ──
   const [type, setType] = useState<PropertyType>(initialProperty?.type || 'Apartamento');
+  const [purpose, setPurpose] = useState<PropertyPurpose>(initialProperty?.purpose || 'Venda');
   const [neighborhood, setNeighborhood] = useState(initialProperty?.neighborhood || '');
   const [condominiumName, setCondominiumName] = useState(initialProperty?.condominium_name || '');
+  const [internalName, setInternalName] = useState(initialProperty?.internal_name || '');
   const [address, setAddress] = useState(initialProperty?.address || '');
   const [number, setNumber] = useState(initialProperty?.number || '');
   const [complement, setComplement] = useState(initialProperty?.complement || '');
@@ -91,6 +108,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   const [suites, setSuites] = useState<number | ''>(initialProperty?.suites ?? '');
   const [bathrooms, setBathrooms] = useState<number | ''>(initialProperty?.bathrooms ?? '');
   const [parkingSpaces, setParkingSpaces] = useState<number | ''>(initialProperty?.parking_spaces ?? '');
+  const [parkingSpacesType, setParkingSpacesType] = useState<'Rotativas' | ''>(initialProperty?.parking_spaces_type || '');
   const [floor, setFloor] = useState<number | ''>(initialProperty?.floor ?? '');
   const [position, setPosition] = useState<PropertyPosition>(initialProperty?.position || 'Nascente');
   const [condition, setCondition] = useState<PropertyCondition>(initialProperty?.condition || 'Usado');
@@ -98,13 +116,25 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
 
   // Valores (Preço é obrigatório; condomínio e IPTU são opcionais)
   const [price, setPrice] = useState<number | ''>(initialProperty?.price ?? '');
+  const [priceInput, setPriceInput] = useState(
+    initialProperty?.price != null
+      ? initialProperty.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 })
+      : ''
+  );
   const [condoFee, setCondoFee] = useState<number | ''>(initialProperty?.condo_fee ?? '');
   const [iptu, setIptu] = useState<number | ''>(initialProperty?.iptu ?? '');
+  const [condoFeeInput, setCondoFeeInput] = useState(initialProperty?.condo_fee != null ? formatMoneyInput(String(initialProperty.condo_fee * 100)) : '');
+  const [iptuInput, setIptuInput] = useState(initialProperty?.iptu != null ? formatMoneyInput(String(initialProperty.iptu * 100)) : '');
 
   // Características / Tags (opcionais)
   const [buildingFeatures, setBuildingFeatures] = useState<string[]>(initialProperty?.building_features || []);
   const [apartmentFeatures, setApartmentFeatures] = useState<string[]>(initialProperty?.apartment_features || []);
   const [customFeature, setCustomFeature] = useState('');
+
+  // Identificador estável do imóvel (para vincular os uploads de mídias)
+  const [propertyId] = useState<string>(() => initialProperty?.id || `prop-${Date.now()}`);
+  const propertyIdRef = useRef<string>(propertyId);
+
 
   // Fotos
   const [images, setImages] = useState<ProcessedImage[]>(() => {
@@ -113,8 +143,9 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         id: p.id || `photo-${idx}`,
         previewUrl: getPhotoUrl(p.storage_path),
         storagePath: p.storage_path,
+        objectKey: p.object_key || (p.storage_path.startsWith('properties/') ? p.storage_path : undefined),
+        storageProvider: p.storage_provider || (p.storage_path.startsWith('properties/') ? 'r2' : 'external'),
         isCover: p.is_cover,
-        sortOrder: p.sort_order,
       }));
     }
     return [];
@@ -144,28 +175,89 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
     }
   };
 
-  // ── Manipulação de Fotos ──
+  // ── Manipulação de Fotos com Upload Seguro R2 ──
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     setIsProcessingImages(true);
     setErrorMessage(null);
 
-    const newImages: ProcessedImage[] = [];
-    for (let i = 0; i < e.target.files.length; i++) {
-      const file = e.target.files[i];
+    const propId = propertyIdRef.current;
+    const selectedFiles = Array.from(e.target.files);
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
       const processed = await processImageFile(file);
-      if (images.length === 0 && newImages.length === 0) {
-        processed.isCover = true;
+      const isFirst = images.length === 0 && i === 0;
+      processed.isCover = isFirst;
+      processed.isUploading = true;
+      processed.uploadProgress = 0;
+
+      const tempId = `temp-${Date.now()}-${i}`;
+      processed.id = tempId;
+      setImages((prev) => [...prev, processed]);
+
+      if (processed.file) {
+        try {
+          const uploaded = await uploadPropertyMedia(propId, processed.file, {
+            sortOrder: images.length + i,
+            isCover: isFirst,
+            onProgress: (p) => {
+              setImages((prev) =>
+                prev.map((img) =>
+                  img.id === tempId ? { ...img, uploadProgress: p.pct } : img
+                )
+              );
+            },
+          });
+
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === tempId
+                ? {
+                    ...img,
+                    id: uploaded.id,
+                    objectKey: uploaded.object_key,
+                    storagePath: uploaded.object_key,
+                    storageProvider: 'r2',
+                    previewUrl: uploaded.public_url || img.previewUrl,
+                    isUploading: false,
+                    uploadProgress: 100,
+                  }
+                : img
+            )
+          );
+        } catch (uploadErr: any) {
+          console.error('Erro no upload para R2:', uploadErr);
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === tempId
+                ? {
+                    ...img,
+                    isUploading: false,
+                    uploadError: uploadErr.message || 'Falha no upload',
+                  }
+                : img
+            )
+          );
+        }
       }
-      newImages.push(processed);
     }
 
-    setImages((prev) => [...prev, ...newImages]);
     setIsProcessingImages(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleRemoveImage = (index: number) => {
+    const target = images[index];
+    if (target) {
+      const propId = propertyIdRef.current;
+      const keyOrPath = target.objectKey || target.storagePath;
+      if (keyOrPath && (keyOrPath.startsWith('properties/') || target.storageProvider === 'r2')) {
+        deletePropertyMedia(propId, { mediaId: target.id, objectKey: keyOrPath }).catch((err) =>
+          console.error('Erro ao deletar mídia do R2/Supabase:', err)
+        );
+      }
+    }
     setImages((prev) => {
       const updated = prev.filter((_, i) => i !== index);
       if (updated.length > 0 && !updated.some((img) => img.isCover)) {
@@ -231,15 +323,17 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
     setErrorMessage(null);
 
     const numericPrice = Number(price);
-    const newPropertyId = initialProperty?.id || `prop-${Date.now()}`;
+    const newPropertyId = propertyIdRef.current;
 
-    // Monta array de fotos
-    const photos = images.map((img, idx) => ({
+    // Monta array de fotos compatível com R2, Supabase legado e URLs externas
+    const photos: PropertyPhoto[] = images.map((img, idx) => ({
       id: img.id || `photo-${idx}`,
       property_id: newPropertyId,
-      storage_path: img.storagePath || img.previewUrl,
+      storage_path: img.objectKey || img.storagePath || img.previewUrl,
       sort_order: idx,
       is_cover: img.isCover,
+      object_key: img.objectKey,
+      storage_provider: img.storageProvider || (img.objectKey ? 'r2' : 'external'),
     }));
 
     // Se nenhuma foto foi enviada e não tínhamos fotos anteriores, mantém foto padrão
@@ -261,10 +355,11 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
     const newProperty: Property = {
       ...(initialProperty || {}),
       id: newPropertyId,
-      purpose: initialProperty?.purpose || 'Venda',
+      purpose,
       type,
       neighborhood: neighborhood.trim(),
       condominium_name: condominiumName.trim() || undefined,
+      internal_name: internalName.trim() || undefined,
       address: address.trim() || undefined,
       number: number.trim() || undefined,
       complement: complement.trim() || undefined,
@@ -272,7 +367,8 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
       bedrooms: Number(bedrooms),
       suites: suites !== '' ? Number(suites) : 0,
       bathrooms: bathrooms !== '' ? Number(bathrooms) : 0,
-      parking_spaces: parkingSpaces !== '' ? Number(parkingSpaces) : 0,
+      parking_spaces: parkingSpacesType === 'Rotativas' ? 0 : parkingSpaces !== '' ? Number(parkingSpaces) : 0,
+      parking_spaces_type: parkingSpacesType || undefined,
       floor: floor !== '' ? Number(floor) : null,
       position,
       condition,
@@ -336,7 +432,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             <span>Informações Principais</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* 1. Tipo do Imóvel * */}
             <div>
               <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
@@ -368,6 +464,20 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                   <span>⚠ {fieldErrors.type}</span>
                 </p>
               )}
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Finalidade
+              </label>
+              <select
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value as PropertyPurpose)}
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent cursor-pointer"
+              >
+                <option value="Venda">Venda</option>
+                <option value="Locação">Locação</option>
+              </select>
             </div>
 
             {/* 2. Bairro * */}
@@ -414,6 +524,20 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 placeholder="Ex: Ed. Ocean Palace"
                 className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
               />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
+                Nome interno / Empreendimento
+              </label>
+              <input
+                type="text"
+                value={internalName}
+                onChange={(e) => setInternalName(e.target.value)}
+                placeholder="Ex: Live Park, Avant Home..."
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
+              />
+              <p className="mt-1 text-[10px] text-ink-secondary/70">Uso interno. Não aparece para o cliente.</p>
             </div>
           </div>
 
@@ -560,15 +684,21 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
               <label className="text-[11px] font-semibold text-ink-secondary block mb-1">
                 Vagas
               </label>
-              <input
-                type="number"
-                min="0"
-                max="20"
-                value={parkingSpaces}
-                onChange={(e) => setParkingSpaces(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="0"
-                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
-              />
+              <select
+                value={parkingSpacesType === 'Rotativas' ? 'Rotativas' : parkingSpaces}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setParkingSpacesType(value === 'Rotativas' ? 'Rotativas' : '');
+                  setParkingSpaces(value === '' ? '' : value === 'Rotativas' ? 0 : Number(value));
+                }}
+                className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent cursor-pointer"
+              >
+                <option value="">Não informado</option>
+                {Array.from({ length: 21 }, (_, count) => (
+                  <option key={count} value={count}>{count === 0 ? '0 (sem vaga)' : `${count} ${count === 1 ? 'vaga' : 'vagas'}`}</option>
+                ))}
+                <option value="Rotativas">Rotativas</option>
+              </select>
             </div>
           </div>
 
@@ -650,14 +780,19 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 Valor do imóvel (R$) <span className="text-status-danger font-bold">*</span>
               </label>
               <input
-                type="number"
+                type="text"
                 min="1"
-                value={price}
+                inputMode="decimal"
+                value={priceInput}
                 onChange={(e) => {
-                  setPrice(e.target.value === '' ? '' : Number(e.target.value));
+                  const formatted = formatMoneyInput(e.target.value);
+                  const normalized = formatted.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.');
+                  setPriceInput(formatted);
+                  setPrice(normalized === '' ? '' : Number(normalized));
                   clearFieldError('price');
                 }}
-                placeholder="Ex: 450000"
+                onBlur={() => setPriceInput(priceInput ? formatMoneyInput(priceInput.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '')) : '')}
+                placeholder="Ex: R$ 450.000,00"
                 className={`w-full px-3 py-2 rounded-xl bg-surface-1 text-ink-primary text-xs focus:outline-none font-mono font-bold transition-colors ${
                   fieldErrors.price
                     ? 'border-2 border-status-danger/70 bg-status-danger/5 placeholder-rose-400/40 text-status-danger'
@@ -677,11 +812,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 Condomínio Mensal (R$) <span className="text-ink-secondary font-normal">(Opcional)</span>
               </label>
               <input
-                type="number"
-                min="0"
-                value={condoFee}
-                onChange={(e) => setCondoFee(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Ex: 450"
+                type="text"
+                inputMode="decimal"
+                value={condoFeeInput}
+                onChange={(e) => { const formatted = formatMoneyInput(e.target.value); setCondoFeeInput(formatted); setCondoFee(parseMoneyInput(formatted)); }}
+                placeholder="Ex: R$ 450,00"
+                onBlur={() => setCondoFeeInput(condoFeeInput ? formatMoneyInput(String(Number(condoFee || 0) * 100)) : '')}
                 className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
@@ -691,11 +827,12 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                 IPTU Anual (R$)
               </label>
               <input
-                type="number"
-                min="0"
-                value={iptu}
-                onChange={(e) => setIptu(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="850"
+                type="text"
+                inputMode="decimal"
+                value={iptuInput}
+                onChange={(e) => { const formatted = formatMoneyInput(e.target.value); setIptuInput(formatted); setIptu(parseMoneyInput(formatted)); }}
+                placeholder="R$ 850,00"
+                onBlur={() => setIptuInput(iptuInput ? formatMoneyInput(String(Number(iptu || 0) * 100)) : '')}
                 className="w-full px-3 py-2 rounded-xl bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-mono"
               />
             </div>
@@ -810,7 +947,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,.heic,.heif"
+            accept="image/*,.heic,.heif,video/mp4,video/quicktime,video/webm"
             onChange={handleFilesSelected}
             className="hidden"
           />
@@ -819,7 +956,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 pt-1">
               {images.map((img, idx) => (
                 <div
-                  key={idx}
+                  key={img.id || idx}
                   className={`relative group rounded-xl overflow-hidden aspect-video border transition-all ${
                     img.isCover
                       ? 'border-accent ring-2 ring-accent/40 shadow-lg shadow-accent/20'
@@ -831,6 +968,17 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
                     alt={`Foto ${idx + 1}`}
                     className="w-full h-full object-cover"
                   />
+
+                  {img.isUploading && (
+                    <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-1.5 z-20">
+                      <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                      <span className="text-[10px] font-bold text-white tracking-wide">
+                        {img.uploadProgress !== undefined && img.uploadProgress > 0
+                          ? `${img.uploadProgress}%`
+                          : 'Enviando...'}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Badge de Capa */}
                   {img.isCover && (

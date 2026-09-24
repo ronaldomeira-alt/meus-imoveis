@@ -140,17 +140,21 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
       {/* ── 1. HEADER SUPERIOR DE NAVEGAÇÃO & AÇÕES ── */}
-      <div className="sticky top-0 z-20 px-4 sm:px-6 py-3 border-b border-line-subtle bg-[var(--bg-base)]/95 flex items-center justify-between gap-3">
+      <div className="sticky top-0 z-20 pl-2 pr-4 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-full hidden w-5 border-b border-line-subtle bg-[var(--surface-1)] md:block lg:w-6"
+        />
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
+          className="justify-self-start flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
         >
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
           <span>Voltar para estoque</span>
         </button>
 
         {/* Grupo de Ações do Imóvel */}
-        <div className="flex items-center gap-2">
+        <div className="justify-self-center flex items-center gap-2">
           {/* Criar Post Instagram com IA */}
           <button
             onClick={() => setIsPostEditorOpen(true)}
@@ -293,6 +297,12 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               {property.neighborhood}
             </h1>
 
+            {property.internal_name && (
+              <span className="inline-flex max-w-full truncate mt-2 px-2 py-1 rounded-lg bg-accent/10 border border-accent/20 text-[11px] font-semibold text-accent" title="Nome interno / Empreendimento">
+                Interno: {property.internal_name}
+              </span>
+            )}
+
             {(property.address || property.condominium_name) && (
               <p className="text-sm text-ink-secondary flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-accent flex-shrink-0" />
@@ -328,11 +338,19 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Foto Principal em Destaque Widescreen */}
           <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-3xl overflow-hidden bg-black/60 border border-line-subtle shadow-2xl group">
             {currentPhotoUrl ? (
-              <img
-                src={currentPhotoUrl}
-                alt={property.neighborhood}
-                className="w-full h-full object-cover"
-              />
+              currentPhoto?.media_type === 'video' || /\.(mp4|webm|mov)$/i.test(currentPhotoUrl) ? (
+                <video
+                  src={currentPhotoUrl}
+                  controls
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : (
+                <img
+                  src={currentPhotoUrl}
+                  alt={property.neighborhood}
+                  className="w-full h-full object-cover"
+                />
+              )
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-ink-secondary bg-surface-2">
                 <Home className="w-12 h-12 mb-2 opacity-40" />
@@ -440,7 +458,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <Car className="w-3 h-3 text-accent" /> Garagem
             </span>
             <div className="text-base font-black text-ink-primary mt-1">
-              {property.parking_spaces} <span className="text-xs font-normal text-ink-secondary">vaga(s)</span>
+              {property.parking_spaces_type === 'Rotativas' ? 'Rotativas' : <>{property.parking_spaces} <span className="text-xs font-normal text-ink-secondary">vaga(s)</span></>}
             </div>
           </div>
 
@@ -536,7 +554,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <h3 className="text-sm font-extrabold text-ink-primary">Descrição do Imóvel</h3>
               <p className="text-xs sm:text-sm text-ink-secondary leading-relaxed whitespace-pre-line">
                 {property.notes ||
-                  `Excelente ${property.type.toLowerCase()} localizado no bairro ${property.neighborhood}, com ${property.area_m2} m² de área privativa, ${property.bedrooms} quartos${property.suites > 0 ? ` (${property.suites} suíte)` : ''} e ${property.parking_spaces} vaga(s) de garagem.`}
+                  `Excelente ${property.type.toLowerCase()} localizado no bairro ${property.neighborhood}, com ${property.area_m2} m² de área privativa, ${property.bedrooms} quartos${property.suites > 0 ? ` (${property.suites} suíte)` : ''} e ${property.parking_spaces_type === 'Rotativas' ? 'vagas rotativas' : `${property.parking_spaces} vaga(s) de garagem`}.`}
               </p>
             </div>
           </div>

@@ -14,7 +14,6 @@ import {
   AlignLeft,
   Check,
   X,
-  Plus,
 } from 'lucide-react';
 import type { ExtractedPropertyData } from '../../lib/gemini';
 import type { PropertyType } from '../../types/property';
@@ -32,18 +31,65 @@ interface PropertyFichaProps {
 
 const PROPERTY_TYPES: PropertyType[] = ['Apartamento', 'Casa', 'Flat', 'Studio', 'Cobertura', 'Terreno', 'Outro'];
 
+const COMMON_NEIGHBORHOODS = [
+  'Aeroclube',
+  'Altiplano',
+  'Bancários',
+  'Bela Vista',
+  'Bessa',
+  'Cabo Branco',
+  'Camboinha',
+  'Expedicionários',
+  'Intermares',
+  'Jardim Luna',
+  'Jardim Oceania',
+  'Manaíra',
+  'Miramar',
+  'Portal do Sol',
+  'Tambauzinho',
+  'Tambaú',
+];
+
 const COMMON_AMENITIES = [
-  'Piscina',
   'Academia',
+  'Cinema',
   'Elevador',
-  'Portaria 24h',
-  'Salão de festas',
-  'Rooftop',
+  'Escada',
   'Espaço gourmet',
+  'Lavanderia',
+  'Minimercado',
+  'Piscina',
+  'Portaria física',
+  'Portaria virtual',
+  'Recepção',
+  'Restaurante',
+  'Rooftop',
+  'Salão de festas',
+  'Salão de jogos',
+  'Sem área de lazer',
 ];
 
 const currency = (v: number) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const formatCurrencyValue = (value: string) => {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 })
+    : '';
+};
+
+const formatCurrencyTyping = (value: string) => {
+  const digits = value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return '';
+  const cents = Number(digits) / 100;
+  return cents.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+};
+
+const parseCurrencyInput = (value: string) => {
+  const normalized = value.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.');
+  return normalized !== '' ? parseFloat(normalized) : null;
+};
 
 const formatBedrooms = (data: ExtractedPropertyData): string => {
   if (data.bedrooms_options && data.bedrooms_options.length > 0) {
@@ -114,36 +160,47 @@ const InlineValue: React.FC<{
   displayValue: React.ReactNode;
   placeholder: string;
   type?: 'text' | 'number';
+  suggestions?: string[];
+  formatDraft?: (value: string) => string;
+  formatInput?: (value: string) => string;
   onCommit: (raw: string) => void;
-}> = ({ rawValue, displayValue, placeholder, type = 'text', onCommit }) => {
+}> = ({ rawValue, displayValue, placeholder, type = 'text', suggestions = [], formatDraft, formatInput, onCommit }) => {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(rawValue);
+  const [draft, setDraft] = useState(formatDraft ? formatDraft(rawValue) : rawValue);
 
   if (editing) {
     return (
-      <input
-        autoFocus
-        type={type}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onFocus={(e) => e.currentTarget.select()}
-        onBlur={() => {
-          onCommit(draft);
-          setEditing(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
+      <>
+        <input
+          autoFocus
+          type={formatDraft ? 'text' : type}
+          list={suggestions.length > 0 ? `suggestions-${type}-${placeholder.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}` : undefined}
+          value={draft}
+          onChange={(e) => setDraft(formatInput ? formatInput(e.target.value) : e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => {
             onCommit(draft);
             setEditing(false);
-          }
-          if (e.key === 'Escape') {
-            setDraft(rawValue);
-            setEditing(false);
-          }
-        }}
-        className="w-full bg-transparent text-sm font-semibold text-ink-primary focus:outline-none border-b border-accent pb-0.5"
-      />
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onCommit(draft);
+              setEditing(false);
+            }
+            if (e.key === 'Escape') {
+              setDraft(rawValue);
+              setEditing(false);
+            }
+          }}
+          className="w-full bg-transparent text-sm font-semibold text-ink-primary focus:outline-none border-b border-accent pb-0.5"
+        />
+        {suggestions.length > 0 && (
+          <datalist id={`suggestions-${type}-${placeholder.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`}>
+            {suggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+          </datalist>
+        )}
+      </>
     );
   }
 
@@ -151,7 +208,7 @@ const InlineValue: React.FC<{
     <button
       type="button"
       onClick={() => {
-        setDraft(rawValue);
+        setDraft(formatDraft ? formatDraft(rawValue) : rawValue);
         setEditing(true);
       }}
       className="w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
@@ -176,26 +233,39 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
   showValidationErrors = false,
 }) => {
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [neighborhoodMenuOpen, setNeighborhoodMenuOpen] = useState(false);
+  const [bathroomsMenuOpen, setBathroomsMenuOpen] = useState(false);
+  const [parkingMenuOpen, setParkingMenuOpen] = useState(false);
   const [amenityDraft, setAmenityDraft] = useState('');
   const errors = requiredValidation.errors as Partial<Record<MandatoryPropertyFieldKey, string>>;
+  const neighborhoodQuery = (data.neighborhood || '').trim().toLocaleLowerCase('pt-BR');
+  const filteredNeighborhoods = COMMON_NEIGHBORHOODS.filter((neighborhood) =>
+    neighborhood.toLocaleLowerCase('pt-BR').startsWith(neighborhoodQuery)
+  );
+  const bathroomQuery = data.bathrooms?.toString() || '';
+  const filteredBathrooms = ['1', '2', '3', '4'].filter((value) => value.startsWith(bathroomQuery));
 
   const amenities = data.building_features || [];
-  const amenitiesResolved = amenities.length > 0 || data.field_states?.building_features === 'informed';
+  const amenityOptions = [
+    ...COMMON_AMENITIES,
+    ...amenities.filter((feat) => !COMMON_AMENITIES.includes(feat)),
+  ];
 
   const toggleAmenity = (feat: string) => {
-    const next = amenities.includes(feat) ? amenities.filter((f) => f !== feat) : [...amenities, feat];
+    const next = feat === 'Sem área de lazer'
+      ? (amenities.includes(feat) ? [] : [feat])
+      : (amenities.includes(feat)
+        ? amenities.filter((f) => f !== feat)
+        : [...amenities.filter((f) => f !== 'Sem área de lazer'), feat]);
     onUpdateField('building_features', next);
-  };
-
-  const markNoAmenities = () => {
-    onUpdateField('building_features', []);
-    onUpdateField('field_states', { ...(data.field_states || {}), building_features: 'informed' });
   };
 
   const addCustomAmenity = () => {
     const trimmed = amenityDraft.trim();
     if (!trimmed) return;
-    if (!amenities.includes(trimmed)) onUpdateField('building_features', [...amenities, trimmed]);
+    if (!amenities.includes(trimmed)) {
+      onUpdateField('building_features', [...amenities.filter((f) => f !== 'Sem área de lazer'), trimmed]);
+    }
     setAmenityDraft('');
   };
 
@@ -302,12 +372,53 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
             errorMessage={errors.neighborhood}
             className="lg:col-span-2"
           >
-            <InlineValue
-              rawValue={data.neighborhood || ''}
-              displayValue={data.neighborhood}
-              placeholder="Ex: Bessa"
-              onCommit={(v) => onUpdateField('neighborhood', v || null)}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setNeighborhoodMenuOpen((value) => !value)}
+                className="w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <span className={`text-sm ${data.neighborhood ? 'font-semibold text-ink-primary' : 'text-ink-secondary/50 text-xs italic'}`}>
+                  {data.neighborhood || 'Selecionar bairro...'}
+                </span>
+              </button>
+              {neighborhoodMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setNeighborhoodMenuOpen(false)} />
+                  <div className="absolute left-0 top-full mt-1.5 z-20 w-52 max-h-64 overflow-y-auto modal-surface rounded-xl py-1 shadow-modal border border-line-subtle">
+                    <div className="px-2 pb-1.5">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={data.neighborhood || ''}
+                        onChange={(event) => onUpdateField('neighborhood', event.target.value || null)}
+                        placeholder="Digite o bairro..."
+                        className="w-full rounded-lg border border-line-subtle bg-black/20 px-2.5 py-1.5 text-xs text-ink-primary outline-none focus:border-accent"
+                      />
+                    </div>
+                    {filteredNeighborhoods.map((neighborhood) => {
+                      const selected = data.neighborhood === neighborhood;
+                      return (
+                        <button
+                          key={neighborhood}
+                          type="button"
+                          onClick={() => {
+                            onUpdateField('neighborhood', neighborhood);
+                            setNeighborhoodMenuOpen(false);
+                          }}
+                          className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/[0.06] transition-colors cursor-pointer ${selected ? 'text-accent font-semibold' : 'text-ink-secondary'}`}
+                        >
+                          {neighborhood}
+                        </button>
+                      );
+                    })}
+                    {filteredNeighborhoods.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-ink-secondary/70">Nenhuma sugestão encontrada.</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </FichaItem>
 
           {/* Área */}
@@ -418,34 +529,103 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
             icon={ShowerHead}
             resolved={data.bathrooms != null}
           >
-            <InlineValue
-              rawValue={data.bathrooms?.toString() ?? ''}
-              displayValue={data.bathrooms != null ? `${data.bathrooms} ${data.bathrooms === 1 ? 'banheiro' : 'banheiros'}` : ''}
-              placeholder="Não informado"
-              type="number"
-              onCommit={(v) => onUpdateField('bathrooms', v !== '' ? parseInt(v, 10) : null)}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBathroomsMenuOpen((value) => !value)}
+                className="w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+              >
+                <span className={`text-sm ${data.bathrooms != null ? 'font-semibold text-ink-primary' : 'text-ink-secondary/50 text-xs italic'}`}>
+                  {data.bathrooms != null ? `${data.bathrooms} ${data.bathrooms === 1 ? 'banheiro' : 'banheiros'}` : 'Selecionar banheiros...'}
+                </span>
+              </button>
+              {bathroomsMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setBathroomsMenuOpen(false)} />
+                  <div className="absolute left-0 top-full mt-1.5 z-20 w-44 max-h-64 overflow-y-auto modal-surface rounded-xl py-1 shadow-modal border border-line-subtle">
+                    <div className="px-2 pb-1.5">
+                      <input
+                        autoFocus
+                        type="text"
+                        inputMode="numeric"
+                        value={data.bathrooms?.toString() || ''}
+                        onChange={(event) => {
+                          const value = event.target.value.replace(/\D/g, '');
+                          onUpdateField('bathrooms', value ? parseInt(value, 10) : null);
+                        }}
+                        placeholder="Digite a quantidade..."
+                        className="w-full rounded-lg border border-line-subtle bg-black/20 px-2.5 py-1.5 text-xs text-ink-primary outline-none focus:border-accent"
+                      />
+                    </div>
+                    {filteredBathrooms.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          onUpdateField('bathrooms', Number(value));
+                          setBathroomsMenuOpen(false);
+                        }}
+                        className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/[0.06] transition-colors cursor-pointer ${data.bathrooms === Number(value) ? 'text-accent font-semibold' : 'text-ink-secondary'}`}
+                      >
+                        {value}
+                      </button>
+                    ))}
+                    {filteredBathrooms.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-ink-secondary/70">Nenhuma sugestão encontrada.</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </FichaItem>
 
           {/* Vagas (0 é válido) */}
           <FichaItem
             label="Vagas"
             icon={Car}
-            resolved={data.parking_spaces != null}
+            resolved={data.parking_spaces != null || data.parking_spaces_type === 'Rotativas'}
           >
-            <InlineValue
-              rawValue={data.parking_spaces?.toString() ?? ''}
-              displayValue={
-                data.parking_spaces != null
-                  ? data.parking_spaces === 0
-                    ? '0 (sem vaga)'
-                    : `${data.parking_spaces} ${data.parking_spaces === 1 ? 'vaga' : 'vagas'}`
-                  : ''
-              }
-              placeholder="Não informado"
-              type="number"
-              onCommit={(v) => onUpdateField('parking_spaces', v !== '' ? parseInt(v, 10) : null)}
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setParkingMenuOpen((value) => !value)}
+                className="w-full text-left cursor-pointer"
+              >
+                <span className={`text-sm ${data.parking_spaces_type === 'Rotativas' || data.parking_spaces != null ? 'font-semibold text-ink-primary' : 'text-ink-secondary/50 text-xs italic'}`}>
+                  {data.parking_spaces_type === 'Rotativas'
+                    ? 'Rotativas'
+                    : data.parking_spaces != null
+                      ? data.parking_spaces === 0 ? '0 (sem vaga)' : `${data.parking_spaces} ${data.parking_spaces === 1 ? 'vaga' : 'vagas'}`
+                      : 'Selecionar vagas...'}
+                </span>
+              </button>
+              {parkingMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setParkingMenuOpen(false)} />
+                  <div className="absolute left-0 top-full mt-1.5 z-20 w-44 max-h-64 overflow-y-auto modal-surface rounded-xl py-1 shadow-modal border border-line-subtle">
+                    {['Rotativas', '1', '2', '3', '4'].map((option) => {
+                      const selected = option === 'Rotativas'
+                        ? data.parking_spaces_type === 'Rotativas'
+                        : data.parking_spaces_type !== 'Rotativas' && data.parking_spaces === Number(option);
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => {
+                            onUpdateField('parking_spaces_type', option === 'Rotativas' ? 'Rotativas' : null);
+                            onUpdateField('parking_spaces', option === 'Rotativas' ? 0 : Number(option));
+                            setParkingMenuOpen(false);
+                          }}
+                          className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/[0.06] transition-colors cursor-pointer ${selected ? 'text-accent font-semibold' : 'text-ink-secondary'}`}
+                        >
+                          {option === 'Rotativas' ? 'Rotativa' : `${option} ${option === '1' ? 'vaga' : 'vagas'}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </FichaItem>
         </div>
       </div>
@@ -470,8 +650,12 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
               rawValue={data.price?.toString() ?? ''}
               displayValue={data.price != null ? currency(data.price) : ''}
               placeholder="Ex: R$ 520.000"
-              type="number"
-              onCommit={(v) => onUpdateField('price', v !== '' ? parseFloat(v) : null)}
+              formatDraft={(value) => value ? formatCurrencyValue(value) : ''}
+              formatInput={formatCurrencyTyping}
+              onCommit={(v) => {
+                const normalized = v.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.');
+                onUpdateField('price', normalized !== '' ? parseFloat(normalized) : null);
+              }}
             />
           </FichaItem>
 
@@ -492,8 +676,9 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
                     rawValue={data.condo_fee?.toString() ?? ''}
                     displayValue={data.condo_fee != null ? currency(data.condo_fee) : ''}
                     placeholder="Não informado"
-                    type="number"
-                    onCommit={(v) => onUpdateField('condo_fee', v !== '' ? parseFloat(v) : null)}
+                    formatDraft={(value) => value ? formatCurrencyValue(value) : ''}
+                    formatInput={formatCurrencyTyping}
+                    onCommit={(v) => onUpdateField('condo_fee', parseCurrencyInput(v))}
                   />
                 )}
               </div>
@@ -546,8 +731,9 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
               rawValue={data.iptu?.toString() ?? ''}
               displayValue={data.iptu != null ? currency(data.iptu) : ''}
               placeholder="Não informado"
-              type="number"
-              onCommit={(v) => onUpdateField('iptu', v !== '' ? parseFloat(v) : null)}
+              formatDraft={(value) => value ? formatCurrencyValue(value) : ''}
+              formatInput={formatCurrencyTyping}
+              onCommit={(v) => onUpdateField('iptu', parseCurrencyInput(v))}
             />
           </FichaItem>
         </div>
@@ -571,51 +757,7 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
         </div>
 
         <div className="p-3 rounded-xl border border-line-subtle/60 bg-white/[0.015] space-y-2.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {amenities.map((feat) => (
-              <span
-                key={feat}
-                className="px-2.5 py-1 rounded-lg bg-accent/15 border border-accent/30 text-accent text-xs font-semibold flex items-center gap-1.5"
-              >
-                {feat}
-                <button
-                  type="button"
-                  onClick={() => toggleAmenity(feat)}
-                  className="hover:text-status-danger cursor-pointer ml-0.5"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-
-            {COMMON_AMENITIES.filter((f) => !amenities.includes(f)).map((feat) => (
-              <button
-                key={feat}
-                type="button"
-                onClick={() => toggleAmenity(feat)}
-                className="px-2.5 py-1 rounded-lg bg-white/[0.02] border border-line-subtle text-ink-secondary hover:text-ink-primary hover:border-line-strong text-xs transition-colors cursor-pointer flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" />
-                {feat}
-              </button>
-            ))}
-
-            {amenities.length === 0 && (
-              <button
-                type="button"
-                onClick={markNoAmenities}
-                className={`px-2.5 py-1 rounded-lg text-xs transition-colors cursor-pointer border ${
-                  amenitiesResolved
-                    ? 'bg-white/[0.06] border-line-strong text-ink-primary italic font-medium'
-                    : 'bg-white/[0.02] border-line-subtle text-ink-secondary hover:text-ink-primary'
-                }`}
-              >
-                {amenitiesResolved ? 'Sem área de lazer ✓' : 'Sem área de lazer'}
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 max-w-xs pt-1">
+          <div className="flex items-center gap-2 w-1/5 min-w-[150px]">
             <input
               type="text"
               value={amenityDraft}
@@ -627,7 +769,7 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
                 }
               }}
               placeholder="Adicionar comodidade..."
-              className="flex-1 px-2.5 py-1 rounded-lg bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
+              className="w-full px-2.5 py-1 rounded-lg bg-surface-1 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent"
             />
             {amenityDraft.trim() && (
               <button
@@ -638,6 +780,49 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
                 Adicionar
               </button>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {amenityOptions.map((feat) => {
+              const selected = amenities.includes(feat);
+              return selected ? (
+                <span
+                  key={feat}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleAmenity(feat)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      toggleAmenity(feat);
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-accent/15 border border-accent/30 text-accent text-xs font-semibold flex items-center gap-1.5 cursor-pointer hover:bg-accent/25 transition-colors"
+                >
+                  {feat}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleAmenity(feat);
+                    }}
+                    className="hover:text-status-danger cursor-pointer ml-0.5"
+                    aria-label={`Remover ${feat}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  key={feat}
+                  type="button"
+                  onClick={() => toggleAmenity(feat)}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.02] border border-line-subtle text-ink-secondary hover:text-ink-primary hover:border-line-strong text-xs transition-colors cursor-pointer"
+                >
+                  {feat}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

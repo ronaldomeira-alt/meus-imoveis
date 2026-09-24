@@ -1,15 +1,16 @@
 import React from 'react';
 import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
-import { Heart } from 'lucide-react';
+import { PropertyShareMenu } from './PropertyShareMenu';
 import { InstagramIcon } from '../ui/InstagramIcon';
 
 interface PropertyCardProps {
   property: Property;
   onClick: () => void;
+  onUpdateProperty: (property: Property) => void;
 }
 
-export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick }) => {
+export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, onUpdateProperty }) => {
   const formatPrice = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
 
@@ -37,8 +38,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
       className="card-surface overflow-hidden cursor-pointer group flex flex-col justify-between transition-all duration-200 hover:border-accent/40"
       style={{ padding: '8px 8px 10px' }}
     >
-      {/* Foto com proporção leve 16:9 */}
-      <div className="relative aspect-[16/9] overflow-hidden bg-black/40 rounded-lg">
+      {/* Foto quadrada para capas verticais e horizontais */}
+      <div className="relative aspect-square overflow-hidden bg-black/40 rounded-lg">
         <img
           src={imageUrl}
           alt={property.neighborhood}
@@ -58,20 +59,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
           </span>
         )}
 
-        {/* Favorito */}
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-ink-primary/70 hover:text-ink-primary transition-colors bg-black/45 border border-line-strong"
-        >
-          <Heart style={{ width: '10px', height: '10px' }} strokeWidth={2} />
-        </button>
+        <PropertyShareMenu property={property} onUpdate={onUpdateProperty} />
       </div>
 
       {/* Informações */}
-      <div className="px-1 pt-2">
+      <div className="px-1 pt-3">
         <div className="flex items-center justify-between gap-1">
           <h4
-            className="font-bold text-[12.5px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight"
+            className="font-bold text-[13px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight"
             style={{ letterSpacing: '-0.01em' }}
           >
             {property.neighborhood}
@@ -83,12 +78,17 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
           )}
         </div>
 
-        <p className="text-[10px] text-ink-secondary mt-0.5 truncate">
+        <p className="text-[11px] text-ink-secondary mt-1 truncate">
           {bedroomsText} · {areaText}
         </p>
 
         {/* Badge discreto de rede social */}
         <div className="mt-1.5">
+          {property.internal_name && (
+            <span className="inline-flex max-w-full truncate mb-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-accent/10 border border-accent/20 text-accent" title={property.internal_name}>
+              {property.internal_name}
+            </span>
+          )}
           <span
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-semibold tracking-tight border ${
               isInstaPublished

@@ -145,3 +145,17 @@ html, body, #root {
   animation: waveform-bounce 1s ease-in-out infinite alternate;
   transform-origin: center;
 }
+
+@keyframes waveform-bounce-wide {
+  0%, 100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(0.9);
+  }
+}
+
+.animate-waveform-wide {
+  animation: waveform-bounce-wide 1.2s ease-in-out infinite alternate;
+  transform-origin: center;
+}

@@ -293,7 +293,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 animate-fade-in">
       <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-surface-3 border border-line-strong shadow-modal overflow-hidden text-ink-primary">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-line-subtle bg-surface-2/90 flex-shrink-0">

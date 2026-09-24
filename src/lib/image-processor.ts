@@ -6,6 +6,11 @@ export interface ProcessedImage {
   previewUrl: string;
   isCover: boolean;
   storagePath?: string;
+  objectKey?: string;
+  storageProvider?: 'r2' | 'supabase' | 'external';
+  isUploading?: boolean;
+  uploadProgress?: number;
+  uploadError?: string;
 }
 
 export const processImageFile = async (file: File): Promise<ProcessedImage> => {

@@ -13,13 +13,61 @@ export const supabase = isSupabaseConfigured
 export const STORAGE_BUCKET = 'property-images';
 export const ASSETS_BUCKET = 'app-assets';
 
+export const R2_PUBLIC_BASE = (
+  import.meta.env.VITE_R2_PUBLIC_URL ||
+  'https://pub-e28ab031048d44b2aa8b1846c6e6fdc6.r2.dev'
+).replace(/\/$/, '');
+
+export type MediaStorageOrigin = 'external' | 'supabase' | 'r2';
+
+export const identifyMediaOrigin = (path: string): MediaStorageOrigin => {
+  if (!path) return 'external';
+  if (path.startsWith('properties/') || path.startsWith('r2:') || path.includes('.r2.dev')) {
+    return 'r2';
+  }
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('blob:') ||
+    path.startsWith('data:')
+  ) {
+    if (path.includes('supabase.co/storage/v1/object/public/')) {
+      return 'supabase';
+    }
+    return 'external';
+  }
+  return 'supabase';
+};
+
 export const getPhotoUrl = (path: string): string => {
   if (!path) return 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80';
-  if (path.startsWith('http') || path.startsWith('blob:')) return path;
-  if (!supabase) return path;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+
+  // 1. URLs completas (Web, Unsplash, Blob ou Data URL)
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('blob:') ||
+    path.startsWith('data:')
+  ) {
+    return path;
+  }
+
+  // 2. Objetos no Cloudflare R2 (ex: properties/{propertyId}/photos/...)
+  if (path.startsWith('properties/') || path.startsWith('r2:')) {
+    const key = path.replace(/^r2:/, '');
+    return `${R2_PUBLIC_BASE}/${key}`;
+  }
+
+  // 3. Caminhos legados no Supabase Storage
+  if (supabase) {
+    const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+    if (data?.publicUrl) return data.publicUrl;
+  }
+
+  return path;
 };
+
+export const resolveMediaUrl = getPhotoUrl;
 
 export const calculateDashboardStats = (properties: Property[]): DashboardStats => {
   const activeProps = properties.filter((p) => p.status === 'Ativo');

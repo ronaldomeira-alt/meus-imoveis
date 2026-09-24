@@ -14,7 +14,7 @@ export const sharePropertySafely = async (property: Property): Promise<boolean> 
 
 📐 Área: ${property.area_m2} m²
 🛏️ Quartos: ${property.bedrooms} (${property.suites} suíte${property.suites > 1 ? 's' : ''})
-🚗 Vagas: ${property.parking_spaces}
+🚗 Vagas: ${property.parking_spaces_type === 'Rotativas' ? 'Rotativas' : property.parking_spaces}
 ${property.position ? `☀️ Posição: ${property.position}\n` : ''}${property.condominium_name ? `🏢 Condomínio: ${property.condominium_name}\n` : ''}
 💰 *Valor: ${formatPrice(property.price)}*
 ${property.condo_fee ? `Condomínio: ${formatPrice(property.condo_fee)}/mês` : ''}

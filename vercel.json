@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/imovel/:id",
+      "destination": "/api/public-page?id=:id"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

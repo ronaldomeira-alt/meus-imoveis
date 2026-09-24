@@ -21,9 +21,11 @@ import {
   extractPropertyMultiProvider,
   PreferredAIProvider,
 } from '../../lib/ai-provider';
-import type { Property } from '../../types/property';
+import type { Property, PropertyPhoto } from '../../types/property';
 import { PropertyGallery } from './PropertyGallery';
+import { uploadPropertyMedia, deletePropertyMedia } from '../../lib/r2-media';
 import { PropertyFicha } from './PropertyFicha';
+import { AudioWaveform } from '../ui/AudioWaveform';
 
 const emptyReviewData: ExtractedPropertyData = {
   purpose: null,
@@ -33,10 +35,12 @@ const emptyReviewData: ExtractedPropertyData = {
   number: null,
   complement: null,
   condominium_name: null,
+  internal_name: null,
   bedrooms: null,
   suites: null,
   bathrooms: null,
   parking_spaces: null,
+  parking_spaces_type: null,
   area_m2: null,
   is_approximate_area: false,
   price: null,
@@ -87,7 +91,7 @@ const getTrackedResolution = (data: ExtractedPropertyData): Record<string, boole
   price: data.price != null,
   suites: data.suites != null,
   bathrooms: data.bathrooms != null,
-  parking_spaces: data.parking_spaces != null,
+  parking_spaces: data.parking_spaces != null || data.parking_spaces_type === 'Rotativas',
   condo: data.condo_fee != null || Boolean(data.condo_included) || Boolean(data.condo_not_applicable),
   amenities: (data.building_features?.length ?? 0) > 0 || data.field_states?.building_features === 'informed',
 });
@@ -145,8 +149,17 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   }, [textInput, mode]);
 
   const handleClearFicha = () => {
+    images.forEach((image) => {
+      if (image.previewUrl.startsWith('blob:')) URL.revokeObjectURL(image.previewUrl);
+    });
+    setImages([]);
     setReviewData(emptyReviewData);
     setTextInput('');
+    setErrorMessage(null);
+    setProcessingStatus('');
+    setIsProcessingImages(false);
+    setIsProcessingAI(false);
+    handleCancelRecording();
     setShowValidationErrors(false);
     setShowClearModal(false);
   };
@@ -225,27 +238,93 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
     }
   };
 
+  const propertyIdRef = useRef<string>('');
+  if (!propertyIdRef.current) {
+    propertyIdRef.current = `prop-${Date.now()}`;
+  }
+
   // ── Mídias ──
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     setIsProcessingImages(true);
 
-    const newImages: ProcessedImage[] = [];
-    for (let i = 0; i < e.target.files.length; i++) {
-      const file = e.target.files[i];
+    const propId = propertyIdRef.current;
+    const selectedFiles = Array.from(e.target.files);
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
       const processed = await processImageFile(file);
-      if (images.length === 0 && newImages.length === 0) {
-        processed.isCover = true;
+      const isFirst = images.length === 0 && i === 0;
+      processed.isCover = isFirst;
+      processed.isUploading = true;
+      processed.uploadProgress = 0;
+
+      const tempId = `temp-${Date.now()}-${i}`;
+      processed.id = tempId;
+      setImages((prev) => [...prev, processed]);
+
+      if (processed.file) {
+        try {
+          const uploaded = await uploadPropertyMedia(propId, processed.file, {
+            sortOrder: images.length + i,
+            isCover: isFirst,
+            onProgress: (p) => {
+              setImages((prev) =>
+                prev.map((img) =>
+                  img.id === tempId ? { ...img, uploadProgress: p.pct } : img
+                )
+              );
+            },
+          });
+
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === tempId
+                ? {
+                    ...img,
+                    id: uploaded.id,
+                    objectKey: uploaded.object_key,
+                    storagePath: uploaded.object_key,
+                    storageProvider: 'r2',
+                    previewUrl: uploaded.public_url || img.previewUrl,
+                    isUploading: false,
+                    uploadProgress: 100,
+                  }
+                : img
+            )
+          );
+        } catch (uploadErr) {
+          console.error('Erro no upload para R2:', uploadErr);
+          setImages((prev) =>
+            prev.map((img) =>
+              img.id === tempId
+                ? {
+                    ...img,
+                    isUploading: false,
+                    uploadError: 'Falha no upload',
+                  }
+                : img
+            )
+          );
+        }
       }
-      newImages.push(processed);
     }
 
-    setImages((prev) => [...prev, ...newImages]);
     setIsProcessingImages(false);
     e.target.value = '';
   };
 
   const handleRemoveImage = (index: number) => {
+    const target = images[index];
+    if (target) {
+      const propId = propertyIdRef.current;
+      const keyOrPath = target.objectKey || target.storagePath;
+      if (keyOrPath && (keyOrPath.startsWith('properties/') || target.storageProvider === 'r2')) {
+        deletePropertyMedia(propId, { mediaId: target.id, objectKey: keyOrPath }).catch((err) =>
+          console.error('Erro ao deletar mídia do R2/Supabase:', err)
+        );
+      }
+    }
     setImages((prev) => {
       const updated = prev.filter((_, i) => i !== index);
       if (updated.length > 0 && !updated.some((img) => img.isCover)) {
@@ -364,13 +443,15 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       return;
     }
 
-    const newPropertyId = `prop-${Date.now()}`;
-    const photos = images.map((img, idx) => ({
-      id: `photo-${idx}`,
+    const newPropertyId = propertyIdRef.current;
+    const photos: PropertyPhoto[] = images.map((img, idx) => ({
+      id: img.id || `photo-${idx}`,
       property_id: newPropertyId,
-      storage_path: img.previewUrl,
+      storage_path: img.objectKey || img.storagePath || img.previewUrl,
       sort_order: idx,
       is_cover: img.isCover,
+      object_key: img.objectKey,
+      storage_provider: img.storageProvider || (img.objectKey ? 'r2' : 'external'),
     }));
 
     if (photos.length === 0) {
@@ -392,10 +473,12 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       number: reviewData.number || undefined,
       complement: reviewData.complement || undefined,
       condominium_name: reviewData.condominium_name || undefined,
+      internal_name: reviewData.internal_name || undefined,
       bedrooms: reviewData.bedrooms ?? 0,
       suites: reviewData.suites ?? 0,
       bathrooms: reviewData.bathrooms ?? 0,
       parking_spaces: reviewData.parking_spaces ?? 0,
+      parking_spaces_type: reviewData.parking_spaces_type === 'Rotativas' ? 'Rotativas' : undefined,
       area_m2: reviewData.area_m2 ?? 0,
       is_development: reviewData.is_development,
       area_range: reviewData.area_range,
@@ -462,7 +545,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             <button
               type="button"
               onClick={() => setShowClearModal(true)}
-              title="Limpar todas as informações da ficha mantendo as fotos"
+              title="Limpar todas as informações da ficha, inclusive as fotos"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] border border-line-subtle transition-all cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -515,7 +598,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
 
       {/* ── Modal de Confirmação para Limpar Ficha ── */}
       {showClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in">
           <div className="w-full max-w-sm modal-surface rounded-2xl p-5 border border-line-subtle shadow-modal space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-status-warning/15 border border-status-warning/30 flex items-center justify-center text-status-warning flex-shrink-0">
@@ -524,7 +607,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
               <div>
                 <h3 className="text-sm font-bold text-ink-primary">Limpar informações?</h3>
                 <p className="text-xs text-ink-secondary mt-0.5">
-                  Os dados preenchidos serão resetados. Suas fotos e vídeos cadastrados serão mantidos.
+                  Todos os dados da ficha, inclusive as fotos e vídeos adicionados, serão removidos.
                 </p>
               </div>
             </div>
@@ -598,8 +681,11 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
           >
             {isRecording ? (
               <div className="flex-1 flex items-center gap-2 py-1 px-1">
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                <span className="text-accent/90 italic text-xs sm:text-sm">Ouvindo... Fale os detalhes do imóvel</span>
+                <AudioWaveform variant="wide" />
+                <span className="flex items-center gap-1.5 whitespace-nowrap text-status-danger text-[10px] font-semibold uppercase tracking-wider animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-status-danger" />
+                  REC
+                </span>
               </div>
             ) : isTranscribing ? (
               <div className="flex-1 flex items-center gap-2 py-1 px-1 text-ink-secondary">

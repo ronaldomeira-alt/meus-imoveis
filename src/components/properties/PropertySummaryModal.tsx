@@ -129,6 +129,11 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
             {/* Preço Principal em Destaque */}
             <div className="flex items-baseline justify-between border-y border-line-subtle py-2.5">
               <div>
+                {property.internal_name && (
+                  <span className="inline-flex max-w-full truncate mb-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-accent/10 border border-accent/20 text-accent">
+                    {property.internal_name}
+                  </span>
+                )}
                 <span className="text-[10px] font-bold uppercase tracking-wider text-accent block">
                   Valor de {property.purpose === 'Locação' ? 'Aluguel' : 'Venda'}
                 </span>
@@ -179,7 +184,7 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
                 </div>
                 <div className="min-w-0">
                   <span className="text-[9px] uppercase font-bold text-ink-secondary block leading-tight">Vagas</span>
-                  <p className="text-xs font-bold text-ink-primary truncate">{property.parking_spaces} vaga(s)</p>
+                  <p className="text-xs font-bold text-ink-primary truncate">{property.parking_spaces_type === 'Rotativas' ? 'Rotativas' : `${property.parking_spaces} vaga(s)`}</p>
                 </div>
               </div>
             </div>

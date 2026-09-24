@@ -16,11 +16,13 @@ export interface ExtractedPropertyData {
   complement?: string | null;
   cep?: string | null;
   condominium_name?: string | null;
+  internal_name?: string | null;
   unit?: string | null;
   bedrooms?: number | null;
   suites?: number | null;
   bathrooms?: number | null;
   parking_spaces?: number | null;
+  parking_spaces_type?: 'Rotativas' | null;
   area_m2?: number | null;
   is_approximate_area?: boolean;
   price?: number | null;

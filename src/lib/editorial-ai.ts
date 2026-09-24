@@ -90,7 +90,7 @@ function buildPropertyContext(property: Property): string {
   parts.push(`Área privativa: ${property.area_m2} m²`);
   parts.push(`Quartos: ${property.bedrooms} (${property.suites} suíte(s))`);
   parts.push(`Banheiros: ${property.bathrooms}`);
-  parts.push(`Vagas de garagem: ${property.parking_spaces}`);
+  parts.push(`Vagas de garagem: ${property.parking_spaces_type === 'Rotativas' ? 'rotativas' : property.parking_spaces}`);
   if (property.position && property.position !== 'Não informado') parts.push(`Posição solar: ${property.position}`);
   if (property.price > 0) {
     parts.push(`Valor: R$ ${property.price.toLocaleString('pt-BR')}`);

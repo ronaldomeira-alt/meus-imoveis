@@ -11,7 +11,7 @@ interface PropertyGalleryProps {
   isProcessing: boolean;
 }
 
-const VISIBLE_THUMBS = 6;
+const VISIBLE_THUMBS = 10;
 
 export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
   images,
@@ -93,28 +93,13 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isProcessing}
-            className="text-xs text-accent hover:text-accent-hover font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {isProcessing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <ImagePlus className="w-3.5 h-3.5" />
-            )}
-            <span>{images.length === 0 ? 'Adicionar mídias' : 'Adicionar mais'}</span>
-          </button>
-        </div>
       </div>
 
       <input
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,.heic,.heif"
+        accept="image/*,.heic,.heif,video/mp4,video/quicktime,video/webm"
         onChange={onFilesSelected}
         className="hidden"
       />
@@ -148,7 +133,7 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
             return (
               <div
                 key={img.id || img.previewUrl || idx}
-                draggable={!isProcessing}
+                draggable={!isProcessing && !img.isUploading}
                 onDragStart={(e) => handleDragStart(e, idx)}
                 onDragOver={(e) => handleDragOver(e, idx)}
                 onDragEnd={handleDragEnd}
@@ -167,10 +152,21 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
                   className="w-full h-full object-cover pointer-events-none"
                 />
 
+                {img.isUploading && (
+                  <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-1.5 z-20">
+                    <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                    <span className="text-[10px] font-bold text-white tracking-wide">
+                      {img.uploadProgress !== undefined && img.uploadProgress > 0
+                        ? `${img.uploadProgress}%`
+                        : 'Enviando...'}
+                    </span>
+                  </div>
+                )}
+
                 {isCover ? (
                   <>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
-                    <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[9.5px] font-bold text-accent border border-accent/30 flex items-center gap-1 pointer-events-none">
+                    <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/70 text-[9.5px] font-bold text-accent border border-accent/30 flex items-center gap-1 pointer-events-none">
                       <Star className="w-2.5 h-2.5 fill-accent" />
                       Principal
                     </span>
@@ -238,15 +234,13 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
             title="Adicionar mais mídias"
-            className="flex-shrink-0 w-[80px] h-[104px] sm:w-[88px] sm:h-[114px] rounded-xl border border-dashed border-line-subtle hover:border-accent/40 bg-white/[0.01] hover:bg-accent/5 flex flex-col items-center justify-center gap-1 text-ink-secondary hover:text-accent transition-colors cursor-pointer disabled:opacity-50"
+            aria-label="Adicionar mais mídias"
+            className="flex-shrink-0 w-10 h-[104px] sm:w-10 sm:h-[114px] rounded-xl border border-accent/70 bg-transparent hover:bg-accent/10 flex flex-col items-center justify-center text-accent transition-colors cursor-pointer disabled:opacity-50"
           >
             {isProcessing ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <ImagePlus className="w-4 h-4" />
-                <span className="text-[10px] font-medium">+ Mais</span>
-              </>
+              <ImagePlus className="w-4 h-4" />
             )}
           </button>
         </div>

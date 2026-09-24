@@ -8,7 +8,6 @@ import { PriceRangeChart } from './components/dashboard/PriceRangeChart';
 import { RecentCarousel } from './components/dashboard/RecentCarousel';
 import { PropertyCard } from './components/properties/PropertyCard';
 import { PropertyFilters, FilterState } from './components/properties/PropertyFilters';
-import { PropertySummaryModal } from './components/properties/PropertySummaryModal';
 import { PropertyDetailPage } from './components/properties/PropertyDetailPage';
 import { PropertyEditModal } from './components/properties/PropertyEditModal';
 import { AddPropertyPage } from './components/capture/AddPropertyPage';
@@ -24,8 +23,9 @@ import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
 import type { PreferredAIProvider } from './lib/ai-provider';
-import { PlusCircle, Building2, Users, Archive } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { InstagramIcon } from './components/ui/InstagramIcon';
+import { getSavedPublicAdminToken, setPublicPage } from './lib/publicProperties';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -126,7 +126,6 @@ export const App: React.FC = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   // ── Modais e Visualização em Dois Níveis (Modal Resumo → Página Completa) ──
-  const [summaryProperty, setSummaryProperty] = useState<Property | null>(null);
   const [viewingPropertyId, setViewingPropertyId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const match = window.location.pathname.match(/^\/imoveis\/([^/]+)$/);
@@ -164,12 +163,7 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', parseUrl);
   }, []);
 
-  const handleOpenSummary = (property: Property) => {
-    setSummaryProperty(property);
-  };
-
   const handleOpenDetail = (property: Property) => {
-    setSummaryProperty(null);
     setViewingPropertyId(property.id);
     window.history.pushState({ propertyId: property.id }, '', `/imoveis/${property.id}`);
   };
@@ -182,6 +176,17 @@ export const App: React.FC = () => {
   };
 
   const handleUpdateProperty = (updatedProperty: Property) => {
+    const currentProperty = properties.find((property) => property.id === updatedProperty.id);
+    if (currentProperty?.public_page_active) {
+      const token = getSavedPublicAdminToken();
+      if (token) {
+        void setPublicPage(updatedProperty, updatedProperty.status === 'Ativo' && currentProperty.status === 'Ativo', token)
+          .then((result) => setProperties((prev) => prev.map((property) => property.id === updatedProperty.id
+            ? { ...updatedProperty, public_page_id: result.id, public_page_active: result.active }
+            : property)))
+          .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
+      }
+    }
     setProperties((prev) =>
       prev.map((p) => (p.id === updatedProperty.id ? updatedProperty : p))
     );
@@ -239,10 +244,11 @@ export const App: React.FC = () => {
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = (p.type + ' ' + p.neighborhood).toLowerCase().includes(q);
+        const matchInternalName = (p.internal_name || '').toLowerCase().includes(q);
         const matchCondo = (p.condominium_name || '').toLowerCase().includes(q);
         const matchAddress = (p.address || '').toLowerCase().includes(q);
         const matchNotes = (p.notes || '').toLowerCase().includes(q);
-        if (!matchTitle && !matchCondo && !matchAddress && !matchNotes) {
+        if (!matchTitle && !matchInternalName && !matchCondo && !matchAddress && !matchNotes) {
           return false;
         }
       }
@@ -311,6 +317,13 @@ export const App: React.FC = () => {
   };
 
   const handleArchiveProperty = async (id: string) => {
+    const property = properties.find((item) => item.id === id);
+    if (property?.public_page_active) {
+      const token = getSavedPublicAdminToken();
+      if (token) void setPublicPage(property, false, token)
+        .then((result) => setProperties((prev) => prev.map((item) => item.id === id ? { ...item, public_page_id: result.id, public_page_active: result.active } : item)))
+        .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
+    }
     setProperties((prev) =>
       prev.map((p) => {
         if (p.id === id) {
@@ -320,20 +333,28 @@ export const App: React.FC = () => {
         return p;
       })
     );
-    setSummaryProperty(null);
   };
 
   const handleMarkAsSold = async (id: string) => {
+    const property = properties.find((item) => item.id === id);
+    if (property?.public_page_active) {
+      const token = getSavedPublicAdminToken();
+      if (token) void setPublicPage(property, false, token)
+        .then((result) => setProperties((prev) => prev.map((item) => item.id === id ? { ...item, public_page_id: result.id, public_page_active: result.active } : item)))
+        .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
+    }
     setProperties((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'Vendido', updated_at: new Date().toISOString() } : p))
     );
-    setSummaryProperty(null);
   };
 
   const handleDeleteProperty = async (id: string) => {
     if (window.confirm('Tem certeza que deseja remover este imóvel do catálogo?')) {
+      const property = properties.find((item) => item.id === id);
+      const token = getSavedPublicAdminToken();
+      if (property?.public_page_active && token) void setPublicPage(property, false, token)
+        .catch((error) => console.error('Não foi possível desativar a página pública do imóvel:', error));
       setProperties((prev) => prev.filter((p) => p.id !== id));
-      setSummaryProperty(null);
       if (viewingPropertyId === id) {
         handleBackToInventory();
       }
@@ -431,7 +452,11 @@ export const App: React.FC = () => {
       />
 
       {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA (NÍVEL 2) ── */}
-      <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden py-3.5 pr-3.5 pl-3.5 sm:py-5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:py-6 lg:pr-6 lg:pl-[96px] min-w-0">
+      <main
+        className={`relative z-10 flex-1 flex flex-col h-full overflow-hidden pr-3.5 pl-3.5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:pr-6 lg:pl-[96px] min-w-0 ${
+          viewingProperty ? 'pt-0 pb-0' : 'py-3.5 sm:py-5 lg:py-6'
+        }`}
+      >
         {activeSection === 'captar' ? (
           <AddPropertyPage
             onSaveProperty={(p) => {
@@ -457,6 +482,10 @@ export const App: React.FC = () => {
           <>
             {/* Header Superior */}
             <Header
+          showGreeting={activeSection === 'dashboard'}
+          sectionTitle={activeSection === 'estoque' ? 'Estoque' : activeSection === 'parceiros' ? 'Imóveis em Parceria' : activeSection === 'arquivados' ? 'Imóveis Vendidos e Arquivados' : undefined}
+          sectionCount={activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados' ? filteredProperties.length : undefined}
+          onAddProperty={activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados' ? () => setActiveSection('captar') : undefined}
           searchQuery={searchQuery}
           onSearchChange={(q) => {
             setSearchQuery(q);
@@ -564,7 +593,7 @@ export const App: React.FC = () => {
             <div className="flex-shrink-0">
               <RecentCarousel
                 properties={properties.filter((p) => p.status === 'Ativo')}
-                onSelectProperty={(prop) => handleOpenSummary(prop)}
+                onSelectProperty={(prop) => handleOpenDetail(prop)}
                 onViewAll={() => setActiveSection('estoque')}
               />
             </div>
@@ -573,33 +602,9 @@ export const App: React.FC = () => {
 
         {/* ── VIEW ESTOQUE / PARCEIROS / ARQUIVADOS ── */}
         {(activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados') && (
-          <div className="flex-1 flex flex-col min-h-0 space-y-4 overflow-hidden animate-fade-in">
+          <div className="flex-1 flex flex-col min-h-0 gap-2 overflow-hidden animate-fade-in">
             {/* Barra de Filtros Sticky */}
-            <div className="flex-shrink-0 sticky top-0 z-20 bg-[var(--bg-base)]/95 backdrop-blur-md pt-1 pb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h2 className="text-xl font-extrabold text-ink-primary flex items-center gap-2">
-                    {activeSection === 'estoque' && <Building2 className="w-5 h-5 text-accent" />}
-                    {activeSection === 'parceiros' && <Users className="w-5 h-5 text-status-partner" />}
-                    {activeSection === 'arquivados' && <Archive className="w-5 h-5 text-status-warning" />}
-                    {activeSection === 'estoque' && 'Catálogo do Estoque'}
-                    {activeSection === 'parceiros' && 'Imóveis em Parceria'}
-                    {activeSection === 'arquivados' && 'Imóveis Vendidos e Arquivados'}
-                  </h2>
-                  <p className="text-xs text-ink-secondary">
-                    {filteredProperties.length} imóveis encontrados com os critérios atuais
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setActiveSection('captar')}
-                  className="btn-primary px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  Adicionar Imóvel
-                </button>
-              </div>
-
+            <div className="flex-shrink-0 sticky top-0 z-20 bg-[var(--bg-base)]/95">
               <PropertyFilters
                 filters={filters}
                 onFilterChange={(newFilters) => setFilters(newFilters)}
@@ -625,12 +630,13 @@ export const App: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-8">
+                <div className="grid w-full max-w-[1570px] mx-auto grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 pb-8">
                   {filteredProperties.map((property) => (
                     <PropertyCard
                       key={property.id}
                       property={property}
-                      onClick={() => handleOpenSummary(property)}
+                      onClick={() => handleOpenDetail(property)}
+                      onUpdateProperty={(updated) => setProperties((current) => current.map((item) => item.id === updated.id ? updated : item))}
                     />
                   ))}
                 </div>
@@ -685,15 +691,6 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* ── MODAL DE RESUMO DO IMÓVEL (NÍVEL 1) ── */}
-      {summaryProperty && (
-        <PropertySummaryModal
-          property={summaryProperty}
-          onClose={() => setSummaryProperty(null)}
-          onOpenDetail={handleOpenDetail}
-        />
-      )}
-
       {/* ── MODAL DE EDIÇÃO DO IMÓVEL ── */}
       <PropertyEditModal
         isOpen={Boolean(editingProperty)}
@@ -713,7 +710,7 @@ export const App: React.FC = () => {
         onSelectProperty={(propId) => {
           const found = properties.find((p) => p.id === propId);
           if (found) {
-            handleOpenSummary(found);
+            handleOpenDetail(found);
             setIsNotificationDrawerOpen(false);
           }
         }}
@@ -722,7 +719,7 @@ export const App: React.FC = () => {
 
       {/* ── MODAL 1-CLICK: CONFIRMAÇÃO APÓS SALVAR IMÓVEL (FASE 13) ── */}
       {savedPropertyPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fade-in">
           <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-line-strong p-6 shadow-2xl space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-pink-500/20">
               <InstagramIcon className="w-7 h-7" />
