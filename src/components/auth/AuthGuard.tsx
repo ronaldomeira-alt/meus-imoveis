@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { LoginPage } from './LoginPage';
 import { Loader2 } from 'lucide-react';
@@ -10,7 +10,35 @@ interface AuthGuardProps {
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const { user, loading, isAdmin } = useAuth();
 
+  const [isRecoveryMode, setIsRecoveryMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search;
+      const hash = window.location.hash;
+      return search.includes('mode=update-password') || hash.includes('type=recovery');
+    }
+    return false;
+  });
+
   useEffect(() => {
+    const checkRecovery = () => {
+      const search = window.location.search;
+      const hash = window.location.hash;
+      if (search.includes('mode=update-password') || hash.includes('type=recovery')) {
+        setIsRecoveryMode(true);
+      }
+    };
+    checkRecovery();
+    window.addEventListener('hashchange', checkRecovery);
+    window.addEventListener('popstate', checkRecovery);
+    return () => {
+      window.removeEventListener('hashchange', checkRecovery);
+      window.removeEventListener('popstate', checkRecovery);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isRecoveryMode) return;
+
     if (!loading && (!user || !isAdmin)) {
       if (window.location.pathname !== '/login') {
         window.history.replaceState(null, '', '/login');
@@ -20,7 +48,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         window.history.replaceState(null, '', '/');
       }
     }
-  }, [loading, user, isAdmin]);
+  }, [loading, user, isAdmin, isRecoveryMode]);
 
   // Enquanto a sessão está sendo verificada, NUNCA expõe o conteúdo do CRM
   if (loading) {
@@ -37,6 +65,18 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
           </div>
         </div>
       </div>
+    );
+  }
+
+  // Se o usuário veio pelo link de recuperação de senha, EXIGE que ele defina a senha antes de entrar
+  if (isRecoveryMode) {
+    return (
+      <LoginPage
+        onSuccess={() => {
+          setIsRecoveryMode(false);
+          window.history.replaceState(null, '', '/');
+        }}
+      />
     );
   }
 
