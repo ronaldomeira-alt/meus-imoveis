@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 
     // Repassa o evento diretamente para o WACRM (autoridade canônica de tracking)
     const wacrmUrl = process.env.WACRM_URL || 'http://localhost:3000';
-    const tunnelKey = process.env.TUNNEL_API_KEY;
+    const tunnelKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.TUNNEL_API_KEY;
 
     const headers = { 'Content-Type': 'application/json' };
     if (tunnelKey) {

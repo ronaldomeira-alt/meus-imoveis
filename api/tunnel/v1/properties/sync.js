@@ -25,11 +25,11 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Método não permitido.' }));
   }
 
-  const tunnelKey = process.env.TUNNEL_API_KEY;
+  const tunnelKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.TUNNEL_API_KEY;
   if (!tunnelKey) {
-    console.error('[properties-sync-proxy] TUNNEL_API_KEY não configurada no ambiente do servidor.');
+    console.error('[properties-sync-proxy] Nenhuma credencial de túnel configurada no servidor.');
     res.statusCode = 500;
-    return res.end(JSON.stringify({ error: 'TUNNEL_API_KEY não configurada no servidor.' }));
+    return res.end(JSON.stringify({ error: 'Credenciais do túnel não configuradas no servidor.' }));
   }
 
   try {
