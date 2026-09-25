@@ -24,6 +24,13 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Método não permitido.' }));
   }
 
+  const tunnelKey = process.env.TUNNEL_API_KEY;
+  if (!tunnelKey) {
+    console.error('[tracking-proxy] TUNNEL_API_KEY não configurada no servidor.');
+    res.statusCode = 500;
+    return res.end(JSON.stringify({ error: 'TUNNEL_API_KEY não configurada no servidor.' }));
+  }
+
   try {
     const body = await readBody(req);
     const trackingToken = String(body.tracking_token || '').trim();
@@ -45,12 +52,11 @@ export default async function handler(req, res) {
 
     // Repassa o evento diretamente para o WACRM (autoridade canônica de tracking)
     const wacrmUrl = process.env.WACRM_URL || 'http://localhost:3000';
-    const tunnelKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.TUNNEL_API_KEY;
 
-    const headers = { 'Content-Type': 'application/json' };
-    if (tunnelKey) {
-      headers['Authorization'] = `Bearer ${tunnelKey}`;
-    }
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${tunnelKey}`,
+    };
 
     const wacrmRes = await fetch(`${wacrmUrl}/api/tunnel/v1/events/tracking`, {
       method: 'POST',
