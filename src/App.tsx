@@ -23,11 +23,14 @@ import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
 import type { PreferredAIProvider } from './lib/ai-provider';
-import { Building2 } from 'lucide-react';
+import { Building2, Sparkles } from 'lucide-react';
 import { InstagramIcon } from './components/ui/InstagramIcon';
 import { getSavedPublicAdminToken, setPublicPage } from './lib/publicProperties';
 import { AuthProvider, useAuth } from './lib/auth';
 import { AuthGuard } from './components/auth/AuthGuard';
+import { MatchView } from './components/match/MatchView';
+import { syncPropertyToMatch } from './lib/match/service';
+import { isMatchRelevantPropertyChange } from './lib/match/property-adapter';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -140,6 +143,16 @@ const CrmAppContent: React.FC = () => {
   // ── Marketing & Post Studio (Fase 13, 14, 15) ──
   const [marketingPostProperty, setMarketingPostProperty] = useState<Property | null>(null);
   const [savedPropertyPrompt, setSavedPropertyPrompt] = useState<Property | null>(null);
+  const [matchToast, setMatchToast] = useState<{ title: string; count: number } | null>(null);
+
+  // Sincronização inicial de imóveis ativos com a projeção do Match
+  useEffect(() => {
+    const activeProps = properties.filter((p) => p.status === 'Ativo');
+    // Executa em segundo plano de forma silenciosa e não-bloqueante
+    activeProps.forEach((p) => {
+      syncPropertyToMatch(p).catch(() => {});
+    });
+  }, []);
 
 
 
@@ -192,6 +205,20 @@ const CrmAppContent: React.FC = () => {
     setProperties((prev) =>
       prev.map((p) => (p.id === updatedProperty.id ? updatedProperty : p))
     );
+
+    // FASE 9 & 28: Recalcula Matches apenas se campos relevantes mudaram
+    if (currentProperty && isMatchRelevantPropertyChange(currentProperty, updatedProperty)) {
+      syncPropertyToMatch(updatedProperty)
+        .then((res) => {
+          if (res.strongMatchesCount > 0) {
+            setMatchToast({
+              title: updatedProperty.title || updatedProperty.condominium_name || 'Imóvel atualizado',
+              count: res.strongMatchesCount,
+            });
+          }
+        })
+        .catch((err) => console.error('[Match] Erro ao recalcular imóvel atualizado:', err));
+    }
   };
 
   // ── Filtros e Busca Global ──
@@ -314,6 +341,27 @@ const CrmAppContent: React.FC = () => {
     };
     setNotifications((prev) => [newNotification, ...prev]);
 
+    // FASE 9 & 10: Evento property.created -> Roda Match com leads elegíveis
+    syncPropertyToMatch(newProperty)
+      .then((res) => {
+        if (res.strongMatchesCount > 0) {
+          const strongNotif: NotificationItem = {
+            id: `match-strong-${Date.now()}`,
+            title: 'Matches Fortes Encontrados 🎯',
+            body: `${newProperty.title || newProperty.condominium_name || 'Novo imóvel'} gerou ${res.strongMatchesCount} Matches fortes (${res.matchesCount} no total)!`,
+            property_id: newProperty.id,
+            read: false,
+            created_at: 'Agora mesmo',
+          };
+          setNotifications((prev) => [strongNotif, ...prev]);
+          setMatchToast({
+            title: newProperty.title || newProperty.condominium_name || 'Novo imóvel',
+            count: res.strongMatchesCount,
+          });
+        }
+      })
+      .catch((err) => console.error('[Match] Erro ao sincronizar novo imóvel:', err));
+
     // Pergunta 1-Click: deseja agendar/criar publicação no Instagram para o imóvel?
     setSavedPropertyPrompt(newProperty);
   };
@@ -326,10 +374,13 @@ const CrmAppContent: React.FC = () => {
         .then((result) => setProperties((prev) => prev.map((item) => item.id === id ? { ...item, public_page_id: result.id, public_page_active: result.active } : item)))
         .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
     }
+    const nextStatus = property?.status === 'Arquivado' ? 'Ativo' : 'Arquivado';
+    if (property) {
+      syncPropertyToMatch({ ...property, status: nextStatus }).catch(console.error);
+    }
     setProperties((prev) =>
       prev.map((p) => {
         if (p.id === id) {
-          const nextStatus = p.status === 'Arquivado' ? 'Ativo' : 'Arquivado';
           return { ...p, status: nextStatus, updated_at: new Date().toISOString() };
         }
         return p;
@@ -344,6 +395,9 @@ const CrmAppContent: React.FC = () => {
       if (token) void setPublicPage(property, false, token)
         .then((result) => setProperties((prev) => prev.map((item) => item.id === id ? { ...item, public_page_id: result.id, public_page_active: result.active } : item)))
         .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
+    }
+    if (property) {
+      syncPropertyToMatch({ ...property, status: 'Vendido' }).catch(console.error);
     }
     setProperties((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'Vendido', updated_at: new Date().toISOString() } : p))
@@ -647,6 +701,13 @@ const CrmAppContent: React.FC = () => {
           </div>
         )}
 
+        {/* ── VIEW MATCH (Fase 11) ── */}
+        {activeSection === 'match' && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <MatchView />
+          </div>
+        )}
+
         {/* ── VIEW RELATÓRIOS ── */}
         {activeSection === 'relatorios' && (
           <div className="flex-1 min-h-0 overflow-hidden">
@@ -778,6 +839,38 @@ const CrmAppContent: React.FC = () => {
             window.dispatchEvent(new CustomEvent('marketing-posts-updated'));
           }}
         />
+      )}
+
+      {/* ── TOAST CONTEXTUAL: NOVO MATCH FORTE (Fase 10 & 24) ── */}
+      {matchToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-[#131722]/95 backdrop-blur-md border border-accent/40 shadow-2xl flex items-center gap-3 animate-fade-in max-w-sm">
+          <div className="w-9 h-9 rounded-xl bg-accent/20 border border-accent/40 flex items-center justify-center text-accent flex-shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-xs font-bold text-ink-primary">
+              Matches Fortes Encontrados!
+            </h4>
+            <p className="text-[11px] text-ink-secondary mt-0.5 truncate">
+              {matchToast.title} gerou {matchToast.count} {matchToast.count === 1 ? 'match forte' : 'matches fortes'}.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setMatchToast(null);
+              setActiveSection('match');
+            }}
+            className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 cursor-pointer"
+          >
+            Ver Matches
+          </button>
+          <button
+            onClick={() => setMatchToast(null)}
+            className="text-ink-muted hover:text-ink-primary text-xs ml-1 cursor-pointer p-1"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   );

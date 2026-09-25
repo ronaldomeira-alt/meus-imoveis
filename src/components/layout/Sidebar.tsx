@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Home,
   Building2,
+  Sparkles,
   PlusCircle,
   Users,
   Archive,
@@ -16,6 +17,7 @@ import type { AppUser } from '../../lib/currentUser';
 export type NavSection =
   | 'dashboard'
   | 'estoque'
+  | 'match'
   | 'captar'
   | 'piloto'
   | 'calendario'
@@ -35,6 +37,7 @@ interface SidebarProps {
 const NAV_ITEMS = [
   { id: 'dashboard' as NavSection,     label: 'Dashboard',        icon: Home },
   { id: 'estoque' as NavSection,       label: 'Estoque',          icon: Building2 },
+  { id: 'match' as NavSection,         label: 'Match',            icon: Sparkles },
   { id: 'captar' as NavSection,        label: 'Adicionar imóvel', icon: PlusCircle },
   { id: 'piloto' as NavSection,        label: 'Piloto Automático', icon: InstagramIcon },
   { id: 'calendario' as NavSection,    label: 'Calendário',       icon: Calendar },

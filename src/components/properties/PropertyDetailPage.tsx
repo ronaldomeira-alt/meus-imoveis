@@ -30,6 +30,7 @@ import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
 import { sharePropertySafely } from '../../lib/share-sanitizer';
 import { PostEditorModal } from '../marketing/PostEditorModal';
+import { PropertyMatchSummary } from '../match/PropertyMatchSummary';
 
 interface PropertyDetailPageProps {
   property: Property;
@@ -507,8 +508,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
         {/* ── 5. DETALHAMENTO EM DUAS COLUNAS NO DESKTOP ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Coluna Esquerda (2/3): Características e Descrição */}
+          {/* Coluna Esquerda (2/3): Match e Características */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Inteligência de Match com WACRM */}
+            <PropertyMatchSummary property={property} />
+
             {/* Características do Imóvel */}
             {property.apartment_features && property.apartment_features.length > 0 && (
               <div className="panel-surface p-5 rounded-3xl space-y-3">

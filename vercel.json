@@ -1,8 +1,16 @@
 {
   "rewrites": [
     {
+      "source": "/imoveis/p/:token",
+      "destination": "/api/public-page?token=:token"
+    },
+    {
       "source": "/imovel/:id",
       "destination": "/api/public-page?id=:id"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",

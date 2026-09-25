@@ -1,8 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Property, DashboardStats, NeighborhoodStat, PropertyTypeStat, PriceRangeStat } from '../types/property';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const getEnv = (key: string): string => {
+  if (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.[key]) {
+    return (import.meta as any).env[key];
+  }
+  const proc = (globalThis as any).process;
+  if (typeof proc !== 'undefined' && proc?.env?.[key]) {
+    return proc.env[key] as string;
+  }
+  return '';
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -14,7 +25,8 @@ export const STORAGE_BUCKET = 'property-images';
 export const ASSETS_BUCKET = 'app-assets';
 
 export const R2_PUBLIC_BASE = (
-  import.meta.env.VITE_R2_PUBLIC_URL ||
+  getEnv('VITE_R2_PUBLIC_URL') ||
+  getEnv('R2_PUBLIC_URL') ||
   'https://pub-e28ab031048d44b2aa8b1846c6e6fdc6.r2.dev'
 ).replace(/\/$/, '');
 
