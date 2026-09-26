@@ -752,7 +752,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       <AnimatePresence>
         {isFullscreen && currentPhotoUrl && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 overflow-hidden"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden overscroll-none"
             onTouchStart={(event) => {
               if (event.touches.length === 2) {
                 pinchRef.current = { distance: touchDistance(event.touches), zoom: fullscreenZoom, pan: fullscreenPan, closing: false };
@@ -825,7 +825,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-6xl max-h-[85vh] w-full h-full flex items-center justify-center overflow-hidden"
+              className="relative w-full h-full flex items-center justify-center overflow-hidden"
             >
               <div
                 className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-[180ms] ease-linear' : ''}`}
@@ -841,7 +841,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                     <img
                       src={getPhotoUrl(photo.storage_path)}
                       alt=""
-                      className="w-full h-full object-cover touch-none select-none"
+                      className="w-full h-full object-contain touch-none select-none"
                       style={photoIndex === selectedPhotoIndex
                         ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
                         : undefined}
