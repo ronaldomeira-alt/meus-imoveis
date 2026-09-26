@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Sparkles,
-  Search,
   Filter,
   Send,
   Building2,
@@ -19,15 +18,17 @@ import { PropertyAnalysisView } from './PropertyAnalysisView';
 import { WhatsAppSendModal } from './WhatsAppSendModal';
 import { LeadDetailDrawer } from './LeadDetailDrawer';
 
-export const MatchView: React.FC = () => {
+interface MatchViewProps {
+  searchQuery?: string;
+}
+
+export const MatchView: React.FC<MatchViewProps> = ({ searchQuery = '' }) => {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MatchStatus>('novo');
 
   // Filtros compactos
-  const [searchTerm, setSearchTerm] = useState('');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'strong' | 'good' | 'manual'>('all');
-  const [tempFilter, setTempFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
   const [maturityFilter, setMaturityFilter] = useState<'all' | 'qualified' | 'growing'>('all');
 
   // Modais e gavetas
@@ -107,8 +108,8 @@ export const MatchView: React.FC = () => {
   const filteredMatches = useMemo(() => {
     return matches.filter((m) => {
       // 1. Busca textual
-      if (searchTerm) {
-        const query = searchTerm.toLowerCase();
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
         const leadName = (m.lead?.name || '').toLowerCase();
         const leadPhone = (m.lead?.phone || '').toLowerCase();
         const propTitle = (m.property?.title || '').toLowerCase();
@@ -128,19 +129,13 @@ export const MatchView: React.FC = () => {
       if (scoreFilter === 'good' && (m.matchScore < 70 || m.matchScore >= 85)) return false;
       if (scoreFilter === 'manual' && m.matchScore >= 70) return false;
 
-      // 3. Temperatura
-      const score = m.lead?.aiScore ?? 0;
-      if (tempFilter === 'hot' && score < 8) return false;
-      if (tempFilter === 'warm' && (score < 5 || score >= 8)) return false;
-      if (tempFilter === 'cold' && score >= 5) return false;
-
-      // 4. Maturidade
+      // 3. Maturidade
       if (maturityFilter === 'qualified' && m.profileMaturity < 70) return false;
       if (maturityFilter === 'growing' && m.profileMaturity >= 70) return false;
 
       return true;
     });
-  }, [matches, searchTerm, scoreFilter, tempFilter, maturityFilter]);
+  }, [matches, searchQuery, scoreFilter, maturityFilter]);
 
   // Agrupamento por Imóvel (Perspectiva IMÓVEL → LEADS COMPATÍVEIS)
   const groupedByProperty = useMemo<PropertyMatchGroup[]>(() => {
@@ -283,50 +278,26 @@ export const MatchView: React.FC = () => {
       </div>
 
       {/* ── Barra Compacta de Filtros ── */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-xl bg-surface-1 border border-line-subtle text-xs shrink-0">
-        {/* Campo de Busca */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted" />
-          <input
-            type="text"
-            placeholder="Buscar imóvel, bairro ou lead..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary placeholder:text-ink-muted focus:outline-none focus:border-accent text-xs"
-          />
-        </div>
-
+      <div className="flex items-center gap-2 p-2 rounded-xl bg-surface-1 border border-line-subtle text-xs shrink-0">
         {/* Filtros em Linha Compacta */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 w-full">
           {/* Faixa de Match */}
           <select
             value={scoreFilter}
             onChange={(e) => setScoreFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-medium cursor-pointer"
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-medium cursor-pointer"
           >
-            <option value="all">Todas as Faixas</option>
+            <option value="all">Nível de match</option>
             <option value="strong">Match Forte (≥85%)</option>
             <option value="good">Bom Match (70–84%)</option>
             <option value="manual">Manual (50–69%)</option>
-          </select>
-
-          {/* Temperatura */}
-          <select
-            value={tempFilter}
-            onChange={(e) => setTempFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-medium cursor-pointer"
-          >
-            <option value="all">Temperatura: Todas</option>
-            <option value="hot">Quente (Score ≥8)</option>
-            <option value="warm">Morno (Score 5–7)</option>
-            <option value="cold">Frio (Score &lt;5)</option>
           </select>
 
           {/* Maturidade */}
           <select
             value={maturityFilter}
             onChange={(e) => setMaturityFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-medium cursor-pointer"
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-line-subtle text-ink-primary text-xs focus:outline-none focus:border-accent font-medium cursor-pointer"
           >
             <option value="all">Maturidade: Todas</option>
             <option value="qualified">Qualificado (≥70%)</option>
@@ -337,7 +308,7 @@ export const MatchView: React.FC = () => {
           <button
             onClick={fetchMatches}
             disabled={isLoading}
-            className="p-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
+            className="flex-shrink-0 p-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 border border-line-subtle text-ink-secondary hover:text-ink-primary transition-colors cursor-pointer"
             title="Recarregar matches"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-accent' : ''}`} />

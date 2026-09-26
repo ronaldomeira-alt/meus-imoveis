@@ -780,7 +780,7 @@ const CrmAppContent: React.FC = () => {
         {/* ── VIEW MATCH (Fase 11) ── */}
         {activeSection === 'match' && (
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col h-full">
-            <MatchView />
+              <MatchView searchQuery={searchQuery} />
           </div>
         )}
 
