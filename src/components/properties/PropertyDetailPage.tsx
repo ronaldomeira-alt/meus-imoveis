@@ -268,7 +268,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       </div>
 
       {/* ── 2. CONTEÚDO PRINCIPAL DA PÁGINA ── */}
-      <div className="max-w-7xl mx-auto w-full min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="property-detail-content max-w-7xl mx-auto w-full min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Título, Badges e Preço no Topo */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-line-subtle pb-5">
           <div className="space-y-2">
