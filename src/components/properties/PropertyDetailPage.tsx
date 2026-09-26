@@ -468,6 +468,33 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             {/* Gradiente sutil */}
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
+            {photos.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
+                  }}
+                  className="hidden md:group-hover:flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white/80 hover:text-white items-center justify-center transition-opacity"
+                  aria-label="Foto anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
+                  }}
+                  className="hidden md:group-hover:flex absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-black/35 hover:bg-black/55 text-white/80 hover:text-white items-center justify-center transition-opacity"
+                  aria-label="Próxima foto"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
           </div>
 
           {/* Miniaturas das Fotos */}
