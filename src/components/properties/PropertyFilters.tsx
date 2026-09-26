@@ -77,7 +77,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
           </select>
         </div>
         <div className="min-w-0 sm:min-w-[145px] sm:flex-[1_1_160px]">
-          <label className={labelClass}>Tipo</label>
+          <label className={`${labelClass} hidden sm:block`}>Tipo</label>
           <select value={filters.type} onChange={(e) => onFilterChange({ ...filters, type: e.target.value })} className={fieldClass}>
             <option value="" className="bg-[#15181D]">Tipo</option>
             {propertyTypes.map((t) => <option key={t} value={t} className="bg-[#15181D]">{t}</option>)}

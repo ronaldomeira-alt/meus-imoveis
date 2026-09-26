@@ -30,7 +30,6 @@ import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
 import { sharePropertySafely } from '../../lib/share-sanitizer';
 import { PostEditorModal } from '../marketing/PostEditorModal';
-import { PropertyMatchSummary } from '../match/PropertyMatchSummary';
 
 interface PropertyDetailPageProps {
   property: Property;
@@ -53,10 +52,29 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 }) => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenZoom, setFullscreenZoom] = useState(1);
+  const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
   const [shareSuccess, setShareSuccess] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; closing: boolean } | null>(null);
+  const panRef = useRef<{ x: number; y: number } | null>(null);
+
+  const resetFullscreenTransform = () => {
+    setFullscreenZoom(1);
+    setFullscreenPan({ x: 0, y: 0 });
+  };
+
+  const closeFullscreen = () => {
+    resetFullscreenTransform();
+    setIsFullscreen(false);
+  };
+
+  const touchDistance = (touches: React.TouchList) => {
+    const [first, second] = [touches[0], touches[1]];
+    return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+  };
 
   // Fecha o menu de ações ao clicar fora
   useEffect(() => {
@@ -524,8 +542,6 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Coluna Esquerda (2/3): Match e Características */}
           <div className="lg:col-span-2 space-y-6">
             {/* Inteligência de Match com WACRM */}
-            <PropertyMatchSummary property={property} />
-
             {/* Características do Imóvel */}
             {property.apartment_features && property.apartment_features.length > 0 && (
               <div className="panel-surface p-5 rounded-3xl space-y-3">
@@ -699,11 +715,46 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       {/* ── 6. MODAL FULLSCREEN / LIGHTBOX DE FOTOS ── */}
       <AnimatePresence>
         {isFullscreen && currentPhotoUrl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 overflow-hidden"
+            onTouchStart={(event) => {
+              if (event.touches.length === 2) {
+                pinchRef.current = { distance: touchDistance(event.touches), zoom: fullscreenZoom, pan: fullscreenPan, closing: false };
+              } else if (event.touches.length === 1 && fullscreenZoom > 1) {
+                panRef.current = { x: event.touches[0].clientX - fullscreenPan.x, y: event.touches[0].clientY - fullscreenPan.y };
+              }
+            }}
+            onTouchMove={(event) => {
+              if (event.touches.length === 2 && pinchRef.current) {
+                event.preventDefault();
+                const scale = touchDistance(event.touches) / pinchRef.current.distance;
+                pinchRef.current.closing = pinchRef.current.zoom === 1 && scale < 0.98;
+                const nextZoom = Math.max(1, Math.min(3, pinchRef.current.zoom * scale));
+                setFullscreenZoom(nextZoom);
+                if (nextZoom === 1) setFullscreenPan({ x: 0, y: 0 });
+              } else if (event.touches.length === 1 && panRef.current && fullscreenZoom > 1) {
+                event.preventDefault();
+                setFullscreenPan({
+                  x: event.touches[0].clientX - panRef.current.x,
+                  y: event.touches[0].clientY - panRef.current.y,
+                });
+              }
+            }}
+            onTouchEnd={(event) => {
+              if (pinchRef.current) {
+                const closingPinch = pinchRef.current.closing;
+                pinchRef.current = null;
+                if (closingPinch) closeFullscreen();
+                else if (fullscreenZoom < 1.02) resetFullscreenTransform();
+              }
+              if (event.touches.length === 0) panRef.current = null;
+            }}
+          >
             {/* Fechar */}
             <button
-              onClick={() => setIsFullscreen(false)}
-              className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-ink-primary flex items-center justify-center transition-all cursor-pointer"
+              onClick={closeFullscreen}
+              className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-ink-primary flex items-center justify-center transition-all cursor-pointer"
+              aria-label="Fechar tela cheia"
             >
               <X className="w-5 h-5" />
             </button>
@@ -718,7 +769,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <img
                 src={currentPhotoUrl}
                 alt=""
-                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl touch-none select-none"
+                style={{ transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }}
               />
 
               {photos.length > 1 && (
