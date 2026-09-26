@@ -23,9 +23,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70 animate-fade-in">
-      <div className="w-full max-w-sm h-full modal-surface border-l border-line-strong flex flex-col shadow-modal animate-slide-in-right">
+      <div className="notification-drawer-panel w-full max-w-sm h-full modal-surface border-l border-line-strong flex flex-col shadow-modal animate-slide-in-right">
         {/* Topo do Drawer */}
-        <div className="flex items-center justify-between p-4 border-b border-line-subtle">
+        <div className="notification-drawer-header flex items-center justify-between p-4 border-b border-line-subtle">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-accent-soft text-accent">
               <Bell className="w-4 h-4" />
