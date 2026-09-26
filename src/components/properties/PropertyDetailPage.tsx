@@ -51,6 +51,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
+  const [fullscreenDragX, setFullscreenDragX] = useState(0);
+  const [fullscreenTrackAnimating, setFullscreenTrackAnimating] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
@@ -69,6 +71,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
   const closeFullscreen = () => {
     resetFullscreenTransform();
+    setFullscreenDragX(0);
+    setFullscreenTrackAnimating(false);
     setIsFullscreen(false);
   };
 
@@ -749,6 +753,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 panRef.current = { x: event.touches[0].clientX - fullscreenPan.x, y: event.touches[0].clientY - fullscreenPan.y };
               } else if (event.touches.length === 1) {
                 fullscreenTouchStartX.current = event.touches[0].clientX;
+                setFullscreenTrackAnimating(false);
+                setFullscreenDragX(0);
               }
             }}
             onTouchMove={(event) => {
@@ -765,6 +771,9 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   x: event.touches[0].clientX - panRef.current.x,
                   y: event.touches[0].clientY - panRef.current.y,
                 });
+              } else if (event.touches.length === 1 && fullscreenTouchStartX.current !== null && fullscreenZoom === 1) {
+                event.preventDefault();
+                setFullscreenDragX(event.touches[0].clientX - fullscreenTouchStartX.current);
               }
             }}
             onTouchEnd={(event) => {
@@ -776,9 +785,19 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               } else if (fullscreenTouchStartX.current !== null && photos.length > 1) {
                 const deltaX = (event.changedTouches[0]?.clientX ?? fullscreenTouchStartX.current) - fullscreenTouchStartX.current;
                 if (Math.abs(deltaX) >= 45) {
-                  setSelectedPhotoIndex((prev) => deltaX < 0
-                    ? (prev < photos.length - 1 ? prev + 1 : 0)
-                    : (prev > 0 ? prev - 1 : photos.length - 1));
+                  const direction = deltaX < 0 ? -1 : 1;
+                  setFullscreenTrackAnimating(true);
+                  setFullscreenDragX(deltaX < 0 ? -window.innerWidth : window.innerWidth);
+                  window.setTimeout(() => {
+                    setSelectedPhotoIndex((prev) => direction < 0
+                      ? (prev < photos.length - 1 ? prev + 1 : 0)
+                      : (prev > 0 ? prev - 1 : photos.length - 1));
+                    setFullscreenDragX(0);
+                    setFullscreenTrackAnimating(false);
+                  }, 180);
+                } else {
+                  setFullscreenTrackAnimating(true);
+                  setFullscreenDragX(0);
                 }
               }
               fullscreenTouchStartX.current = null;
@@ -799,14 +818,28 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-6xl max-h-[85vh] w-full h-full flex items-center justify-center"
+              className="relative max-w-6xl max-h-[85vh] w-full h-full flex items-center justify-center overflow-hidden"
             >
-              <img
-                src={currentPhotoUrl}
-                alt=""
-                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl touch-none select-none"
-                style={{ transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }}
-              />
+              <div
+                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-200 ease-out' : ''}`}
+                style={{
+                  width: `${Math.max(photos.length, 1) * 100}%`,
+                  transform: `translateX(calc(-${selectedPhotoIndex * (100 / Math.max(photos.length, 1))}% + ${fullscreenDragX}px))`,
+                }}
+              >
+                {photos.map((photo, index) => (
+                  <div key={photo.id || index} className="relative h-full w-full flex-shrink-0 flex items-center justify-center px-1">
+                    <img
+                      src={getPhotoUrl(photo.storage_path)}
+                      alt=""
+                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl touch-none select-none"
+                      style={index === selectedPhotoIndex
+                        ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
+                        : undefined}
+                    />
+                  </div>
+                ))}
+              </div>
 
             </motion.div>
           </div>
