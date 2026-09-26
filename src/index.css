@@ -155,9 +155,9 @@ html, body, #root {
 
 .property-detail-header {
   box-sizing: border-box;
-  height: calc(3.25rem + env(safe-area-inset-top, 0px));
-  min-height: calc(3.25rem + env(safe-area-inset-top, 0px));
-  padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+  height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  min-height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 @media (max-width: 767px) {

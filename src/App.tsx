@@ -581,8 +581,10 @@ const CrmAppContent: React.FC = () => {
 
       {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA (NÍVEL 2) ── */}
       <main
-        className={`relative z-10 flex-1 flex flex-col h-full overflow-hidden pr-3.5 pl-3.5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:pr-6 lg:pl-[96px] min-w-0 ${
-          viewingProperty ? 'pt-0 pb-0' : 'py-3.5 sm:py-5 lg:py-6'
+        className={`relative z-10 flex-1 flex flex-col h-full overflow-hidden min-w-0 ${
+          viewingProperty
+            ? 'pt-0 pb-0 px-0 md:pl-[72px]'
+            : 'py-3.5 sm:py-5 lg:py-6 pr-3.5 pl-3.5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:pr-6 lg:pl-[96px]'
         }`}
       >
         {activeSection === 'captar' ? (
