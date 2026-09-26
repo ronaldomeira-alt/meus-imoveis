@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   const firstName = currentUser.name.split(' ')[0];
 
   return (
-    <header className={`flex-shrink-0 select-none ${showGreeting ? 'mb-3' : 'mb-2'}`}>
+    <header className={`app-header flex-shrink-0 select-none ${showGreeting ? 'mb-3' : 'mb-2'}`}>
       <div className="flex items-center justify-between gap-3">
         {/* ── Esquerda: Menu mobile + Data/Saudação ── */}
         <div className="flex items-center gap-3 min-w-0">

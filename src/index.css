@@ -131,6 +131,15 @@ html, body, #root {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/*
+ * O viewport usa `viewport-fit=cover` para ocupar toda a tela no PWA.
+ * Consuma a safe area no shell do header, mantendo menu, saudação e ações
+ * alinhados como um único bloco. Em navegadores sem safe area, env() vale 0.
+ */
+.app-header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {
