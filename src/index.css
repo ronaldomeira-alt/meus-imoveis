@@ -161,6 +161,23 @@ html, body, #root {
 }
 
 @media (max-width: 767px) {
+  .manual-edit-sections {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .manual-edit-sections > * {
+    order: 2;
+  }
+
+  .manual-edit-sections > .manual-edit-error {
+    order: 0;
+  }
+
+  .manual-edit-sections > .manual-edit-photos {
+    order: 1;
+  }
+
   .notification-drawer-panel {
     height: 100dvh;
     max-height: 100dvh;

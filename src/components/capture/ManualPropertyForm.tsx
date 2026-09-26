@@ -408,9 +408,9 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
       className="flex-1 min-h-0 flex flex-col overflow-hidden animate-fade-in"
     >
       {/* Área rolável com campos organizados */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 space-y-5 custom-scrollbar">
+      <div className="manual-edit-sections flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-4 space-y-5 custom-scrollbar">
         {errorMessage && (
-          <div className="p-3.5 rounded-2xl bg-status-danger/10 border border-status-danger/30 flex items-center justify-between text-status-danger text-xs">
+          <div className="manual-edit-error p-3.5 rounded-2xl bg-status-danger/10 border border-status-danger/30 flex items-center justify-between text-status-danger text-xs">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-4 h-4 text-status-danger flex-shrink-0" />
               <span>{errorMessage}</span>
@@ -925,7 +925,7 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
         </div>
 
         {/* ── 5. SEÇÃO EXCLUSIVA DE FOTOS (MODO MANUAL) ── */}
-        <div className="pt-5 border-t border-white/[0.06] space-y-3.5">
+        <div className="manual-edit-photos pt-5 border-t border-white/[0.06] space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-ink-primary text-xs font-bold uppercase tracking-wider">
               <ImageIcon className="w-3.5 h-3.5 text-accent" />
