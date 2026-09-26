@@ -17,6 +17,8 @@ import {
   Sparkles,
   Check,
   X,
+  ChevronLeft,
+  ChevronRight,
   ShieldCheck,
   Home,
   MoreHorizontal,
@@ -850,6 +852,27 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   );
                 })}
               </div>
+
+              {photos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
+                    className="hidden md:flex absolute left-5 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/20 items-center justify-center transition-colors"
+                    aria-label="Foto anterior"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0))}
+                    className="hidden md:flex absolute right-5 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/20 items-center justify-center transition-colors"
+                    aria-label="Próxima foto"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+                </>
+              )}
 
             </motion.div>
           </div>
