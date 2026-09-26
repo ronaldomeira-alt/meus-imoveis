@@ -881,7 +881,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
-                    className="hidden md:flex absolute left-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
+                    className="hidden md:flex absolute left-24 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
                     aria-label="Foto anterior"
                   >
                     <ChevronLeft className="w-6 h-6" />
