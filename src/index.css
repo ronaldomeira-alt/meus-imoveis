@@ -183,6 +183,17 @@ html, body, #root {
   pointer-events: auto;
 }
 
+@media (max-width: 767px) {
+  .match-scroll-shell {
+    overscroll-behavior-y: contain;
+  }
+
+  .match-tabs {
+    top: env(safe-area-inset-top, 0px);
+    padding-top: calc(0.25rem + env(safe-area-inset-top, 0px));
+  }
+}
+
 /* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {

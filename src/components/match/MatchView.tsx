@@ -220,7 +220,7 @@ export const MatchView: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 gap-3 overflow-hidden animate-fade-in p-2 sm:p-4">
+    <div className="match-scroll-shell flex-1 flex flex-col min-h-0 gap-3 overflow-y-auto md:overflow-hidden animate-fade-in p-2 sm:p-4">
       {/* ── Topo: Marca e Abas de Estado ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-line-subtle pb-3 shrink-0">
         <div className="flex items-center gap-3">
@@ -238,10 +238,10 @@ export const MatchView: React.FC = () => {
         </div>
 
         {/* Abas Padronizadas: Novos, Enviados, Pausados, Arquivados */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-2/60 border border-line-subtle self-start sm:self-center">
+        <div className="match-tabs sticky top-0 z-20 flex items-center gap-1.5 p-1 rounded-xl bg-surface-2/95 border border-line-subtle self-start sm:self-center w-full sm:w-auto">
           <button
             onClick={() => setActiveTab('novo')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'novo'
                 ? 'bg-accent text-white shadow-md shadow-accent/20'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
@@ -251,7 +251,7 @@ export const MatchView: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('enviado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'enviado'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
@@ -261,7 +261,7 @@ export const MatchView: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('pausado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'pausado'
                 ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
@@ -271,7 +271,7 @@ export const MatchView: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('arquivado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === 'arquivado'
                 ? 'bg-slate-700 text-white shadow-md'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
@@ -346,7 +346,7 @@ export const MatchView: React.FC = () => {
       </div>
 
       {/* ── GRID PRINCIPAL: 3 CARDS POR LINHA NO DESKTOP ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+      <div className="flex-1 min-h-0 overflow-visible md:overflow-y-auto pr-1">
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
