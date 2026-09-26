@@ -471,8 +471,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Miniaturas das Fotos */}
           {photos.length > 1 && (
             <div className="flex gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-              {photos.slice(1).map((p, idx) => {
-                const photoIndex = idx + 1;
+              {photos.map((p, idx) => {
+                const photoIndex = idx;
                 const thumbUrl = getPhotoUrl(p.storage_path);
                 const isSelected = photoIndex === selectedPhotoIndex;
                 return (
@@ -828,7 +828,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               className="relative max-w-6xl max-h-[85vh] w-full h-full flex items-center justify-center overflow-hidden"
             >
               <div
-                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-120 ease-out' : ''}`}
+                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-[180ms] ease-linear' : ''}`}
                 style={{
                   width: `${fullscreenSlideIndexes.length * 100}%`,
                   transform: `translateX(calc(-${100 / fullscreenSlideIndexes.length}% + ${fullscreenDragX}px))`,
@@ -837,11 +837,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 {fullscreenSlideIndexes.map((photoIndex) => {
                   const photo = photos[photoIndex];
                   return (
-                  <div key={photo.id || photoIndex} className="relative h-full flex-shrink-0 flex items-center justify-center px-1" style={{ width: `${100 / fullscreenSlideIndexes.length}%` }}>
+                  <div key={photo.id || photoIndex} className="relative h-full flex-shrink-0 flex items-center justify-center" style={{ width: `${100 / fullscreenSlideIndexes.length}%` }}>
                     <img
                       src={getPhotoUrl(photo.storage_path)}
                       alt=""
-                      className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl touch-none select-none"
+                      className="w-full h-full object-cover touch-none select-none"
                       style={photoIndex === selectedPhotoIndex
                         ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
                         : undefined}
