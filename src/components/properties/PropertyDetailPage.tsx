@@ -58,6 +58,9 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const galleryTouchStartX = useRef<number | null>(null);
+  const gallerySwipeDetected = useRef(false);
+  const fullscreenTouchStartX = useRef<number | null>(null);
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; closing: boolean } | null>(null);
   const panRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -368,7 +371,30 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         {/* ── 3. GALERIA COMPLETA DE FOTOGRAFIAS ── */}
         <div className="property-detail-gallery space-y-3">
           {/* Foto Principal em Destaque Widescreen */}
-          <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-3xl overflow-hidden bg-black/60 border border-line-subtle shadow-2xl group">
+          <div
+            className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-3xl overflow-hidden bg-black/60 border border-line-subtle shadow-2xl group cursor-zoom-in"
+            onClick={() => {
+              if (gallerySwipeDetected.current) {
+                gallerySwipeDetected.current = false;
+                return;
+              }
+              setIsFullscreen(true);
+            }}
+            onTouchStart={(event) => {
+              galleryTouchStartX.current = event.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(event) => {
+              const startX = galleryTouchStartX.current;
+              galleryTouchStartX.current = null;
+              if (startX === null || photos.length < 2) return;
+              const deltaX = (event.changedTouches[0]?.clientX ?? startX) - startX;
+              if (Math.abs(deltaX) < 45) return;
+              gallerySwipeDetected.current = true;
+              setSelectedPhotoIndex((prev) => deltaX < 0
+                ? (prev < photos.length - 1 ? prev + 1 : 0)
+                : (prev > 0 ? prev - 1 : photos.length - 1));
+            }}
+          >
             {currentPhotoUrl ? (
               currentPhoto?.media_type === 'video' || /\.(mp4|webm|mov)$/i.test(currentPhotoUrl) ? (
                 <video
@@ -397,14 +423,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             {photos.length > 1 && (
               <>
                 <button
-                  onClick={() => setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
+                  onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1)); }}
                   className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg active:scale-95"
                   aria-label="Foto anterior"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0))}
+                  onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0)); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg active:scale-95"
                   aria-label="Próxima foto"
                 >
@@ -417,7 +443,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             <div className="absolute bottom-4 right-4 flex items-center gap-2">
               {photos.length > 0 && (
                 <button
-                  onClick={() => setIsFullscreen(true)}
+                  onClick={(event) => { event.stopPropagation(); setIsFullscreen(true); }}
                   className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-ink-primary text-xs font-semibold border border-line-strong flex items-center gap-1.5 transition-all cursor-pointer shadow-lg active:scale-95"
                 >
                   <Maximize className="w-3.5 h-3.5" />
@@ -443,7 +469,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     key={p.id || idx}
                     onClick={() => setSelectedPhotoIndex(idx)}
-                    className={`relative w-24 sm:w-28 h-16 sm:h-20 rounded-2xl overflow-hidden flex-shrink-0 border-2 transition-all cursor-pointer ${
+                    className={`relative w-20 sm:w-28 h-16 sm:h-20 rounded-2xl overflow-hidden flex-shrink-0 border-2 transition-all cursor-pointer ${
                       isSelected
                         ? 'border-accent scale-105 shadow-[0_0_12px_rgba(0,229,255,0.4)]'
                         : 'border-transparent opacity-60 hover:opacity-100'
@@ -722,6 +748,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 pinchRef.current = { distance: touchDistance(event.touches), zoom: fullscreenZoom, pan: fullscreenPan, closing: false };
               } else if (event.touches.length === 1 && fullscreenZoom > 1) {
                 panRef.current = { x: event.touches[0].clientX - fullscreenPan.x, y: event.touches[0].clientY - fullscreenPan.y };
+              } else if (event.touches.length === 1) {
+                fullscreenTouchStartX.current = event.touches[0].clientX;
               }
             }}
             onTouchMove={(event) => {
@@ -746,7 +774,15 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 pinchRef.current = null;
                 if (closingPinch) closeFullscreen();
                 else if (fullscreenZoom < 1.02) resetFullscreenTransform();
+              } else if (fullscreenTouchStartX.current !== null && photos.length > 1) {
+                const deltaX = (event.changedTouches[0]?.clientX ?? fullscreenTouchStartX.current) - fullscreenTouchStartX.current;
+                if (Math.abs(deltaX) >= 45) {
+                  setSelectedPhotoIndex((prev) => deltaX < 0
+                    ? (prev < photos.length - 1 ? prev + 1 : 0)
+                    : (prev > 0 ? prev - 1 : photos.length - 1));
+                }
               }
+              fullscreenTouchStartX.current = null;
               if (event.touches.length === 0) panRef.current = null;
             }}
           >
