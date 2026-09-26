@@ -187,11 +187,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   return (
     <div className="property-detail-shell flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
       {/* ── 1. HEADER SUPERIOR DE NAVEGAÇÃO & AÇÕES ── */}
-      <div className="property-detail-header sticky top-0 z-20 pl-2 pr-2 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 flex items-center justify-between md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 sm:gap-3 min-w-0">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-full hidden w-5 border-b border-line-subtle bg-[var(--surface-1)] md:block lg:w-6"
-        />
+      <div className="property-detail-header sticky top-0 z-20 px-3 sm:px-6 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 flex items-center justify-between md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 sm:gap-3 min-w-0">
         <button
           onClick={onBack}
             className="shrink-0 justify-self-start flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
@@ -885,7 +881,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
-                    className="hidden md:flex absolute left-5 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/20 items-center justify-center transition-colors"
+                    className="hidden md:flex absolute left-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
                     aria-label="Foto anterior"
                   >
                     <ChevronLeft className="w-6 h-6" />
@@ -893,7 +889,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0))}
-                    className="hidden md:flex absolute right-5 top-1/2 -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/20 items-center justify-center transition-colors"
+                    className="hidden md:flex absolute right-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
                     aria-label="Próxima foto"
                   >
                     <ChevronRight className="w-6 h-6" />
