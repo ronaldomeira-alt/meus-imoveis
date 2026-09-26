@@ -151,7 +151,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           className="justify-self-start flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
         >
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-          <span>Voltar para estoque</span>
+          <span className="sm:hidden">Voltar</span>
+          <span className="hidden sm:inline">Voltar ao estoque</span>
         </button>
 
         {/* Grupo de Ações do Imóvel */}
@@ -179,7 +180,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           <button
             onClick={handleToggleInstagramStatus}
             title={isInstaPublished ? 'Clique para marcar como não publicado no Instagram' : 'Clique para marcar como publicado no Instagram'}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border active:scale-[0.98] ${
+            className={`hidden sm:flex px-3 py-1.5 rounded-xl text-xs font-semibold items-center gap-1.5 transition-all cursor-pointer border active:scale-[0.98] ${
               isInstaPublished
                 ? 'bg-status-success/15 border-status-success/40 text-status-success hover:bg-status-success/25'
                 : 'bg-white/5 hover:bg-white/10 text-ink-secondary hover:text-ink-primary border-line-subtle'
@@ -272,7 +273,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         {/* Título, Badges e Preço no Topo */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-line-subtle pb-5">
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="hidden sm:flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/[0.08] text-ink-secondary border border-line-strong">
                 {property.source_type}
               </span>
