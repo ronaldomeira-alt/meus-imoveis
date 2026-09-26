@@ -35,8 +35,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, o
   return (
     <div
       onClick={onClick}
-      className="card-surface overflow-hidden cursor-pointer group flex flex-col justify-between transition-all duration-200 hover:border-accent/40"
-      style={{ padding: '8px 8px 10px' }}
+      className="card-surface overflow-hidden cursor-pointer group flex flex-col justify-between transition-all duration-200 hover:border-accent/40 p-1.5 pb-2 sm:p-2 sm:pb-2.5"
     >
       {/* Foto quadrada para capas verticais e horizontais */}
       <div className="relative aspect-square overflow-hidden bg-black/40 rounded-lg">

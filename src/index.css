@@ -145,6 +145,19 @@ html, body, #root {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.property-detail-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+}
+
+.property-detail-header {
+  min-height: calc(3.25rem + env(safe-area-inset-top, 0px));
+  padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+}
+
 /* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {

@@ -139,9 +139,9 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
+    <div className="property-detail-shell flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
       {/* ── 1. HEADER SUPERIOR DE NAVEGAÇÃO & AÇÕES ── */}
-      <div className="sticky top-0 z-20 pl-2 pr-4 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="property-detail-header sticky top-0 z-20 pl-2 pr-4 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3 min-w-0">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 right-full hidden w-5 border-b border-line-subtle bg-[var(--surface-1)] md:block lg:w-6"
@@ -155,7 +155,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         </button>
 
         {/* Grupo de Ações do Imóvel */}
-        <div className="justify-self-center flex items-center gap-2">
+        <div className="justify-self-center flex items-center gap-1.5 sm:gap-2 min-w-0">
           {/* Criar Post Instagram com IA */}
           <button
             onClick={() => setIsPostEditorOpen(true)}
@@ -268,7 +268,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       </div>
 
       {/* ── 2. CONTEÚDO PRINCIPAL DA PÁGINA ── */}
-      <div className="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="max-w-7xl mx-auto w-full min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Título, Badges e Preço no Topo */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-line-subtle pb-5">
           <div className="space-y-2">

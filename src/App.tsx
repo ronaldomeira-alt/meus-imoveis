@@ -732,7 +732,7 @@ const CrmAppContent: React.FC = () => {
         {(activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados') && (
           <div className="flex-1 flex flex-col min-h-0 gap-2 overflow-hidden animate-fade-in">
             {/* Barra de Filtros Sticky */}
-            <div className="flex-shrink-0 sticky top-0 z-20 bg-[var(--bg-base)]/95">
+            <div className="flex-shrink-0 sm:sticky sm:top-0 z-20 bg-[var(--bg-base)]/95">
               <PropertyFilters
                 filters={filters}
                 onFilterChange={(newFilters) => setFilters(newFilters)}
@@ -758,7 +758,7 @@ const CrmAppContent: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid w-full max-w-[1570px] mx-auto grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 pb-8">
+                <div className="grid w-full max-w-[1570px] mx-auto grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 sm:gap-5 pb-8">
                   {filteredProperties.map((property) => (
                     <PropertyCard
                       key={property.id}
