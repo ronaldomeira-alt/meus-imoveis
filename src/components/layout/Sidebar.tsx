@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* ── Topo: Marca ── */}
         <div className="min-w-0">
-          <div className="h-14 px-4 flex items-center gap-2.5 border-b border-line-subtle">
+          <div className="app-sidebar-brand px-4 flex items-center gap-2.5 border-b border-line-subtle">
             <div
               className="w-7 h-7 rounded-lg bg-accent/15 border border-accent/30 flex items-center justify-center flex-shrink-0"
               title="RM Imóveis — Estoque Inteligente"

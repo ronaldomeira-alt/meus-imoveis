@@ -140,6 +140,11 @@ html, body, #root {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.app-sidebar-brand {
+  height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 /* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {
