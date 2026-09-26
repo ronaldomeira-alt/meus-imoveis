@@ -141,14 +141,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   return (
     <div className="property-detail-shell flex-1 flex flex-col min-h-0 overflow-y-auto animate-fade-in custom-scrollbar">
       {/* ── 1. HEADER SUPERIOR DE NAVEGAÇÃO & AÇÕES ── */}
-      <div className="property-detail-header sticky top-0 z-20 pl-2 pr-4 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3 min-w-0">
+      <div className="property-detail-header sticky top-0 z-20 pl-2 pr-2 sm:pl-4 sm:pr-6 py-2.5 border-b border-line-subtle bg-[var(--surface-1)] shadow-lg shadow-black/10 flex items-center justify-between md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 sm:gap-3 min-w-0">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 right-full hidden w-5 border-b border-line-subtle bg-[var(--surface-1)] md:block lg:w-6"
         />
         <button
           onClick={onBack}
-          className="justify-self-start flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
+            className="shrink-0 justify-self-start flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-ink-secondary hover:text-ink-primary bg-white/5 hover:bg-white/10 border border-line-subtle transition-all cursor-pointer group"
         >
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
           <span className="sm:hidden">Voltar</span>
@@ -156,11 +156,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         </button>
 
         {/* Grupo de Ações do Imóvel */}
-        <div className="justify-self-center flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div className="justify-self-center flex items-center justify-end gap-1 md:gap-2 min-w-0 flex-1 md:flex-none">
           {/* Criar Post Instagram com IA */}
           <button
             onClick={() => setIsPostEditorOpen(true)}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 shadow-md shadow-pink-500/20 hover:opacity-95 flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+            className="h-9 w-9 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 shadow-md shadow-pink-500/20 hover:opacity-95 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
             title="Criar publicação no Instagram com IA"
           >
             <InstagramIcon className="w-3.5 h-3.5" />
@@ -170,7 +170,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Editar */}
           <button
             onClick={() => onEdit(property)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-accent hover:text-ink-primary bg-accent/10 hover:bg-accent/20 border border-accent/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+            className="h-9 w-9 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-xl text-xs font-semibold text-accent hover:text-ink-primary bg-accent/10 hover:bg-accent/20 border border-accent/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
           >
             <Edit3 className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Editar imóvel</span>
@@ -195,14 +195,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Compartilhar */}
           <button
             onClick={handleShare}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] ${
+            className={`h-9 w-9 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] ${
               shareSuccess
                 ? 'bg-status-success/20 text-status-success border border-status-success/40'
                 : 'pill-surface text-ink-primary hover:text-ink-primary'
             }`}
           >
             {shareSuccess ? <Check className="w-3.5 h-3.5 text-status-success" /> : <Share2 className="w-3.5 h-3.5 text-accent" />}
-            <span>{shareSuccess ? 'Copiado!' : 'Compartilhar'}</span>
+            <span className="hidden md:inline">{shareSuccess ? 'Copiado!' : 'Compartilhar'}</span>
           </button>
 
           {/* Menu de Ações Secundárias (•••) */}
@@ -271,8 +271,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       {/* ── 2. CONTEÚDO PRINCIPAL DA PÁGINA ── */}
       <div className="property-detail-content max-w-7xl mx-auto w-full min-w-0 p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Título, Badges e Preço no Topo */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-line-subtle pb-5">
-          <div className="space-y-2">
+        <div className="property-detail-hero flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-line-subtle pb-5">
+          <div className="property-detail-intro space-y-2">
             <div className="hidden sm:flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/[0.08] text-ink-secondary border border-line-strong">
                 {property.source_type}
@@ -306,7 +306,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             )}
 
             {(property.address || property.condominium_name) && (
-              <p className="text-sm text-ink-secondary flex items-center gap-1.5">
+              <p className="property-detail-address-desktop hidden md:flex text-sm text-ink-secondary items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-accent flex-shrink-0" />
                 <span>
                   {property.condominium_name ? `${property.condominium_name} · ` : ''}
@@ -319,8 +319,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             )}
           </div>
 
-          <div className="text-left md:text-right flex-shrink-0 bg-white/[0.03] p-4 rounded-2xl border border-line-subtle">
-            <span className="text-xs uppercase font-bold text-accent tracking-wider block">
+          <div className="property-detail-summary text-left md:text-right flex-shrink-0 bg-white/[0.03] p-3 md:p-4 rounded-2xl border border-line-subtle">
+            <span className="hidden md:block text-xs uppercase font-bold text-accent tracking-wider">
               Valor de {property.purpose === 'Locação' ? 'Aluguel' : 'Venda'}
             </span>
             <div className="text-3xl sm:text-4xl font-black text-ink-primary tabular tracking-tight">
@@ -332,11 +332,23 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 {property.iptu && <span>IPTU: <strong>{formatPrice(property.iptu)}/ano</strong></span>}
               </div>
             )}
+            {(property.address || property.condominium_name) && (
+              <p className="mt-2 text-xs text-ink-secondary flex items-start gap-1.5 text-left md:hidden">
+                <MapPin className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                <span>
+                  {property.condominium_name ? `${property.condominium_name} · ` : ''}
+                  {property.address}
+                  {property.number ? `, ${property.number}` : ''}
+                  {property.complement ? ` · ${property.complement}` : ''}
+                  {' · João Pessoa - PB'}
+                </span>
+              </p>
+            )}
           </div>
         </div>
 
         {/* ── 3. GALERIA COMPLETA DE FOTOGRAFIAS ── */}
-        <div className="space-y-3">
+        <div className="property-detail-gallery space-y-3">
           {/* Foto Principal em Destaque Widescreen */}
           <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-3xl overflow-hidden bg-black/60 border border-line-subtle shadow-2xl group">
             {currentPhotoUrl ? (

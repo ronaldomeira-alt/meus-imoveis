@@ -166,6 +166,29 @@ html, body, #root {
   scroll-margin-top: calc(3.25rem + env(safe-area-inset-top, 0px));
 }
 
+@media (max-width: 767px) {
+  .property-detail-content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .property-detail-hero {
+    display: contents;
+  }
+
+  .property-detail-intro {
+    order: 1;
+  }
+
+  .property-detail-gallery {
+    order: 2;
+  }
+
+  .property-detail-summary {
+    order: 3;
+  }
+}
+
 .price-range-input {
   appearance: none;
   background: transparent;
