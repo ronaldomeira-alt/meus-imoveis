@@ -109,6 +109,13 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
     : (selectedPhotoIndex > 0 ? selectedPhotoIndex - 1 : photos.length - 1);
   const galleryPreviewPhoto = photos.length > 1 ? photos[galleryPreviewIndex] : null;
   const galleryPreviewUrl = galleryPreviewPhoto ? getPhotoUrl(galleryPreviewPhoto.storage_path) : '';
+  const fullscreenSlideIndexes = photos.length > 1
+    ? [
+        selectedPhotoIndex > 0 ? selectedPhotoIndex - 1 : photos.length - 1,
+        selectedPhotoIndex,
+        selectedPhotoIndex < photos.length - 1 ? selectedPhotoIndex + 1 : 0,
+      ]
+    : [selectedPhotoIndex];
 
   // Pré-carrega as fotos secundárias para que as miniaturas apareçam sem atraso perceptível.
   useEffect(() => {
@@ -821,24 +828,27 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               className="relative max-w-6xl max-h-[85vh] w-full h-full flex items-center justify-center overflow-hidden"
             >
               <div
-                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-200 ease-out' : ''}`}
+                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-120 ease-out' : ''}`}
                 style={{
-                  width: `${Math.max(photos.length, 1) * 100}%`,
-                  transform: `translateX(calc(-${selectedPhotoIndex * (100 / Math.max(photos.length, 1))}% + ${fullscreenDragX}px))`,
+                  width: `${fullscreenSlideIndexes.length * 100}%`,
+                  transform: `translateX(calc(-${100 / fullscreenSlideIndexes.length}% + ${fullscreenDragX}px))`,
                 }}
               >
-                {photos.map((photo, index) => (
-                  <div key={photo.id || index} className="relative h-full w-full flex-shrink-0 flex items-center justify-center px-1">
+                {fullscreenSlideIndexes.map((photoIndex) => {
+                  const photo = photos[photoIndex];
+                  return (
+                  <div key={photo.id || photoIndex} className="relative h-full flex-shrink-0 flex items-center justify-center px-1" style={{ width: `${100 / fullscreenSlideIndexes.length}%` }}>
                     <img
                       src={getPhotoUrl(photo.storage_path)}
                       alt=""
                       className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl touch-none select-none"
-                      style={index === selectedPhotoIndex
+                      style={photoIndex === selectedPhotoIndex
                         ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
                         : undefined}
                     />
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
             </motion.div>
