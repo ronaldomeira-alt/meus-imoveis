@@ -16,10 +16,7 @@ import {
   Compass,
   Sparkles,
   Check,
-  Maximize,
   X,
-  ChevronLeft,
-  ChevronRight,
   ShieldCheck,
   Home,
   MoreHorizontal,
@@ -419,49 +416,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             {/* Gradiente sutil */}
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-            {/* Controles de Navegação Anterior / Próxima */}
-            {photos.length > 1 && (
-              <>
-                <button
-                  onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1)); }}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg active:scale-95"
-                  aria-label="Foto anterior"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={(event) => { event.stopPropagation(); setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0)); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all opacity-80 hover:opacity-100 cursor-pointer shadow-lg active:scale-95"
-                  aria-label="Próxima foto"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
-
-            {/* Botão de Tela Cheia & Indicador */}
-            <div className="absolute bottom-4 right-4 flex items-center gap-2">
-              {photos.length > 0 && (
-                <button
-                  onClick={(event) => { event.stopPropagation(); setIsFullscreen(true); }}
-                  className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-ink-primary text-xs font-semibold border border-line-strong flex items-center gap-1.5 transition-all cursor-pointer shadow-lg active:scale-95"
-                >
-                  <Maximize className="w-3.5 h-3.5" />
-                  <span>Tela Cheia</span>
-                </button>
-              )}
-            </div>
-
-            {photos.length > 1 && (
-              <div className="absolute bottom-4 left-4 px-3 py-1 rounded-full text-xs font-semibold text-ink-primary bg-black/60 border border-line-strong">
-                Foto {selectedPhotoIndex + 1} de {photos.length}
-              </div>
-            )}
           </div>
 
           {/* Miniaturas das Fotos */}
           {photos.length > 1 && (
-            <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar">
+            <div className="flex gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
               {photos.map((p, idx) => {
                 const thumbUrl = getPhotoUrl(p.storage_path);
                 const isSelected = idx === selectedPhotoIndex;
@@ -469,7 +428,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     key={p.id || idx}
                     onClick={() => setSelectedPhotoIndex(idx)}
-                    className={`relative w-20 sm:w-28 h-16 sm:h-20 rounded-2xl overflow-hidden flex-shrink-0 border-2 transition-all cursor-pointer ${
+                    className={`relative w-24 sm:w-28 h-16 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all cursor-pointer ${
                       isSelected
                         ? 'border-accent scale-105 shadow-[0_0_12px_rgba(0,229,255,0.4)]'
                         : 'border-transparent opacity-60 hover:opacity-100'
@@ -809,35 +768,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 style={{ transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }}
               />
 
-              {photos.length > 1 && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
-                    }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all cursor-pointer"
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0));
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-black/60 hover:bg-black/80 text-ink-primary border border-line-strong flex items-center justify-center transition-all cursor-pointer"
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                </>
-              )}
             </motion.div>
-
-            {/* Indicador no rodapé */}
-            <div className="absolute bottom-4 px-4 py-1.5 rounded-full bg-black/60 border border-line-strong text-xs text-ink-primary">
-              {selectedPhotoIndex + 1} / {photos.length}
-            </div>
           </div>
         )}
       </AnimatePresence>
