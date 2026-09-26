@@ -107,6 +107,7 @@ const CrmAppContent: React.FC = () => {
 
   const getSectionFromPathname = (pathname: string): NavSection => {
     const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
+    if (clean.startsWith('/match')) return 'match';
     return PATH_TO_SECTION[clean] || 'dashboard';
   };
 
@@ -115,24 +116,7 @@ const CrmAppContent: React.FC = () => {
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
       if (!pathname.startsWith('/imoveis/')) {
-        const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
-        const sectionMap: Record<string, NavSection> = {
-          '/': 'dashboard',
-          '/dashboard': 'dashboard',
-          '/estoque': 'estoque',
-          '/match': 'match',
-          '/adicionar-imovel': 'captar',
-          '/captar': 'captar',
-          '/piloto': 'piloto',
-          '/piloto-automatico': 'piloto',
-          '/calendario': 'calendario',
-          '/parceiros': 'parceiros',
-          '/arquivados': 'arquivados',
-          '/relatorios': 'relatorios',
-          '/configuracoes': 'configuracoes',
-          '/config': 'configuracoes',
-        };
-        return sectionMap[clean] || 'dashboard';
+        return getSectionFromPathname(pathname);
       }
     }
     return 'dashboard';
@@ -791,7 +775,7 @@ const CrmAppContent: React.FC = () => {
 
         {/* ── VIEW MATCH (Fase 11) ── */}
         {activeSection === 'match' && (
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col h-full">
             <MatchView />
           </div>
         )}
