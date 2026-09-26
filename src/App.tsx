@@ -737,6 +737,10 @@ const CrmAppContent: React.FC = () => {
                 filters={filters}
                 onFilterChange={(newFilters) => setFilters(newFilters)}
                 availableNeighborhoods={availableNeighborhoods}
+                availablePriceBounds={{
+                  min: Math.min(...properties.map((property) => property.price), 0),
+                  max: Math.max(...properties.map((property) => property.price), 0),
+                }}
                 totalResults={filteredProperties.length}
               />
             </div>

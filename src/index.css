@@ -158,6 +158,31 @@ html, body, #root {
   padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
 }
 
+.price-range-input {
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.price-range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  border: 2px solid var(--surface-3);
+  pointer-events: auto;
+}
+
+.price-range-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  border: 2px solid var(--surface-3);
+  pointer-events: auto;
+}
+
 /* Waveform de gravação de áudio (Captação por IA) */
 @keyframes waveform-bounce {
   0%, 100% {
