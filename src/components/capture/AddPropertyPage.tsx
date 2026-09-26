@@ -520,7 +520,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden animate-fade-in">
+    <div className="add-property-page-shell flex-1 flex flex-col h-full overflow-hidden animate-fade-in">
       {/* ── Header da página ── */}
       <div className="flex-shrink-0 mb-4">
         <button

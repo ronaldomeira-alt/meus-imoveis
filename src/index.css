@@ -160,7 +160,16 @@ html, body, #root {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+/* A página de cadastro fica abaixo do shell principal no PWA standalone. */
+.add-property-page-shell {
+  box-sizing: border-box;
+}
+
 @media (max-width: 767px) {
+  .add-property-page-shell {
+    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  }
+
   .manual-edit-sections {
     display: flex;
     flex-direction: column;
