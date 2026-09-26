@@ -1,0 +1,19 @@
+{
+  "name": "Meus Imóveis — Estoque Inteligente",
+  "short_name": "Meus Imóveis",
+  "description": "Estoque inteligente de imóveis",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0D0F12",
+  "theme_color": "#020408",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x46",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
