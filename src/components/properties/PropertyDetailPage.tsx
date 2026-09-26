@@ -57,6 +57,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const galleryTouchStartX = useRef<number | null>(null);
   const gallerySwipeDetected = useRef(false);
+  const [galleryDragX, setGalleryDragX] = useState(0);
   const fullscreenTouchStartX = useRef<number | null>(null);
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; closing: boolean } | null>(null);
   const panRef = useRef<{ x: number; y: number } | null>(null);
@@ -99,6 +100,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const photos = property.photos && property.photos.length > 0 ? property.photos : [];
   const currentPhoto = photos[selectedPhotoIndex];
   const currentPhotoUrl = currentPhoto ? getPhotoUrl(currentPhoto.storage_path) : '';
+  const galleryPreviewIndex = galleryDragX < 0
+    ? (selectedPhotoIndex < photos.length - 1 ? selectedPhotoIndex + 1 : 0)
+    : (selectedPhotoIndex > 0 ? selectedPhotoIndex - 1 : photos.length - 1);
+  const galleryPreviewPhoto = photos.length > 1 ? photos[galleryPreviewIndex] : null;
+  const galleryPreviewUrl = galleryPreviewPhoto ? getPhotoUrl(galleryPreviewPhoto.storage_path) : '';
 
   // Navegação de fotos por teclado
   useEffect(() => {
@@ -379,12 +385,22 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             }}
             onTouchStart={(event) => {
               galleryTouchStartX.current = event.touches[0]?.clientX ?? null;
+              setGalleryDragX(0);
+            }}
+            onTouchMove={(event) => {
+              const startX = galleryTouchStartX.current;
+              if (startX === null || photos.length < 2) return;
+              setGalleryDragX((event.touches[0]?.clientX ?? startX) - startX);
             }}
             onTouchEnd={(event) => {
               const startX = galleryTouchStartX.current;
               galleryTouchStartX.current = null;
-              if (startX === null || photos.length < 2) return;
+              if (startX === null || photos.length < 2) {
+                setGalleryDragX(0);
+                return;
+              }
               const deltaX = (event.changedTouches[0]?.clientX ?? startX) - startX;
+              setGalleryDragX(0);
               if (Math.abs(deltaX) < 45) return;
               gallerySwipeDetected.current = true;
               setSelectedPhotoIndex((prev) => deltaX < 0
@@ -400,11 +416,25 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   className="w-full h-full object-contain bg-black"
                 />
               ) : (
-                <img
-                  src={currentPhotoUrl}
-                  alt={property.neighborhood}
-                  className="w-full h-full object-cover"
-                />
+                <>
+                  <img
+                    src={currentPhotoUrl}
+                    alt={property.neighborhood}
+                    className="w-full h-full object-cover transition-transform duration-200 ease-out"
+                    style={{ transform: `translateX(${galleryDragX}px)`, transitionDuration: galleryDragX === 0 ? '200ms' : '0ms' }}
+                  />
+                  {galleryPreviewUrl && (
+                    <img
+                      src={galleryPreviewUrl}
+                      alt={property.neighborhood}
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-200 ease-out"
+                      style={{
+                        transform: `translateX(calc(${galleryDragX < 0 ? '100%' : '-100%'} + ${galleryDragX}px))`,
+                        transitionDuration: galleryDragX === 0 ? '200ms' : '0ms',
+                      }}
+                    />
+                  )}
+                </>
               )
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-ink-secondary bg-surface-2">
