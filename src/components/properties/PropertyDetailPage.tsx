@@ -106,6 +106,15 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const galleryPreviewPhoto = photos.length > 1 ? photos[galleryPreviewIndex] : null;
   const galleryPreviewUrl = galleryPreviewPhoto ? getPhotoUrl(galleryPreviewPhoto.storage_path) : '';
 
+  // Pré-carrega as fotos secundárias para que as miniaturas apareçam sem atraso perceptível.
+  useEffect(() => {
+    photos.slice(1).forEach((photo) => {
+      const image = new window.Image();
+      image.decoding = 'async';
+      image.src = getPhotoUrl(photo.storage_path);
+    });
+  }, [property.id, photos]);
+
   // Navegação de fotos por teclado
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -451,20 +460,21 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Miniaturas das Fotos */}
           {photos.length > 1 && (
             <div className="flex gap-1.5 overflow-x-auto pb-2 custom-scrollbar">
-              {photos.map((p, idx) => {
+              {photos.slice(1).map((p, idx) => {
+                const photoIndex = idx + 1;
                 const thumbUrl = getPhotoUrl(p.storage_path);
-                const isSelected = idx === selectedPhotoIndex;
+                const isSelected = photoIndex === selectedPhotoIndex;
                 return (
                   <button
-                    key={p.id || idx}
-                    onClick={() => setSelectedPhotoIndex(idx)}
+                    key={p.id || photoIndex}
+                    onClick={() => setSelectedPhotoIndex(photoIndex)}
                     className={`relative w-24 sm:w-28 h-16 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all cursor-pointer ${
                       isSelected
                         ? 'border-accent scale-105 shadow-[0_0_12px_rgba(0,229,255,0.4)]'
                         : 'border-transparent opacity-60 hover:opacity-100'
                     }`}
                   >
-                    <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={thumbUrl} alt="" loading="eager" decoding="async" className="w-full h-full object-cover" />
                   </button>
                 );
               })}
