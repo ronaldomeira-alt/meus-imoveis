@@ -177,6 +177,10 @@ html, body, #root {
     display: contents !important;
   }
 
+  .property-detail-content > * {
+    order: 4;
+  }
+
   .property-detail-intro {
     order: 1 !important;
     margin-bottom: 1.25rem;
