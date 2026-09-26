@@ -74,8 +74,83 @@ const CrmAppContent: React.FC = () => {
   const { signOut } = useAuth();
   const [currentUser] = useCurrentUser();
 
-  // ── Navegação Ativa ──
-  const [activeSection, setActiveSection] = useState<NavSection>('dashboard');
+  // ── Mapeamento de Rotas e Persistência na URL (F5 / Histórico) ──
+  const SECTION_TO_PATH: Record<NavSection, string> = useMemo(() => ({
+    dashboard: '/dashboard',
+    estoque: '/estoque',
+    match: '/match',
+    captar: '/adicionar-imovel',
+    piloto: '/piloto-automatico',
+    calendario: '/calendario',
+    parceiros: '/parceiros',
+    arquivados: '/arquivados',
+    relatorios: '/relatorios',
+    configuracoes: '/configuracoes',
+  }), []);
+
+  const PATH_TO_SECTION: Record<string, NavSection> = useMemo(() => ({
+    '/': 'dashboard',
+    '/dashboard': 'dashboard',
+    '/estoque': 'estoque',
+    '/match': 'match',
+    '/adicionar-imovel': 'captar',
+    '/captar': 'captar',
+    '/piloto': 'piloto',
+    '/piloto-automatico': 'piloto',
+    '/calendario': 'calendario',
+    '/parceiros': 'parceiros',
+    '/arquivados': 'arquivados',
+    '/relatorios': 'relatorios',
+    '/configuracoes': 'configuracoes',
+    '/config': 'configuracoes',
+  }), []);
+
+  const getSectionFromPathname = (pathname: string): NavSection => {
+    const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
+    return PATH_TO_SECTION[clean] || 'dashboard';
+  };
+
+  // ── Navegação Ativa (inicializada a partir da URL) ──
+  const [activeSection, setActiveSection] = useState<NavSection>(() => {
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      if (!pathname.startsWith('/imoveis/')) {
+        const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
+        const sectionMap: Record<string, NavSection> = {
+          '/': 'dashboard',
+          '/dashboard': 'dashboard',
+          '/estoque': 'estoque',
+          '/match': 'match',
+          '/adicionar-imovel': 'captar',
+          '/captar': 'captar',
+          '/piloto': 'piloto',
+          '/piloto-automatico': 'piloto',
+          '/calendario': 'calendario',
+          '/parceiros': 'parceiros',
+          '/arquivados': 'arquivados',
+          '/relatorios': 'relatorios',
+          '/configuracoes': 'configuracoes',
+          '/config': 'configuracoes',
+        };
+        return sectionMap[clean] || 'dashboard';
+      }
+    }
+    return 'dashboard';
+  });
+
+  const navigateToSection = (section: NavSection, replace = false) => {
+    setViewingPropertyId(null);
+    setActiveSection(section);
+    setIsMobileNavOpen(false);
+    const targetPath = SECTION_TO_PATH[section] || '/dashboard';
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      if (replace) {
+        window.history.replaceState({ section }, '', targetPath);
+      } else {
+        window.history.pushState({ section }, '', targetPath);
+      }
+    }
+  };
 
   // ── Dados do Catálogo de Imóveis ──
   const [properties, setProperties] = useState<Property[]>(() => {
@@ -161,32 +236,47 @@ const CrmAppContent: React.FC = () => {
     return properties.find((p) => p.id === viewingPropertyId) || null;
   }, [properties, viewingPropertyId]);
 
-  // ── Sincronização de Rota SPA (/imoveis/:id) e Histórico do Navegador ──
+  // ── Sincronização de Rotas SPA (/imoveis/:id, seções) e Histórico do Navegador ──
   useEffect(() => {
     const parseUrl = () => {
-      const match = window.location.pathname.match(/^\/imoveis\/([^/]+)$/);
+      const pathname = window.location.pathname;
+      const match = pathname.match(/^\/imoveis\/([^/]+)$/);
       if (match && match[1]) {
         setViewingPropertyId(match[1]);
       } else {
         setViewingPropertyId(null);
+        const section = getSectionFromPathname(pathname);
+        setActiveSection(section);
       }
     };
 
     parseUrl();
 
+    // Normaliza URL inicial '/' para '/dashboard' sem quebrar histórico
+    if (window.location.pathname === '/') {
+      window.history.replaceState({ section: 'dashboard' }, '', '/dashboard');
+    }
+
     window.addEventListener('popstate', parseUrl);
     return () => window.removeEventListener('popstate', parseUrl);
-  }, []);
+  }, [getSectionFromPathname]);
 
   const handleOpenDetail = (property: Property) => {
     setViewingPropertyId(property.id);
-    window.history.pushState({ propertyId: property.id }, '', `/imoveis/${property.id}`);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(
+        { propertyId: property.id, section: activeSection },
+        '',
+        `/imoveis/${property.id}`
+      );
+    }
   };
 
   const handleBackToInventory = () => {
     setViewingPropertyId(null);
-    if (window.location.pathname.startsWith('/imoveis/')) {
-      window.history.pushState(null, '', '/');
+    if (typeof window !== 'undefined') {
+      const targetPath = SECTION_TO_PATH[activeSection] || '/estoque';
+      window.history.pushState({ section: activeSection }, '', targetPath);
     }
   };
 
@@ -498,9 +588,7 @@ const CrmAppContent: React.FC = () => {
       <Sidebar
         activeSection={activeSection}
         onSelectSection={(section) => {
-          handleBackToInventory();
-          setActiveSection(section);
-          setIsMobileNavOpen(false);
+          navigateToSection(section);
         }}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
@@ -517,9 +605,9 @@ const CrmAppContent: React.FC = () => {
           <AddPropertyPage
             onSaveProperty={(p) => {
               handleSaveNewProperty(p);
-              setActiveSection('estoque');
+              navigateToSection('estoque');
             }}
-            onBack={() => setActiveSection('dashboard')}
+            onBack={() => navigateToSection('dashboard')}
             geminiApiKey={geminiApiKey}
             groqApiKey={groqApiKey}
             preferredAIProvider={preferredAIProvider}
@@ -541,17 +629,17 @@ const CrmAppContent: React.FC = () => {
           showGreeting={activeSection === 'dashboard'}
           sectionTitle={activeSection === 'estoque' ? 'Estoque' : activeSection === 'parceiros' ? 'Imóveis em Parceria' : activeSection === 'arquivados' ? 'Imóveis Vendidos e Arquivados' : undefined}
           sectionCount={activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados' ? filteredProperties.length : undefined}
-          onAddProperty={activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados' ? () => setActiveSection('captar') : undefined}
+          onAddProperty={activeSection === 'estoque' || activeSection === 'parceiros' || activeSection === 'arquivados' ? () => navigateToSection('captar') : undefined}
           searchQuery={searchQuery}
           onSearchChange={(q) => {
             setSearchQuery(q);
             if (activeSection === 'dashboard' && q.trim()) {
-              setActiveSection('estoque');
+              navigateToSection('estoque');
             }
           }}
           unreadNotificationsCount={unreadCount}
           onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
-          onOpenSettings={() => setActiveSection('configuracoes')}
+          onOpenSettings={() => navigateToSection('configuracoes')}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
           currentUser={currentUser}
           onLogout={signOut}
@@ -594,7 +682,7 @@ const CrmAppContent: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
-                    onClick={() => setActiveSection('estoque')}
+                    onClick={() => navigateToSection('estoque')}
                     className="btn-primary px-2.5 py-1 rounded-lg text-[11px] cursor-pointer"
                   >
                     Ver no catálogo ({filteredProperties.length}) →
@@ -617,7 +705,7 @@ const CrmAppContent: React.FC = () => {
                   data={stats.byNeighborhood}
                   selectedNeighborhood={filters.neighborhood}
                   onSelectNeighborhood={handleSelectNeighborhood}
-                  onViewAll={() => setActiveSection('estoque')}
+                  onViewAll={() => navigateToSection('estoque')}
                 />
               </div>
 
@@ -628,7 +716,7 @@ const CrmAppContent: React.FC = () => {
                   totalActive={stats.totalActive}
                   selectedType={filters.type}
                   onSelectType={handleSelectPropertyType}
-                  onViewAll={() => setActiveSection('estoque')}
+                  onViewAll={() => navigateToSection('estoque')}
                 />
               </div>
 
@@ -640,7 +728,7 @@ const CrmAppContent: React.FC = () => {
                   selectedMinPrice={filters.minPrice}
                   selectedMaxPrice={filters.maxPrice}
                   onSelectRange={handleSelectPriceRange}
-                  onViewAll={() => setActiveSection('estoque')}
+                  onViewAll={() => navigateToSection('estoque')}
                 />
               </div>
             </div>
@@ -650,7 +738,7 @@ const CrmAppContent: React.FC = () => {
               <RecentCarousel
                 properties={properties.filter((p) => p.status === 'Ativo')}
                 onSelectProperty={(prop) => handleOpenDetail(prop)}
-                onViewAll={() => setActiveSection('estoque')}
+                onViewAll={() => navigateToSection('estoque')}
               />
             </div>
           </div>
@@ -730,7 +818,7 @@ const CrmAppContent: React.FC = () => {
           <div className="flex-1 min-h-0 overflow-hidden">
             <MarketingCalendarView
               properties={properties}
-              onOpenPiloto={() => setActiveSection('piloto')}
+              onOpenPiloto={() => navigateToSection('piloto')}
             />
           </div>
         )}
@@ -858,7 +946,7 @@ const CrmAppContent: React.FC = () => {
           <button
             onClick={() => {
               setMatchToast(null);
-              setActiveSection('match');
+              navigateToSection('match');
             }}
             className="btn-primary px-3 py-1.5 rounded-lg text-xs font-bold flex-shrink-0 cursor-pointer"
           >

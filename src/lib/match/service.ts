@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../supabase';
 import type { Property } from '../../types/property';
 import type {
   PropertyProjection,
@@ -11,6 +12,25 @@ import type {
 } from './types';
 import { propertyToProjection, ensureUuid } from './property-adapter';
 import { generateTrackingToken, buildSharePublicUrl, buildWhatsAppPersonalLink } from './tokens';
+
+/**
+ * Obtém o cabeçalho Authorization: Bearer <access_token> a partir da sessão Supabase no browser.
+ */
+async function getAuthHeader(): Promise<Record<string, string> | null> {
+  if (typeof window === 'undefined' || !supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data?.session?.access_token) {
+      return null;
+    }
+    return {
+      Authorization: `Bearer ${data.session.access_token}`,
+    };
+  } catch (err) {
+    console.warn('[getAuthHeader] Falha ao obter token da sessão:', err);
+    return null;
+  }
+}
 
 const getEnv = (key: string): string => {
   if (typeof import.meta !== 'undefined' && (import.meta as any)?.env?.[key]) {
@@ -34,7 +54,9 @@ let _cachedTunnelClient: SupabaseClient | null = null;
 export function getTunnelClient(): SupabaseClient | null {
   if (_cachedTunnelClient) return _cachedTunnelClient;
   const supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const serviceRoleKey = typeof window === 'undefined' ? getEnv('SUPABASE_SERVICE_ROLE_KEY') : '';
   const supabaseKey =
+    serviceRoleKey ||
     getEnv('VITE_SUPABASE_ANON_KEY') ||
     getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') ||
     '';
@@ -328,10 +350,40 @@ export async function getMatchesForProperty(
     status?: MatchStatus;
   }
 ): Promise<MatchRecord[]> {
-  if (!tunnelClient) return [];
   const accountId = options?.accountId || DEFAULT_ACCOUNT_ID;
   const canonicalPropId = ensureUuid(propertyId);
   const minScore = options?.minScore ?? 50;
+
+  if (typeof window !== 'undefined') {
+    const authHeaders = await getAuthHeader();
+    if (!authHeaders) {
+      console.warn('[getMatchesForProperty] Usuário não autenticado.');
+      return [];
+    }
+
+    try {
+      const url = new URL('/api/matches', window.location.origin);
+      url.searchParams.set('propertyId', canonicalPropId);
+      url.searchParams.set('minScore', String(minScore));
+      if (options?.status) url.searchParams.set('status', options.status);
+      if (options?.onlyActive) url.searchParams.set('onlyActive', 'true');
+
+      const res = await fetch(url.toString(), {
+        headers: authHeaders,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.matches)) {
+          return data.matches;
+        }
+      }
+    } catch (err) {
+      console.warn('[getMatchesForProperty] Falha em /api/matches:', err);
+    }
+    return [];
+  }
+
+  if (!tunnelClient) return [];
 
   let query = tunnelClient
     .from('lead_property_matches')
@@ -472,9 +524,39 @@ export async function getAllMatches(options?: {
   minScore?: number;
   search?: string;
 }): Promise<MatchRecord[]> {
-  if (!tunnelClient) return [];
   const accountId = options?.accountId || DEFAULT_ACCOUNT_ID;
   const minScore = options?.minScore ?? 50;
+  const status = options?.status || 'novo';
+
+  if (typeof window !== 'undefined') {
+    const authHeaders = await getAuthHeader();
+    if (!authHeaders) {
+      console.warn('[getAllMatches] Usuário não autenticado.');
+      return [];
+    }
+
+    try {
+      const url = new URL('/api/matches', window.location.origin);
+      url.searchParams.set('status', status);
+      url.searchParams.set('minScore', String(minScore));
+      if (options?.search) url.searchParams.set('search', options.search);
+
+      const res = await fetch(url.toString(), {
+        headers: authHeaders,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.matches)) {
+          return data.matches;
+        }
+      }
+    } catch (err) {
+      console.warn('[getAllMatches] Falha em /api/matches:', err);
+    }
+    return [];
+  }
+
+  if (!tunnelClient) return [];
 
   let query = tunnelClient
     .from('lead_property_matches')
@@ -607,9 +689,41 @@ export async function suppressMatch(args: {
   propertyId: string;
   accountId?: string;
 }): Promise<boolean> {
-  if (!tunnelClient) return false;
   const accountId = args.accountId || DEFAULT_ACCOUNT_ID;
   const canonicalPropId = ensureUuid(args.propertyId);
+
+  if (typeof window !== 'undefined') {
+    const authHeaders = await getAuthHeader();
+    if (!authHeaders) {
+      console.warn('[suppressMatch] Usuário não autenticado.');
+      return false;
+    }
+
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'suppress',
+          matchId: args.matchId,
+          leadId: args.leadId,
+          propertyId: canonicalPropId,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return Boolean(data.success);
+      }
+    } catch (err) {
+      console.warn('[suppressMatch] Falha em /api/matches:', err);
+    }
+    return false;
+  }
+
+  if (!tunnelClient) return false;
 
   const { error } = await tunnelClient
     .from('lead_property_matches')
@@ -632,6 +746,36 @@ export async function updateMatchStatus(
   newStatus: MatchStatus,
   accountId: string = DEFAULT_ACCOUNT_ID
 ): Promise<boolean> {
+  if (typeof window !== 'undefined') {
+    const authHeaders = await getAuthHeader();
+    if (!authHeaders) {
+      console.warn('[updateMatchStatus] Usuário não autenticado.');
+      return false;
+    }
+
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'update_status',
+          matchId,
+          newStatus,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return Boolean(data.success);
+      }
+    } catch (err) {
+      console.warn('[updateMatchStatus] Falha em /api/matches:', err);
+    }
+    return false;
+  }
+
   if (!tunnelClient) return false;
   const now = new Date().toISOString();
   const updateData: Record<string, any> = {
