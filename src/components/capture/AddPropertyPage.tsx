@@ -10,6 +10,7 @@ import {
   Loader2,
   AlertCircle,
   RotateCcw,
+  Link2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AudioRecorder } from '../../lib/audio-recorder';
@@ -26,6 +27,8 @@ import { PropertyGallery } from './PropertyGallery';
 import { uploadPropertyMedia, deletePropertyMedia } from '../../lib/r2-media';
 import { PropertyFicha } from './PropertyFicha';
 import { AudioWaveform } from '../ui/AudioWaveform';
+import { supabase } from '../../lib/supabase';
+import { prepareInstagramProperty, type InstagramPost } from '../../lib/instagram-import';
 
 const emptyReviewData: ExtractedPropertyData = {
   purpose: null,
@@ -116,6 +119,9 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
 
   const [textInput, setTextInput] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [isImportingInstagram, setIsImportingInstagram] = useState(false);
+  const [importProgress, setImportProgress] = useState('');
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -149,12 +155,19 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   }, [textInput, mode]);
 
   const handleClearFicha = () => {
+    if (isImportingInstagram || isProcessingImages) return;
     images.forEach((image) => {
       if (image.previewUrl.startsWith('blob:')) URL.revokeObjectURL(image.previewUrl);
+      if (image.storageProvider === 'r2' && image.objectKey) {
+        deletePropertyMedia(propertyIdRef.current, { mediaId: image.id, objectKey: image.objectKey })
+          .catch((error) => console.error('Erro ao remover foto descartada:', error));
+      }
     });
     setImages([]);
     setReviewData(emptyReviewData);
     setTextInput('');
+    setInstagramUrl('');
+    setImportProgress('');
     setErrorMessage(null);
     setProcessingStatus('');
     setIsProcessingImages(false);
@@ -162,6 +175,11 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
     handleCancelRecording();
     setShowValidationErrors(false);
     setShowClearModal(false);
+  };
+
+  const handleLeaveWithoutSaving = () => {
+    handleClearFicha();
+    onBack();
   };
 
   useEffect(() => {
@@ -338,6 +356,86 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
     setImages((prev) => prev.map((img, i) => ({ ...img, isCover: i === index })));
   };
 
+  const handleImportInstagram = async () => {
+    if (!instagramUrl.trim() || isImportingInstagram || isProcessingImages || isProcessingAI || isRecording || isTranscribing) return;
+    if (images.length || textInput.trim() || reviewData.type || reviewData.neighborhood || reviewData.price || reviewData.instagram_source_url) {
+      setErrorMessage('Para importar uma publicação, comece com a ficha vazia. Use “Limpar informações” antes de prosseguir.');
+      return;
+    }
+    setIsImportingInstagram(true);
+    setImportProgress('Lendo a publicação do Instagram...');
+    setErrorMessage(null);
+    try {
+      const { data: { session } } = await supabase!.auth.getSession();
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente para importar.');
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` };
+      const response = await fetch('/api/instagram-import', {
+        method: 'POST', headers, body: JSON.stringify({ action: 'post', url: instagramUrl.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Não foi possível ler a publicação.');
+      const post = body.post as InstagramPost;
+
+      setImportProgress('Organizando os dados do imóvel...');
+      const extraction = post.caption.trim()
+        ? await extractPropertyMultiProvider({ text: post.caption, groqApiKey, geminiApiKey, preferredProvider: preferredAIProvider })
+        : { data: { ...emptyReviewData } };
+      setReviewData(prepareInstagramProperty(post, extraction.data));
+      setInstagramUrl(post.url);
+
+      let importedCount = 0;
+      for (let i = 0; i < post.images.length; i++) {
+        setImportProgress(`Importando foto ${i + 1} de ${post.images.length}...`);
+        try {
+          const imageResponse = await fetch('/api/instagram-import', {
+            method: 'POST', headers, body: JSON.stringify({ action: 'image', url: post.images[i] }),
+          });
+          if (!imageResponse.ok) throw new Error('Foto indisponível.');
+          const blob = await imageResponse.blob();
+          const extension = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+          const processed = await processImageFile(new File([blob], `instagram-${i + 1}.${extension}`, { type: blob.type }));
+          const tempId = `instagram-${Date.now()}-${i}`;
+          processed.id = tempId;
+          processed.isCover = images.length === 0 && importedCount === 0;
+          processed.isUploading = true;
+          setImages((previous) => [...previous, processed]);
+          try {
+            const uploaded = await uploadPropertyMedia(propertyIdRef.current, processed.file!, {
+              sortOrder: images.length + importedCount,
+              isCover: processed.isCover,
+              onProgress: (progress) => setImages((previous) => previous.map((image) =>
+                image.id === tempId ? { ...image, uploadProgress: progress.pct } : image)),
+            });
+            setImages((previous) => previous.map((image) => image.id === tempId ? {
+              ...image, id: uploaded.id, objectKey: uploaded.object_key,
+              storagePath: uploaded.object_key, storageProvider: 'r2',
+              previewUrl: uploaded.public_url || image.previewUrl,
+              isUploading: false, uploadProgress: 100,
+            } : image));
+            importedCount++;
+          } catch (uploadError) {
+            setImages((previous) => previous.filter((image) => image.id !== tempId));
+            URL.revokeObjectURL(processed.previewUrl);
+            console.error('Falha ao salvar foto importada:', uploadError);
+          }
+        } catch (imageError) {
+          console.error('Falha ao ler foto do Instagram:', imageError);
+        }
+      }
+      if (post.images.length > importedCount) {
+        setErrorMessage(`${post.images.length - importedCount} foto(s) não puderam ser importadas. Confira a galeria antes de salvar.`);
+      } else if (!post.images.length) {
+        setErrorMessage('Os dados foram lidos, mas esta publicação não disponibilizou fotos. Adicione-as antes de salvar.');
+      }
+      setImportProgress(`Ficha preenchida. ${importedCount} foto(s) importada(s). Confira os dados antes de salvar.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível importar a publicação.');
+      setImportProgress('');
+    } finally {
+      setIsImportingInstagram(false);
+    }
+  };
+
   // ── Atualização reativa de campo (usada pela ficha, IA e edição manual por igual) ──
   const handleUpdateReviewField = (field: keyof ExtractedPropertyData, value: any) => {
     setReviewData((prev) => {
@@ -437,6 +535,10 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const progressPct = Math.round(((10 - pendingKeys.length) / 10) * 100);
 
   const handleConfirmSave = () => {
+    if (isImportingInstagram || isProcessingImages || isProcessingAI || images.some((image) => image.isUploading || image.uploadError)) {
+      setErrorMessage('Aguarde o fim da importação e confira as fotos antes de salvar.');
+      return;
+    }
     if (!requiredValidation.valid) {
       setShowValidationErrors(true);
       setErrorMessage(`Preencha os campos obrigatórios antes de salvar: ${requiredValidation.missingLabels.join(', ')}.`);
@@ -500,6 +602,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       owner_phone: reviewData.owner_phone || undefined,
       partner_name: reviewData.partner_name || undefined,
       partner_phone: reviewData.partner_phone || undefined,
+      instagram_source_url: reviewData.instagram_source_url || undefined,
       notes: reviewData.notes || '',
       status: 'Ativo',
       created_at: new Date().toISOString(),
@@ -525,8 +628,9 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       <div className="flex-shrink-0 mb-4">
         <button
           type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors mb-2 cursor-pointer"
+          onClick={handleLeaveWithoutSaving}
+          disabled={isImportingInstagram}
+          className="flex items-center gap-1.5 text-xs font-semibold text-ink-secondary hover:text-ink-primary transition-colors mb-2 cursor-pointer disabled:opacity-40"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Voltar
@@ -545,6 +649,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             <button
               type="button"
               onClick={() => setShowClearModal(true)}
+              disabled={isImportingInstagram || isProcessingImages}
               title="Limpar todas as informações da ficha, inclusive as fotos"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-ink-secondary hover:text-ink-primary hover:bg-white/[0.05] border border-line-subtle transition-all cursor-pointer"
             >
@@ -581,7 +686,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             <button
               type="button"
               onClick={handleConfirmSave}
-              disabled={!requiredValidation.valid}
+              disabled={!requiredValidation.valid || isImportingInstagram || isProcessingImages || isProcessingAI || images.some((image) => image.isUploading || image.uploadError)}
               title={!requiredValidation.valid ? `Faltam: ${requiredValidation.missingLabels.join(', ')}` : 'Salvar imóvel'}
               className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:cursor-not-allowed ${
                 requiredValidation.valid
@@ -594,6 +699,35 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="flex-shrink-0 mb-3 rounded-xl border border-line-subtle bg-white/[0.025] p-3">
+        <label htmlFor="instagram-import-url" className="flex items-center gap-1.5 text-xs font-semibold text-ink-primary mb-2">
+          <Link2 className="w-3.5 h-3.5 text-accent" /> Importar publicação do Instagram
+        </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            id="instagram-import-url"
+            type="url"
+            value={instagramUrl}
+            onChange={(event) => setInstagramUrl(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleImportInstagram(); } }}
+            placeholder="Cole o link da publicação de um parceiro ou do seu perfil"
+            disabled={isImportingInstagram}
+            className="flex-1 min-w-0 rounded-lg border border-line-subtle bg-surface-1 px-3 py-2 text-xs text-ink-primary placeholder:text-ink-secondary focus:outline-none focus:border-accent/50 disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => void handleImportInstagram()}
+            disabled={isImportingInstagram || isProcessingImages || isProcessingAI || isRecording || isTranscribing || !instagramUrl.trim()}
+            className="btn-primary rounded-lg px-4 py-2 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isImportingInstagram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+            Importar dados e fotos
+          </button>
+        </div>
+        <p className="text-[10px] text-ink-secondary mt-1.5">Publicações públicas. A ficha fica editável e o imóvel só entra no estoque ao salvar.</p>
+        {importProgress && <p role="status" className="text-[10px] text-accent mt-1.5">{importProgress}</p>}
       </div>
 
       {/* ── Modal de Confirmação para Limpar Ficha ── */}
@@ -652,19 +786,21 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
           onRemoveImage={handleRemoveImage}
           onSetCover={handleSetCover}
           onReorderImages={(newImages) => setImages(newImages)}
-          isProcessing={isProcessingImages}
+          isProcessing={isProcessingImages || isImportingInstagram}
         />
 
         <div className="h-px bg-line-subtle/50" />
 
-        <PropertyFicha
-          data={reviewData}
-          onUpdateField={handleUpdateReviewField}
-          requiredValidation={requiredValidation}
-          pendingLabels={pendingLabels}
-          progressPct={progressPct}
-          showValidationErrors={showValidationErrors}
-        />
+        <div className={isImportingInstagram ? 'pointer-events-none opacity-60' : ''}>
+          <PropertyFicha
+            data={reviewData}
+            onUpdateField={handleUpdateReviewField}
+            requiredValidation={requiredValidation}
+            pendingLabels={pendingLabels}
+            progressPct={progressPct}
+            showValidationErrors={showValidationErrors}
+          />
+        </div>
       </div>
 
       {/* ── Entrada por texto/voz (modo IA) com base ancorada e expansão suave ── */}
@@ -703,7 +839,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
                     if (errorMessage) setErrorMessage(null);
                   }}
                   onKeyDown={handleKeyDown}
-                  disabled={isProcessingAI}
+                  disabled={isProcessingAI || isImportingInstagram}
                   rows={1}
                   placeholder="Fale ou escreva os dados do imóvel..."
                   className="flex-1 bg-transparent text-ink-primary placeholder-ink-secondary/60 text-xs sm:text-sm focus:outline-none resize-none py-1 disabled:opacity-50 transition-[height] duration-150 ease-out leading-relaxed"
@@ -736,7 +872,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
                   <button
                     type="button"
                     onClick={handleStartRecording}
-                    disabled={isProcessingAI}
+                    disabled={isProcessingAI || isImportingInstagram}
                     title="Gravar áudio narrando os detalhes"
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-secondary hover:text-ink-primary hover:bg-white/10 transition-all cursor-pointer disabled:opacity-40"
                   >
@@ -745,7 +881,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
                   <button
                     type="button"
                     onClick={handleSendToAI}
-                    disabled={isProcessingAI || !textInput.trim()}
+                    disabled={isProcessingAI || isImportingInstagram || !textInput.trim()}
                     title="Enviar para análise da IA"
                     className="btn-primary w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >

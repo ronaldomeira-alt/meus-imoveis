@@ -47,6 +47,7 @@ export interface ExtractedPropertyData {
   owner_phone?: string | null;
   partner_name?: string | null;
   partner_phone?: string | null;
+  instagram_source_url?: string | null;
 
   // Metadados de validação e confiabilidade
   missing_mandatory?: string[];
