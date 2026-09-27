@@ -38,7 +38,7 @@ export const LeadDetailDrawer: React.FC<LeadDetailDrawerProps> = ({
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="w-full max-w-md h-full bg-[#11141b] border-l border-line-subtle shadow-2xl flex flex-col"
+          className="theme-dialog-surface w-full max-w-md h-full bg-[#11141b] border-l border-line-subtle shadow-2xl flex flex-col"
         >
           {/* Top Header */}
           <div className="px-5 py-4 border-b border-line-subtle flex items-center justify-between bg-white/[0.02]">

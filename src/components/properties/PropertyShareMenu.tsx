@@ -72,7 +72,7 @@ export const PropertyShareMenu: React.FC<PropertyShareMenuProps> = ({ property, 
   const menu = open ? createPortal(
     <>
       <div className="fixed inset-0 z-[100] bg-black/35 sm:bg-transparent" onClick={(event) => { event.stopPropagation(); setOpen(false); }} />
-      <section onClick={(event) => event.stopPropagation()} className="fixed inset-x-0 bottom-0 z-[101] rounded-t-2xl border border-line-strong bg-[#11141b] p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-2xl sm:inset-x-auto sm:bottom-auto sm:w-72 sm:rounded-xl sm:p-3" style={window.innerWidth >= 640 ? { top: position.top, left: position.left } : undefined} aria-label="Compartilhar imóvel">
+      <section onClick={(event) => event.stopPropagation()} className="fixed inset-x-0 bottom-0 z-[101] rounded-t-2xl border border-line-strong bg-surface-3 text-ink-primary p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-2xl sm:inset-x-auto sm:bottom-auto sm:w-72 sm:rounded-xl sm:p-3" style={window.innerWidth >= 640 ? { top: position.top, left: position.left } : undefined} aria-label="Compartilhar imóvel">
         <div className="mb-2 flex items-center justify-between px-2 sm:hidden"><b className="text-sm">Compartilhar imóvel</b><button type="button" aria-label="Fechar" onClick={() => setOpen(false)}><X className="h-4 w-4" /></button></div>
         {active ? <>
           {typeof navigator.share === 'function' && row(<Smartphone className="h-4 w-4" />, 'Compartilhar…', shareNative)}
@@ -81,7 +81,7 @@ export const PropertyShareMenu: React.FC<PropertyShareMenuProps> = ({ property, 
           {row(<ExternalLink className="h-4 w-4" />, 'Visualizar página pública', openPage)}
         </> : <p className="px-3 py-2 text-xs leading-relaxed text-ink-secondary">Ative a página pública para habilitar o compartilhamento seguro deste imóvel.</p>}
         <div className="my-2 border-t border-line-subtle" />
-        {needsToken && <div className="px-2 pb-2"><label htmlFor={`publish-token-${property.id}`} className="mb-1 block text-xs text-ink-secondary">Token para publicar com segurança</label><input id={`publish-token-${property.id}`} type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" placeholder="Token administrativo" className="w-full rounded-lg border border-line-strong bg-black/20 px-3 py-2 text-xs text-ink-primary outline-none focus:border-accent" /></div>}
+        {needsToken && <div className="px-2 pb-2"><label htmlFor={`publish-token-${property.id}`} className="mb-1 block text-xs text-ink-secondary">Token para publicar com segurança</label><input id={`publish-token-${property.id}`} type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" placeholder="Token administrativo" className="input-field w-full rounded-lg px-3 py-2 text-xs outline-none" /></div>}
         {row(busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : active ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />, busy ? 'Salvando…' : active ? 'Desativar página pública' : 'Ativar página pública', () => void toggleActive(), busy)}
         {message && <p role="status" className="px-3 pt-1 text-xs text-ink-secondary">{message}</p>}
       </section>
@@ -89,7 +89,7 @@ export const PropertyShareMenu: React.FC<PropertyShareMenuProps> = ({ property, 
   ) : null;
 
   return <>
-    <button ref={buttonRef} type="button" aria-label="Compartilhar imóvel" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setMessage(''); setOpen((value) => !value); }} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-line-strong bg-black/55 text-ink-primary/80 transition-colors hover:bg-accent hover:text-white">
+    <button ref={buttonRef} type="button" aria-label="Compartilhar imóvel" aria-expanded={open} onClick={(event) => { event.stopPropagation(); setMessage(''); setOpen((value) => !value); }} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-white/40 bg-black/55 text-white transition-colors hover:bg-accent hover:text-white">
       <Share2 className="h-3.5 w-3.5" strokeWidth={2} />
     </button>
     {menu}

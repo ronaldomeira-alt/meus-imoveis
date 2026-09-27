@@ -127,7 +127,7 @@ const FichaItem: React.FC<{
   children: React.ReactNode;
 }> = ({ label, icon: Icon, required, resolved, approximate, showError, errorMessage, className, children }) => (
   <div
-    className={`p-3 rounded-xl border transition-all duration-150 ${
+    className={`ficha-item p-3 rounded-xl border transition-all duration-150 ${
       showError && !resolved && required
         ? 'border-status-danger/40 bg-status-danger/[0.04]'
         : resolved

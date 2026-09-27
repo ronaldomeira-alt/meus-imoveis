@@ -86,7 +86,7 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
             />
 
             {photos.length > 1 && (
-              <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-semibold text-ink-primary/90 bg-black/55 border border-line-strong flex items-center gap-1.5">
+              <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white/90 bg-black/55 border border-white/30 flex items-center gap-1.5">
                 <Images className="w-3.5 h-3.5 text-accent" />
                 <span>{photos.length} fotos</span>
               </div>
@@ -95,7 +95,7 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
             <button
               onClick={onClose}
               aria-label="Fechar"
-              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center bg-black/55 hover:bg-black/75 text-ink-primary/80 hover:text-ink-primary border border-line-strong transition-colors cursor-pointer"
+              className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center bg-black/55 hover:bg-black/75 text-white/90 hover:text-white border border-white/30 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>

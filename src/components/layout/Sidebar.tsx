@@ -10,6 +10,9 @@ import {
   Settings,
   X,
   Calendar,
+  Sun,
+  Moon,
+  Palette,
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import type { AppUser } from '../../lib/currentUser';
@@ -26,12 +29,16 @@ export type NavSection =
   | 'relatorios'
   | 'configuracoes';
 
+export type AppTheme = 'dark' | 'light' | 'light-blue';
+
 interface SidebarProps {
   activeSection: NavSection;
   onSelectSection: (section: NavSection) => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   currentUser: AppUser;
+  theme: AppTheme;
+  onToggleTheme: () => void;
 }
 
 const NAV_ITEMS = [
@@ -53,7 +60,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
   currentUser,
+  theme,
+  onToggleTheme,
 }) => {
+  const nextTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'light-blue' : 'dark';
+  const nextThemeLabel = nextTheme === 'light' ? 'claro' : nextTheme === 'light-blue' ? 'azul claro' : 'escuro';
+
   return (
     <>
       {/* Backdrop do drawer mobile */}
@@ -105,6 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <button
                   key={item.id}
+                  data-active={isActive}
                   onClick={() => onSelectSection(item.id)}
                   title={item.label}
                   className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[12.5px] font-medium transition-colors duration-150 text-left overflow-hidden ${
@@ -131,6 +144,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* ── Rodapé: Perfil do Usuário ── */}
         <div className="p-2.5 border-t border-line-subtle overflow-hidden">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            title={`Ativar tema ${nextThemeLabel}`}
+            aria-label={`Ativar tema ${nextThemeLabel}`}
+            className="w-full mb-2 flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04] transition-colors"
+          >
+            {nextTheme === 'light' ? <Sun className="w-4 h-4 flex-shrink-0" /> : nextTheme === 'light-blue' ? <Palette className="w-4 h-4 flex-shrink-0" /> : <Moon className="w-4 h-4 flex-shrink-0" />}
+            <span className="whitespace-nowrap opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+              {nextTheme === 'light' ? 'Light' : nextTheme === 'light-blue' ? 'Light Blue' : 'Dark'}
+            </span>
+          </button>
           <div
             className="rounded-lg p-2 flex items-center gap-2.5 pill-surface"
             title={`${currentUser.name} — ${currentUser.role}`}

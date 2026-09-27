@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sidebar, NavSection } from './components/layout/Sidebar';
+import { Sidebar, NavSection, type AppTheme } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { SummaryCards } from './components/dashboard/SummaryCards';
 import { NeighborhoodsChart } from './components/dashboard/NeighborhoodsChart';
@@ -70,7 +70,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
 ];
 
-const CrmAppContent: React.FC = () => {
+const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = ({ theme, onToggleTheme }) => {
   const { signOut } = useAuth();
   const [currentUser] = useCurrentUser();
 
@@ -577,11 +577,14 @@ const CrmAppContent: React.FC = () => {
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
         currentUser={currentUser}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
       />
 
       {/* ── ÁREA PRINCIPAL DO COCKPIT OU PÁGINA COMPLETA (NÍVEL 2) ── */}
       <main
-        className={`relative z-10 flex-1 flex flex-col h-full overflow-hidden min-w-0 ${
+        data-detail-view={Boolean(viewingProperty)}
+        className={`app-main relative z-10 flex-1 flex flex-col h-full overflow-hidden min-w-0 ${
           viewingProperty
             ? 'pt-0 pb-0 px-0 md:pl-[72px]'
             : 'py-3.5 sm:py-5 lg:py-6 pr-3.5 pl-3.5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:pr-6 lg:pl-[96px]'
@@ -633,7 +636,7 @@ const CrmAppContent: React.FC = () => {
 
         {/* ── CORPO PRINCIPAL: ALTERNA ENTRE COCKPIT DASHBOARD E OUTRAS VIEWS ── */}
         {activeSection === 'dashboard' && (
-          <div className="flex-1 flex flex-col md:justify-between min-h-0 gap-3 overflow-y-auto md:overflow-hidden no-scrollbar animate-fade-in">
+          <div className="dashboard-scroll flex-1 flex flex-col md:justify-between min-h-0 gap-3 overflow-y-auto md:overflow-hidden no-scrollbar animate-fade-in">
             {/* 1. TOPO: 4 KPI Cards */}
             <div className="flex-shrink-0">
               <SummaryCards stats={stats} onSelectFilter={handleKpiCardClick} />
@@ -684,7 +687,7 @@ const CrmAppContent: React.FC = () => {
             )}
 
             {/* 2. MEIO: 3 Gráficos Coordenados (1. Bairros, 2. Tipos de Imóvel, 3. Faixas de Preço) */}
-            <div className="md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 flex-shrink-0">
+            <div className="dashboard-charts md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 flex-shrink-0">
               {/* 1. Imóveis por bairro */}
               <div className="h-full min-h-[210px] lg:min-h-0">
                 <NeighborhoodsChart
@@ -955,10 +958,21 @@ const CrmAppContent: React.FC = () => {
 };
 
 export const App: React.FC = () => {
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    const savedTheme = localStorage.getItem('meus_imoveis_theme');
+    return savedTheme === 'light' || savedTheme === 'light-blue' ? savedTheme : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('meus_imoveis_theme', theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#F6F8F8' : theme === 'light-blue' ? '#F6F8FA' : '#020408');
+  }, [theme]);
+
   return (
     <AuthProvider>
       <AuthGuard>
-        <CrmAppContent />
+        <CrmAppContent theme={theme} onToggleTheme={() => setTheme((current) => current === 'dark' ? 'light' : current === 'light' ? 'light-blue' : 'dark')} />
       </AuthGuard>
     </AuthProvider>
   );

@@ -133,7 +133,7 @@ export const PropertyTypesChart: React.FC<PropertyTypesChartProps> = ({
                     }`}
                   >
                     <div
-                      className={`w-full rounded-t-sm transition-all duration-500 ease-out ${
+                      className={`theme-chart-bar w-full rounded-t-sm transition-all duration-500 ease-out ${
                         isSelected ? 'bg-accent' : 'bg-accent/55 group-hover:bg-accent/80'
                       }`}
                       style={{ height: `${heightPct}%` }}

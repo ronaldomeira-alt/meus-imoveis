@@ -22,6 +22,105 @@
   --accent-blue: #3B82F6;
   --accent-blue-hover: #2F6FE0;
   --accent-blue-soft: rgba(59, 130, 246, 0.12);
+  --text-muted: #5B6270;
+  --text-tertiary-rgb: 91 98 112;
+  --accent: #3B82F6;
+  --accent-hover: #2F6FE0;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --bg-base-rgb: 13 15 18;
+  --bg-base-alt-rgb: 16 18 22;
+  --surface-1-rgb: 21 24 29;
+  --surface-2-rgb: 25 28 34;
+  --surface-3-rgb: 29 32 38;
+  --border-subtle-rgb: 37 42 50;
+  --border-strong-rgb: 42 48 56;
+  --text-primary-rgb: 245 246 247;
+  --text-secondary-rgb: 139 146 160;
+  --text-muted-rgb: 91 98 112;
+  --accent-rgb: 59 130 246;
+  --accent-hover-rgb: 47 111 224;
+  --accent-soft-rgb: 59 130 246;
+  --status-success-rgb: 16 185 129;
+  --status-warning-rgb: 245 158 11;
+  --status-partner-rgb: 139 92 246;
+  --status-danger-rgb: 244 63 94;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-base: #F6F8F8;
+  --bg-base-alt: #FFFFFF;
+  --surface-1: #FFFFFF;
+  --surface-2: #FFFFFF;
+  --surface-3: #F0F5F5;
+  --border-subtle: #DDE5E6;
+  --border-strong: #C4D3D4;
+  --text-primary: #1D2729;
+  --text-secondary: #657376;
+  --text-muted: #657376;
+  --text-tertiary-rgb: 101 115 118;
+  --accent: #47888C;
+  --accent-hover: #2E6F73;
+  --accent-soft: rgba(71, 136, 140, 0.12);
+  --accent-blue: #47888C;
+  --accent-blue-hover: #2E6F73;
+  --accent-blue-soft: rgba(71, 136, 140, 0.12);
+  --bg-base-rgb: 246 248 248;
+  --bg-base-alt-rgb: 255 255 255;
+  --surface-1-rgb: 255 255 255;
+  --surface-2-rgb: 255 255 255;
+  --surface-3-rgb: 240 245 245;
+  --border-subtle-rgb: 221 229 230;
+  --border-strong-rgb: 196 211 212;
+  --text-primary-rgb: 29 39 41;
+  --text-secondary-rgb: 101 115 118;
+  --text-muted-rgb: 101 115 118;
+  --accent-rgb: 71 136 140;
+  --accent-hover-rgb: 46 111 115;
+  --accent-soft-rgb: 71 136 140;
+  --status-success-rgb: 6 122 83;
+  --status-warning-rgb: 166 92 0;
+  --status-partner-rgb: 104 69 167;
+  --status-danger-rgb: 192 37 74;
+}
+
+/* Light Blue: a mesma hierarquia clara do Light, com #2d639f como acento. */
+[data-theme="light-blue"] {
+  color-scheme: light;
+  --bg-base: #F6F8FA;
+  --bg-base-alt: #FFFFFF;
+  --surface-1: #FFFFFF;
+  --surface-2: #FFFFFF;
+  --surface-3: #EFF3F9;
+  --border-subtle: #DBE3ED;
+  --border-strong: #C2CEDD;
+  --text-primary: #1D2938;
+  --text-secondary: #637286;
+  --text-muted: #637286;
+  --text-tertiary-rgb: 99 114 134;
+  --accent: #2D639F;
+  --accent-hover: #173E77;
+  --accent-soft: rgba(45, 99, 159, 0.12);
+  --accent-blue: #2D639F;
+  --accent-blue-hover: #173E77;
+  --accent-blue-soft: rgba(45, 99, 159, 0.12);
+  --bg-base-rgb: 246 248 250;
+  --bg-base-alt-rgb: 255 255 255;
+  --surface-1-rgb: 255 255 255;
+  --surface-2-rgb: 255 255 255;
+  --surface-3-rgb: 239 243 249;
+  --border-subtle-rgb: 219 227 237;
+  --border-strong-rgb: 194 206 221;
+  --text-primary-rgb: 29 41 56;
+  --text-secondary-rgb: 99 114 134;
+  --text-muted-rgb: 99 114 134;
+  --accent-rgb: 45 99 159;
+  --accent-hover-rgb: 23 62 119;
+  --accent-soft-rgb: 45 99 159;
+  --status-success-rgb: 6 122 83;
+  --status-warning-rgb: 166 92 0;
+  --status-partner-rgb: 104 69 167;
+  --status-danger-rgb: 192 37 74;
 }
 
 html, body, #root {
@@ -60,6 +159,66 @@ html, body, #root {
   .sidebar-surface {
     background: var(--bg-base-alt);
     border-right: 1px solid var(--border-subtle);
+  }
+
+  /* Experimento local Light Blue: fundo azul escuro e seleção azul claro. */
+  [data-theme="light-blue"] .sidebar-surface {
+    background: #173E77;
+    border-right-color: #2D639F;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface .app-sidebar-brand,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child {
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  [data-theme="light-blue"] .sidebar-surface .app-sidebar-brand h1,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child .pill-surface p:first-child {
+    color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface .app-sidebar-brand p,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child .pill-surface p:last-child,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child > button {
+    color: #DCE8F4;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface .app-sidebar-brand > div:first-child,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child .pill-surface {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  [data-theme="light-blue"] .sidebar-surface .app-sidebar-brand svg {
+    color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="false"],
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="false"] svg {
+    color: #DCE8F4;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="true"] {
+    background: #2D639F;
+    color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="true"] svg {
+    color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="true"] span:last-child {
+    background-color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="false"]:hover,
+  [data-theme="light-blue"] .sidebar-surface > div:last-child > button:hover {
+    background: #2D639F;
+    color: #FFFFFF;
+  }
+
+  [data-theme="light-blue"] .sidebar-surface nav button[data-active="false"]:hover svg {
+    color: #FFFFFF;
   }
 
   /* Modais */
@@ -124,6 +283,33 @@ html, body, #root {
   .select-field:focus {
     outline: none;
     border-color: var(--accent-blue);
+  }
+}
+
+/* Em todos os temas, a expansão do menu desloca o conteúdo no desktop. */
+@media (min-width: 768px) and (hover: hover) {
+  .app-main {
+    transition: padding-left 300ms ease-out;
+  }
+
+  .sidebar-surface:hover + .app-main[data-detail-view="false"] {
+    padding-left: 244px;
+  }
+
+  .sidebar-surface:hover + .app-main[data-detail-view="true"] {
+    padding-left: 224px;
+  }
+}
+
+@media (min-width: 1024px) and (hover: hover) {
+  .sidebar-surface:hover + .app-main[data-detail-view="false"] {
+    padding-left: 248px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main {
+    transition: none;
   }
 }
 
@@ -299,4 +485,164 @@ html, body, #root {
 .animate-waveform-wide {
   animation: waveform-bounce-wide 1.2s ease-in-out infinite alternate;
   transform-origin: center;
+}
+
+/* Correções de contraste limitadas ao tema claro. */
+[data-theme="light"] .ficha-item {
+  background: #F8FAFA;
+  border-color: #C4D3D4;
+}
+
+[data-theme="light"] .ficha-item:focus-within {
+  border-color: var(--accent);
+}
+
+/* Campos ainda usavam texto secundário a 40–70% de opacidade: em superfície
+   branca isso apagava instruções e valores vazios. */
+[data-theme="light"] [class*="text-ink-secondary/"],
+[data-theme="light"] [class*="text-ink-muted/"] {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .ficha-item input,
+[data-theme="light"] .theme-dialog-surface input,
+[data-theme="light"] .theme-dialog-surface textarea {
+  background: #FFFFFF;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .calendar-day-cell {
+  background: #FFFFFF;
+  border-color: var(--border-subtle);
+}
+
+[data-theme="light"] .calendar-day-cell:has(.calendar-post-card) {
+  border-color: var(--border-strong);
+}
+
+[data-theme="light"] .calendar-post-card {
+  background: #E8F3F2;
+  border-color: #B8D0D1;
+}
+
+[data-theme="light"] .calendar-post-card[class*="bg-emerald"] {
+  background: #E8F5EE;
+  border-color: #9DCDB4;
+}
+
+[data-theme="light"] .calendar-post-card[class*="bg-red"] {
+  background: #FCECEF;
+  border-color: #E5B1BE;
+}
+
+[data-theme="light"] .theme-dialog-surface {
+  background: #FFFFFF;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] select option {
+  background: #FFFFFF;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .text-blue-400 { color: #256B85; }
+[data-theme="light"] .text-emerald-300,
+[data-theme="light"] .text-emerald-400 { color: #067A53; }
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400 { color: #9A5800; }
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400 { color: #C0254A; }
+[data-theme="light"] .text-purple-300 { color: #6845A7; }
+
+/* Os dois temas claros compartilham a mesma solução de contraste; o azul
+   altera só os tons de acento e os tints dependentes da paleta. */
+[data-theme="light-blue"] .ficha-item {
+  background: #F8FAFC;
+  border-color: var(--border-strong);
+}
+
+[data-theme="light-blue"] .ficha-item:focus-within {
+  border-color: var(--accent);
+}
+
+[data-theme="light-blue"] [class*="text-ink-secondary/"],
+[data-theme="light-blue"] [class*="text-ink-muted/"] {
+  color: var(--text-secondary);
+}
+
+[data-theme="light-blue"] .ficha-item input,
+[data-theme="light-blue"] .theme-dialog-surface input,
+[data-theme="light-blue"] .theme-dialog-surface textarea {
+  background: #FFFFFF;
+  color: var(--text-primary);
+}
+
+[data-theme="light-blue"] .calendar-day-cell {
+  background: #FFFFFF;
+  border-color: var(--border-subtle);
+}
+
+[data-theme="light-blue"] .calendar-day-cell:has(.calendar-post-card) {
+  border-color: var(--border-strong);
+}
+
+[data-theme="light-blue"] .calendar-post-card {
+  background: #EAF1FA;
+  border-color: #BDD0E7;
+}
+
+[data-theme="light-blue"] .calendar-post-card[class*="bg-emerald"] {
+  background: #E8F5EE;
+  border-color: #9DCDB4;
+}
+
+[data-theme="light-blue"] .calendar-post-card[class*="bg-red"] {
+  background: #FCECEF;
+  border-color: #E5B1BE;
+}
+
+[data-theme="light-blue"] .theme-dialog-surface {
+  background: #FFFFFF;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+[data-theme="light-blue"] select option {
+  background: #FFFFFF;
+  color: var(--text-primary);
+}
+
+[data-theme="light-blue"] .bg-accent.text-ink-primary { color: #FFFFFF; }
+[data-theme="light-blue"] .text-blue-400 { color: #2D639F; }
+[data-theme="light-blue"] .text-emerald-300,
+[data-theme="light-blue"] .text-emerald-400 { color: #067A53; }
+[data-theme="light-blue"] .text-amber-300,
+[data-theme="light-blue"] .text-amber-400 { color: #9A5800; }
+[data-theme="light-blue"] .text-red-300,
+[data-theme="light-blue"] .text-red-400 { color: #C0254A; }
+[data-theme="light-blue"] .text-purple-300 { color: #6845A7; }
+
+/* As barras recebiam bg-accent/55 e /60: sobre o branco o azul parecia
+   desbotado até o hover. No Light Blue, repouso = #2d639f e hover = #173e77. */
+[data-theme="light-blue"] .theme-chart-bar {
+  background-color: #2D639F;
+}
+
+[data-theme="light-blue"] .group:hover .theme-chart-bar,
+[data-theme="light-blue"] .bg-accent:hover {
+  background-color: #173E77;
+}
+
+/* Em telas intermediárias os três gráficos formam duas linhas. Deixar essa
+   região rolar evita que o carrossel recente cubra a última linha. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .dashboard-scroll.dashboard-scroll {
+    overflow-y: auto;
+    justify-content: flex-start;
+  }
+
+  .dashboard-charts.dashboard-charts {
+    flex: none;
+  }
 }

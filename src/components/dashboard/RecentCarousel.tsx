@@ -98,7 +98,7 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
 
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-2 right-2 w-6.5 h-6.5 rounded-full flex items-center justify-center text-ink-primary/90 hover:text-ink-primary transition-colors bg-black/50 border border-line-strong"
+                    className="absolute top-2 right-2 w-6.5 h-6.5 rounded-full flex items-center justify-center text-white/90 hover:text-white transition-colors bg-black/50 border border-white/30"
                   >
                     <Heart style={{ width: '11px', height: '11px' }} strokeWidth={2} />
                   </button>

@@ -80,7 +80,7 @@ export const WhatsAppSendModal: React.FC<WhatsAppSendModalProps> = ({
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 8 }}
-          className="relative w-full max-w-lg rounded-2xl bg-[#131722] border border-white/[0.08] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="theme-dialog-surface relative w-full max-w-lg rounded-2xl bg-[#131722] border border-white/[0.08] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         >
           {/* Header */}
           <div className="px-5 py-4 border-b border-line-subtle flex items-center justify-between bg-white/[0.02]">

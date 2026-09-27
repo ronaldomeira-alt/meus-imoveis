@@ -839,7 +839,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
             {/* Fechar */}
             <button
               onClick={closeFullscreen}
-              className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-ink-primary flex items-center justify-center transition-all cursor-pointer"
+              className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
               aria-label="Fechar tela cheia"
             >
               <X className="w-5 h-5" />

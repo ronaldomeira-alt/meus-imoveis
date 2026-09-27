@@ -418,7 +418,7 @@ export const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
                 onDragOver={(e) => handleDragOver(e, day.dateStr)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, day)}
-                className={`flex flex-col min-h-24 p-1.5 rounded-xl border transition-all ${
+                className={`calendar-day-cell flex flex-col min-h-24 p-1.5 rounded-xl border transition-all ${
                   day.isCurrentMonth
                     ? 'bg-white/[0.02] border-line-subtle/50'
                     : 'bg-black/20 border-transparent opacity-40'
@@ -467,7 +467,7 @@ export const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
                         draggable={!isPublished}
                         onDragStart={(e) => handleDragStart(e, post)}
                         onClick={() => handleCardClick(post)}
-                        className={`p-1.5 rounded-lg border text-left cursor-pointer transition-all select-none group ${
+                        className={`calendar-post-card p-1.5 rounded-lg border text-left cursor-pointer transition-all select-none group ${
                           isPublished
                             ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400'
                             : isFailed

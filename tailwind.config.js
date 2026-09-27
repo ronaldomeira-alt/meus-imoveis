@@ -9,33 +9,34 @@ export default {
     extend: {
       colors: {
         base: {
-          DEFAULT: '#0D0F12',
-          alt: '#101216',
+          DEFAULT: 'rgb(var(--bg-base-rgb) / <alpha-value>)',
+          alt: 'rgb(var(--bg-base-alt-rgb) / <alpha-value>)',
         },
         surface: {
-          1: '#15181D',
-          2: '#191C22',
-          3: '#1D2026',
+          1: 'rgb(var(--surface-1-rgb) / <alpha-value>)',
+          2: 'rgb(var(--surface-2-rgb) / <alpha-value>)',
+          3: 'rgb(var(--surface-3-rgb) / <alpha-value>)',
         },
         line: {
-          subtle: '#252A32',
-          strong: '#2A3038',
+          subtle: 'rgb(var(--border-subtle-rgb) / <alpha-value>)',
+          strong: 'rgb(var(--border-strong-rgb) / <alpha-value>)',
         },
         ink: {
-          primary: '#F5F6F7',
-          secondary: '#8B92A0',
-          muted: '#5B6270',
+          primary: 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+          muted: 'rgb(var(--text-muted-rgb) / <alpha-value>)',
+          tertiary: 'rgb(var(--text-tertiary-rgb) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#3B82F6',
-          hover: '#2F6FE0',
-          soft: 'rgba(59, 130, 246, 0.12)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--accent-hover-rgb) / <alpha-value>)',
+          soft: 'rgba(var(--accent-soft-rgb) / 0.12)',
         },
         status: {
-          success: '#10B981',
-          warning: '#F59E0B',
-          partner: '#8B5CF6',
-          danger: '#F43F5E',
+          success: 'rgb(var(--status-success-rgb) / <alpha-value>)',
+          warning: 'rgb(var(--status-warning-rgb) / <alpha-value>)',
+          partner: 'rgb(var(--status-partner-rgb) / <alpha-value>)',
+          danger: 'rgb(var(--status-danger-rgb) / <alpha-value>)',
         }
       },
       fontFamily: {

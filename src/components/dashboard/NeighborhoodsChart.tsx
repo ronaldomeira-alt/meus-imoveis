@@ -86,7 +86,7 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
 
               <div className="flex-1 h-2 rounded-full bg-white/[0.05] overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ease-out ${
+                  className={`theme-chart-bar h-full rounded-full transition-all duration-500 ease-out ${
                     isSelected ? 'bg-accent' : 'bg-accent/60 group-hover:bg-accent'
                   }`}
                   style={{ width: `${pct}%` }}
