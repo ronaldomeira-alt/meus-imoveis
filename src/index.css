@@ -163,7 +163,7 @@ html, body, #root {
 
   /* Experimento local Light Blue: fundo azul escuro e seleção azul claro. */
   [data-theme="light-blue"] .sidebar-surface {
-    background: #173E77;
+    background: #0D2A52;
     border-right-color: #2D639F;
   }
 
