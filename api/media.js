@@ -1,4 +1,4 @@
-import { handleMedia } from './shared/media.js';
+import { handleMedia } from './_shared/media.js';
 
 export default function handler(req, res) {
   return handleMedia(req, res);

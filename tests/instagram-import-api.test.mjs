@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleInstagramImport } from '../api/shared/instagram-import.js';
+import { handleInstagramImport } from '../api/_shared/instagram-import.js';
 
 test('connected own post imports, partner without public-post service reports configuration need', async () => {
   const beforeFetch = globalThis.fetch;

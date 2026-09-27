@@ -68,7 +68,7 @@ assertCheck(
 );
 
 // 5. Cada evento de tracking gera no máximo 1 registro em tracking_events
-const pubPagesContent = fs.readFileSync(path.resolve('api/shared/public-pages.js'), 'utf-8');
+const pubPagesContent = fs.readFileSync(path.resolve('api/_shared/public-pages.js'), 'utf-8');
 const trackingJsContent = fs.readFileSync(path.resolve('api/tunnel/v1/events/tracking.js'), 'utf-8');
 const pubPagesDirectInsert = pubPagesContent.includes('.from(\'tracking_events\').insert');
 const trackingJsDirectInsert = trackingJsContent.includes('.from(\'tracking_events\').insert');

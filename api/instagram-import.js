@@ -1,1 +1,1 @@
-export { handleInstagramImport as default } from './shared/instagram-import.js';
+export { handleInstagramImport as default } from './_shared/instagram-import.js';

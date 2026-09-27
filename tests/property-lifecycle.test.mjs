@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { handlePropertyDeletion } from '../api/shared/property-lifecycle.js';
+import { handlePropertyDeletion } from '../api/_shared/property-lifecycle.js';
 
 test('authenticated deletion uses the canonical account and reports database failures', async () => {
   const originalFetch = globalThis.fetch;

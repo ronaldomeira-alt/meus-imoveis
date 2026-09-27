@@ -3,20 +3,20 @@ import { defineConfig, loadEnv, type Connect } from 'vite'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
-const publicApi = require('./api/shared/public-pages.js') as {
+const publicApi = require('./api/_shared/public-pages.js') as {
   handlePublicPages: Connect.NextHandleFunction
   handlePublicPageHtml: Connect.NextHandleFunction
 }
-const mediaApi = require('./api/shared/media.js') as {
+const mediaApi = require('./api/_shared/media.js') as {
   handleMedia: Connect.NextHandleFunction
 }
-const matchesApi = require('./api/shared/matches.js') as {
+const matchesApi = require('./api/_shared/matches.js') as {
   handleMatches: Connect.NextHandleFunction
 }
-const propertyLifecycleApi = require('./api/shared/property-lifecycle.js') as {
+const propertyLifecycleApi = require('./api/_shared/property-lifecycle.js') as {
   handlePropertyDeletion: Connect.NextHandleFunction
 }
-const instagramImportApi = require('./api/shared/instagram-import.js') as {
+const instagramImportApi = require('./api/_shared/instagram-import.js') as {
   handleInstagramImport: Connect.NextHandleFunction
 }
 

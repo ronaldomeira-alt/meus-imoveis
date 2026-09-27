@@ -1,1 +1,1 @@
-export { handlePropertyDeletion as default } from './shared/property-lifecycle.js';
+export { handlePropertyDeletion as default } from './_shared/property-lifecycle.js';

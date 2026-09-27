@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
-import { normalizeInstagramPost, parseInstagramPostUrl } from '../api/shared/instagram-import.js';
+import { normalizeInstagramPost, parseInstagramPostUrl } from '../api/_shared/instagram-import.js';
 
 test('Instagram URL validation and carousel order', () => {
   const url = 'https://www.instagram.com/p/DbtQO6OnO1a/';
