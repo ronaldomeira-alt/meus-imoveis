@@ -19,7 +19,7 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
   const maxCount = Math.max(...items.map((i) => i.count), 5);
 
   return (
-    <div className="panel-surface p-4 lg:p-5 flex flex-col justify-between h-full select-none">
+    <div className="panel-surface p-4 lg:p-5 flex flex-col h-full select-none">
       {/* Topo: Ícone + Título + Link */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
@@ -53,7 +53,7 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
           <p className="text-[11px] text-ink-muted mt-0.5">Cadastre imóveis para ver os bairros</p>
         </div>
       )}
-      <div className={items.length ? 'flex-1 flex flex-col justify-between gap-1.5 pt-1' : 'hidden'}>
+      <div className={items.length ? 'flex-1 flex flex-col justify-start gap-2 pt-1 overflow-y-auto no-scrollbar' : 'hidden'}>
         {items.map((item, idx) => {
           const pct = Math.max(18, Math.round((item.count / maxCount) * 95));
           const isSelected = selectedNeighborhood === item.neighborhood;
@@ -64,12 +64,12 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
             <div
               key={item.neighborhood || idx}
               onClick={() => onSelectNeighborhood(isSelected ? '' : item.neighborhood)}
-              className={`flex items-center gap-3 py-0.5 px-1.5 -mx-1.5 rounded-lg group cursor-pointer transition-all duration-150 ${
+              className={`flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-lg group cursor-pointer transition-all duration-150 ${
                 isSelected
                   ? 'bg-accent-soft'
                   : isDimmed
                   ? 'opacity-35 hover:opacity-75'
-                  : 'hover:bg-white/[0.03]'
+                  : 'hover:bg-white/[0.04]'
               }`}
             >
               <span
