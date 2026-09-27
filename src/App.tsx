@@ -869,7 +869,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       {/* ── MODAL 1-CLICK: CONFIRMAÇÃO APÓS SALVAR IMÓVEL (FASE 13) ── */}
       {savedPropertyPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-line-strong p-6 shadow-2xl space-y-4 text-center">
+          <div className="w-full max-w-md rounded-3xl bg-surface-3 border border-line-strong p-6 shadow-modal space-y-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-pink-500/20">
               <InstagramIcon className="w-7 h-7" />
             </div>
@@ -881,11 +881,11 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
               <p className="text-xs text-ink-secondary mt-1">
                 Deseja criar a publicação para o Instagram e agendar no piloto automático agora?
               </p>
-              <div className="mt-3 p-3 rounded-xl bg-white/[0.03] border border-line-subtle text-left">
+              <div className="mt-3 p-3 rounded-xl bg-surface-1 border border-line-subtle text-left">
                 <p className="text-xs font-bold text-ink-primary truncate">
                   {savedPropertyPrompt.type} · {savedPropertyPrompt.neighborhood}
                 </p>
-                <p className="text-[11px] text-accent">
+                <p className="text-[11px] font-semibold text-accent mt-0.5">
                   R$ {savedPropertyPrompt.price.toLocaleString('pt-BR')} • {savedPropertyPrompt.area_m2}m²
                 </p>
               </div>
@@ -894,7 +894,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
             <div className="flex items-center gap-2.5 pt-2">
               <button
                 onClick={() => setSavedPropertyPrompt(null)}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 border border-line-subtle text-xs font-semibold text-ink-secondary hover:text-ink-primary hover:bg-white/10 transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-surface-1 border border-line-strong text-xs font-semibold text-ink-primary hover:bg-surface-2 hover:border-accent hover:text-accent transition-colors cursor-pointer"
               >
                 Agora não
               </button>
@@ -905,7 +905,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                   setSavedPropertyPrompt(null);
                   setMarketingPostProperty(targetProp);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white text-xs font-bold shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white text-xs font-bold shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all cursor-pointer"
               >
                 Criar Post com IA
               </button>

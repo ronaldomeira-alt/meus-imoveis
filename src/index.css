@@ -44,6 +44,8 @@
   --status-warning-rgb: 245 158 11;
   --status-partner-rgb: 139 92 246;
   --status-danger-rgb: 244 63 94;
+  --selection-bg: rgba(59, 130, 246, 0.35);
+  --selection-text: #FFFFFF;
 }
 
 [data-theme="light"] {
@@ -82,6 +84,8 @@
   --status-warning-rgb: 166 92 0;
   --status-partner-rgb: 104 69 167;
   --status-danger-rgb: 192 37 74;
+  --selection-bg: #BFDBFE;
+  --selection-text: #0F172A;
 }
 
 /* Light Blue: a mesma hierarquia clara do Light, com #2d639f como acento. */
@@ -95,9 +99,9 @@
   --border-subtle: #DBE3ED;
   --border-strong: #C2CEDD;
   --text-primary: #1D2938;
-  --text-secondary: #637286;
-  --text-muted: #637286;
-  --text-tertiary-rgb: 99 114 134;
+  --text-secondary: #475569;
+  --text-muted: #475569;
+  --text-tertiary-rgb: 71 85 105;
   --accent: #2D639F;
   --accent-hover: #173E77;
   --accent-soft: rgba(45, 99, 159, 0.12);
@@ -112,8 +116,8 @@
   --border-subtle-rgb: 219 227 237;
   --border-strong-rgb: 194 206 221;
   --text-primary-rgb: 29 41 56;
-  --text-secondary-rgb: 99 114 134;
-  --text-muted-rgb: 99 114 134;
+  --text-secondary-rgb: 71 85 105;
+  --text-muted-rgb: 71 85 105;
   --accent-rgb: 45 99 159;
   --accent-hover-rgb: 23 62 119;
   --accent-soft-rgb: 45 99 159;
@@ -121,6 +125,8 @@
   --status-warning-rgb: 166 92 0;
   --status-partner-rgb: 104 69 167;
   --status-danger-rgb: 192 37 74;
+  --selection-bg: #BFDBFE;
+  --selection-text: #0F172A;
 }
 
 html, body, #root {
@@ -133,6 +139,17 @@ html, body, #root {
   color: var(--text-primary);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: var(--selection-bg, rgba(59, 130, 246, 0.35));
+  color: var(--selection-text, #FFFFFF);
+}
+
+input::selection,
+textarea::selection {
+  background-color: var(--selection-bg, rgba(59, 130, 246, 0.35));
+  color: var(--selection-text, #FFFFFF);
 }
 
 @layer components {
@@ -505,10 +522,19 @@ html, body, #root {
 }
 
 [data-theme="light"] .ficha-item input,
+[data-theme="light"] .ficha-item textarea,
 [data-theme="light"] .theme-dialog-surface input,
 [data-theme="light"] .theme-dialog-surface textarea {
   background: #FFFFFF;
   color: var(--text-primary);
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder,
+[data-theme="light"] [class*="placeholder-ink-secondary/"]::placeholder,
+[data-theme="light"] [class*="placeholder-ink-muted/"]::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 [data-theme="light"] .calendar-day-cell {
@@ -572,10 +598,19 @@ html, body, #root {
 }
 
 [data-theme="light-blue"] .ficha-item input,
+[data-theme="light-blue"] .ficha-item textarea,
 [data-theme="light-blue"] .theme-dialog-surface input,
 [data-theme="light-blue"] .theme-dialog-surface textarea {
   background: #FFFFFF;
   color: var(--text-primary);
+}
+
+[data-theme="light-blue"] input::placeholder,
+[data-theme="light-blue"] textarea::placeholder,
+[data-theme="light-blue"] [class*="placeholder-ink-secondary/"]::placeholder,
+[data-theme="light-blue"] [class*="placeholder-ink-muted/"]::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
 [data-theme="light-blue"] .calendar-day-cell {

@@ -127,13 +127,13 @@ export const VoiceNotesInput: React.FC<VoiceNotesInputProps> = ({
         </div>
       </div>
 
-      <div className="p-3 rounded-xl border border-line-subtle/60 bg-white/[0.015] focus-within:border-accent transition-colors">
+      <div className="p-3 rounded-xl border border-line-subtle bg-surface-1 focus-within:border-accent transition-colors">
         <textarea
           rows={rows}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-transparent text-xs sm:text-sm text-ink-primary placeholder-ink-secondary/50 focus:outline-none resize-none leading-relaxed"
+          className="w-full bg-transparent text-xs sm:text-sm text-ink-primary placeholder-ink-secondary focus:outline-none resize-none leading-relaxed caret-accent"
         />
       </div>
     </div>
