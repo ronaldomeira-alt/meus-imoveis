@@ -19,15 +19,7 @@ export const PropertyTypesChart: React.FC<PropertyTypesChartProps> = ({
 }) => {
   const [hoveredType, setHoveredType] = useState<string | null>(null);
 
-  const defaultItems: PropertyTypeStat[] = [
-    { type: 'Apartamento', count: 9, pct: 45.0 },
-    { type: 'Studio',      count: 4, pct: 20.0 },
-    { type: 'Flat',        count: 3, pct: 15.0 },
-    { type: 'Casa',        count: 2, pct: 10.0 },
-    { type: 'Cobertura',   count: 2, pct: 10.0 },
-  ];
-
-  const activeItems = (data && data.length > 0 ? data : defaultItems)
+  const activeItems = data
     .filter((item) => item.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);

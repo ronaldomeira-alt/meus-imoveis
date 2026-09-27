@@ -13,7 +13,9 @@ const mediaApi = require('./api/shared/media.js') as {
 const matchesApi = require('./api/shared/matches.js') as {
   handleMatches: Connect.NextHandleFunction
 }
-
+const propertyLifecycleApi = require('./api/shared/property-lifecycle.js') as {
+  handlePropertyDeletion: Connect.NextHandleFunction
+}
 const instagramImportApi = require('./api/shared/instagram-import.js') as {
   handleInstagramImport: Connect.NextHandleFunction
 }
@@ -24,6 +26,7 @@ const publicPagesPlugin = {
     server.middlewares.use('/api/public-pages', publicApi.handlePublicPages)
     server.middlewares.use('/api/media', mediaApi.handleMedia)
     server.middlewares.use('/api/matches', matchesApi.handleMatches)
+    server.middlewares.use('/api/property-lifecycle', propertyLifecycleApi.handlePropertyDeletion)
     server.middlewares.use('/api/instagram-import', instagramImportApi.handleInstagramImport)
     server.middlewares.use('/imovel', (req, res, next) => {
       const match = req.url?.match(/^\/([0-9a-f-]{36})(?:\?.*)?$/i)
@@ -36,6 +39,7 @@ const publicPagesPlugin = {
     server.middlewares.use('/api/public-pages', publicApi.handlePublicPages)
     server.middlewares.use('/api/media', mediaApi.handleMedia)
     server.middlewares.use('/api/matches', matchesApi.handleMatches)
+    server.middlewares.use('/api/property-lifecycle', propertyLifecycleApi.handlePropertyDeletion)
     server.middlewares.use('/api/instagram-import', instagramImportApi.handleInstagramImport)
     server.middlewares.use('/imovel', (req, res, next) => {
       const match = req.url?.match(/^\/([0-9a-f-]{36})(?:\?.*)?$/i)

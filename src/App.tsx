@@ -17,7 +17,6 @@ import { ReportsView } from './components/reports/ReportsView';
 import { PilotoAutomaticoView } from './components/marketing/PilotoAutomaticoView';
 import { MarketingCalendarView } from './components/marketing/MarketingCalendarView';
 import { PostEditorModal } from './components/marketing/PostEditorModal';
-import { initialProperties } from './data/initialProperties';
 import { calculateDashboardStats } from './lib/supabase';
 import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
@@ -29,7 +28,7 @@ import { getSavedPublicAdminToken, setPublicPage } from './lib/publicProperties'
 import { AuthProvider, useAuth } from './lib/auth';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { MatchView } from './components/match/MatchView';
-import { syncPropertyToMatch } from './lib/match/service';
+import { syncPropertyToMatch, deletePropertyFromMatch } from './lib/match/service';
 import { isMatchRelevantPropertyChange } from './lib/match/property-adapter';
 
 const DEFAULT_FILTERS: FilterState = {
@@ -146,7 +145,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         console.error('Erro ao ler dados salvos:', e);
       }
     }
-    return initialProperties;
+    return [];
   });
 
   // Salva no localStorage quando alterado
@@ -480,6 +479,12 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
   const handleDeleteProperty = async (id: string) => {
     if (window.confirm('Tem certeza que deseja remover este imóvel do catálogo?')) {
+      try {
+        await deletePropertyFromMatch(id);
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Não foi possível excluir o imóvel. Tente novamente.');
+        return;
+      }
       const property = properties.find((item) => item.id === id);
       const token = getSavedPublicAdminToken();
       if (property?.public_page_active && token) void setPublicPage(property, false, token)
@@ -636,7 +641,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
         {/* ── CORPO PRINCIPAL: ALTERNA ENTRE COCKPIT DASHBOARD E OUTRAS VIEWS ── */}
         {activeSection === 'dashboard' && (
-          <div className="dashboard-scroll flex-1 flex flex-col md:justify-between min-h-0 gap-3 overflow-y-auto md:overflow-hidden no-scrollbar animate-fade-in">
+          <div className="dashboard-scroll flex-1 flex flex-col min-h-0 gap-3 overflow-y-auto no-scrollbar animate-fade-in">
             {/* 1. TOPO: 4 KPI Cards */}
             <div className="flex-shrink-0">
               <SummaryCards stats={stats} onSelectFilter={handleKpiCardClick} />
@@ -687,7 +692,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
             )}
 
             {/* 2. MEIO: 3 Gráficos Coordenados (1. Bairros, 2. Tipos de Imóvel, 3. Faixas de Preço) */}
-            <div className="dashboard-charts md:flex-1 md:min-h-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 flex-shrink-0">
+            <div className="dashboard-charts grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-[300px] lg:auto-rows-[clamp(260px,36vh,380px)] gap-3.5 flex-shrink-0">
               {/* 1. Imóveis por bairro */}
               <div className="h-full min-h-[210px] lg:min-h-0">
                 <NeighborhoodsChart

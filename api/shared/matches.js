@@ -195,11 +195,13 @@ export async function handleMatches(req, res) {
       const propertyIds = Array.from(new Set((rows || []).map((r) => r.property_id)));
       let propMap = new Map();
       if (propertyIds.length > 0) {
-        const { data: propRows } = await db
+        const { data: propRows, error: projectionError } = await db
           .from('property_match_projections')
           .select('*')
           .eq('account_id', canonicalAccountId)
           .in('property_id', propertyIds);
+
+        if (projectionError) throw projectionError;
 
         for (const p of propRows || []) {
           propMap.set(p.property_id, {
@@ -259,7 +261,7 @@ export async function handleMatches(req, res) {
         }
       }
 
-      const matches = (rows || []).map((r) => {
+      const matches = (rows || []).filter((r) => propMap.has(r.property_id)).map((r) => {
         const contact = r.contacts;
         const name = contact?.name || 'Cliente';
         const initials = name

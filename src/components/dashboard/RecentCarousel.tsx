@@ -66,6 +66,11 @@ export const RecentCarousel: React.FC<RecentCarouselProps> = ({
       </div>
 
       {/* ── Carrossel Horizontal ── */}
+      {properties.length === 0 && (
+        <div className="panel-surface p-6 text-center text-sm text-ink-secondary">
+          Nenhum imóvel ativo no estoque. Adicione um imóvel para começar.
+        </div>
+      )}
       <div className="relative">
         <div
           ref={scrollRef}

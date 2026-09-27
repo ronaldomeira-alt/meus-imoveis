@@ -81,6 +81,21 @@ export const tunnelClient = new Proxy({} as SupabaseClient, {
 export const DEFAULT_ACCOUNT_ID = '7f434d39-87d8-4d16-8262-e3006908d1c5';
 export const WACRM_BASE_URL = getEnv('VITE_WACRM_URL') || 'http://localhost:3000';
 
+/** Complete the shared deletion before removing the local inventory entry. */
+export async function deletePropertyFromMatch(propertyId: string): Promise<void> {
+  const headers = await getAuthHeader();
+  if (!headers) throw new Error('Sua sessão expirou. Entre novamente para excluir o imóvel.');
+  const res = await fetch(`/api/property-lifecycle?propertyId=${encodeURIComponent(ensureUuid(propertyId))}`, {
+    method: 'DELETE',
+    headers,
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Não foi possível sincronizar a exclusão. Tente novamente.');
+  }
+  window.dispatchEvent(new Event('property-inventory-changed'));
+}
+
 /**
  * Constrói o LeadSearchProfile para cálculo no lado do Meus Imóveis.
  * Consome os dados e proveniências oficiais persistidos no banco compartilhado.

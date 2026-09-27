@@ -4,8 +4,7 @@ import {
   Tag,
   Users,
   Plus,
-  ChevronRight,
-  ArrowUp
+  ChevronRight
 } from 'lucide-react';
 import type { DashboardStats } from '../../types/property';
 
@@ -21,21 +20,20 @@ interface KPICardConfig {
   id: SummaryFilterType;
   label: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-  trendText: string;
 }
 
 const CARDS_CONFIG: KPICardConfig[] = [
-  { id: 'all',       label: 'Imóveis ativos',            icon: Home,  trendText: '+12%' },
-  { id: 'own',       label: 'Próprios',                  icon: Tag,   trendText: '+7%' },
-  { id: 'partner',   label: 'Parceiros',                 icon: Users, trendText: '+28%' },
-  { id: 'this_week', label: 'Adicionados esta semana',   icon: Plus,  trendText: '+33%' },
+  { id: 'all',       label: 'Imóveis ativos',            icon: Home },
+  { id: 'own',       label: 'Próprios',                  icon: Tag },
+  { id: 'partner',   label: 'Parceiros',                 icon: Users },
+  { id: 'this_week', label: 'Adicionados esta semana',   icon: Plus },
 ];
 
 const getStatValue = (id: SummaryFilterType, stats: DashboardStats): number => {
-  if (id === 'all')       return stats.totalActive       || 24;
-  if (id === 'own')       return stats.ownCount          || 15;
-  if (id === 'partner')   return stats.partnerCount      || 9;
-  if (id === 'this_week') return stats.addedThisWeekCount > 4 ? 4 : (stats.addedThisWeekCount || 4);
+  if (id === 'all')       return stats.totalActive;
+  if (id === 'own')       return stats.ownCount;
+  if (id === 'partner')   return stats.partnerCount;
+  if (id === 'this_week') return stats.addedThisWeekCount;
   return 0;
 };
 
@@ -80,13 +78,6 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 {value}
               </span>
 
-              <div className="flex items-center gap-1 mt-1.5 text-[9.5px] font-bold text-status-success">
-                <ArrowUp className="w-3 h-3 flex-shrink-0" strokeWidth={2.8} />
-                <span>{card.trendText}</span>
-                <span className="text-ink-secondary font-normal ml-0.5">
-                  {card.id === 'this_week' ? 'vs. semana anterior' : 'vs. mês anterior'}
-                </span>
-              </div>
             </div>
           </button>
         );

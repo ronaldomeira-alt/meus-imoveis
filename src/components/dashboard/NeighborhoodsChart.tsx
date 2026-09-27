@@ -15,17 +15,7 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
   onSelectNeighborhood,
   onViewAll,
 }) => {
-  const defaultItems: NeighborhoodStat[] = [
-    { neighborhood: 'Bessa',       count: 5, pct: 95 },
-    { neighborhood: 'Manaíra',     count: 4, pct: 76 },
-    { neighborhood: 'Cabo Branco', count: 3, pct: 58 },
-    { neighborhood: 'Intermares',  count: 3, pct: 58 },
-    { neighborhood: 'Tambaú',      count: 2, pct: 38 },
-    { neighborhood: 'Aeroclube',   count: 2, pct: 38 },
-    { neighborhood: 'Altiplano',   count: 1, pct: 19 },
-  ];
-
-  const items = data.length > 0 ? data.slice(0, 7) : defaultItems;
+  const items = data.slice(0, 7);
   const maxCount = Math.max(...items.map((i) => i.count), 5);
 
   return (
@@ -57,7 +47,13 @@ export const NeighborhoodsChart: React.FC<NeighborhoodsChartProps> = ({
       </div>
 
       {/* Lista de Barras Horizontais */}
-      <div className="flex-1 flex flex-col justify-between gap-1.5 pt-1">
+      {items.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+          <p className="text-xs font-semibold text-ink-secondary">Nenhum imóvel ativo</p>
+          <p className="text-[11px] text-ink-muted mt-0.5">Cadastre imóveis para ver os bairros</p>
+        </div>
+      )}
+      <div className={items.length ? 'flex-1 flex flex-col justify-between gap-1.5 pt-1' : 'hidden'}>
         {items.map((item, idx) => {
           const pct = Math.max(18, Math.round((item.count / maxCount) * 95));
           const isSelected = selectedNeighborhood === item.neighborhood;

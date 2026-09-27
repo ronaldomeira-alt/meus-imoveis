@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Sparkles,
   Filter,
@@ -26,6 +26,7 @@ export const MatchView: React.FC<MatchViewProps> = ({ searchQuery = '' }) => {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MatchStatus>('novo');
+  const requestVersion = useRef(0);
 
   // Filtros compactos
   const [scoreFilter, setScoreFilter] = useState<'all' | 'strong' | 'good' | 'manual'>('all');
@@ -70,21 +71,40 @@ export const MatchView: React.FC<MatchViewProps> = ({ searchQuery = '' }) => {
     }
   }, []);
 
-  const fetchMatches = async () => {
+  const fetchMatches = useCallback(async () => {
+    const version = ++requestVersion.current;
     setIsLoading(true);
     try {
       const data = await getAllMatches({ status: activeTab, minScore: 50 });
+      if (version !== requestVersion.current) return;
       setMatches(data);
+      setModalGroup((current) => {
+        if (!current) return null;
+        const matches = data.filter((m) => m.propertyId === current.property.propertyId);
+        return matches.length ? { ...current, matches } : null;
+      });
+      setSelectedMatchForSend((current) => current ? data.find((m) => m.id === current.id) || null : null);
+      setSelectedMatchForDetail((current) => current ? data.find((m) => m.id === current.id) || null : null);
     } catch (err) {
       console.error('[MatchView] Erro ao carregar matches:', err);
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
     fetchMatches();
-  }, [activeTab]);
+    const refresh = () => { if (!document.hidden) void fetchMatches(); };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('property-inventory-changed', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      requestVersion.current++;
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('property-inventory-changed', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [fetchMatches]);
 
   const handleSuppress = async (match: MatchRecord) => {
     const success = await suppressMatch({
@@ -224,10 +244,10 @@ export const MatchView: React.FC<MatchViewProps> = ({ searchQuery = '' }) => {
           </div>
           <div>
             <h2 className="text-base font-extrabold text-ink-primary tracking-tight">
-              MATCH — Catálogo de Imóveis & Leads
+              Match — Imóveis & Leads
             </h2>
             <p className="text-xs text-ink-secondary">
-              Perspectiva do Imóvel: Imóvel → Melhor Lead e Leads Compatíveis
+              Melhores leads para o imóvel
             </p>
           </div>
         </div>
