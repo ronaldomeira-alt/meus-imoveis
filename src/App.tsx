@@ -30,6 +30,7 @@ import { AuthGuard } from './components/auth/AuthGuard';
 import { MatchView } from './components/match/MatchView';
 import { syncPropertyToMatch, deletePropertyFromMatch } from './lib/match/service';
 import { isMatchRelevantPropertyChange } from './lib/match/property-adapter';
+import { initialProperties } from './data/initialProperties';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -45,27 +46,19 @@ const DEFAULT_FILTERS: FilterState = {
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'n1',
-    title: 'Novo Imóvel no Bessa',
-    body: 'Apartamento de 64m² com varanda gourmet cadastrado no catálogo.',
-    property_id: 'prop-1',
+    title: 'Apartamento no Brisamar',
+    body: 'Apartamento de 57m² com 2 quartos cadastrado no catálogo.',
+    property_id: 'prop-1790537804954',
     read: false,
-    created_at: 'Há 15 min',
+    created_at: 'Hoje',
   },
   {
     id: 'n2',
-    title: 'Captação Parceria Recebida',
-    body: 'Studio em Tambaú adicionado através de corretor parceiro.',
-    property_id: 'prop-7',
+    title: 'Studio em Intermares',
+    body: 'Studio de 22m² cadastrado no catálogo.',
+    property_id: 'prop-1790536332004',
     read: false,
-    created_at: 'Há 2 horas',
-  },
-  {
-    id: 'n3',
-    title: 'Preço Atualizado',
-    body: 'Cobertura Duplex no Altiplano ajustada para R$ 1.650.000.',
-    property_id: 'prop-4',
-    read: true,
-    created_at: 'Ontem',
+    created_at: 'Hoje',
   },
 ];
 
@@ -138,14 +131,33 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
   // ── Dados do Catálogo de Imóveis ──
   const [properties, setProperties] = useState<Property[]>(() => {
     const saved = localStorage.getItem('meus_imoveis_data');
+    let loaded: Property[] = [];
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Purga imóveis fictícios legados (ex: prop-01 a prop-24 ou fotos de unsplash)
+          loaded = parsed.filter((p: Property) => {
+            const isLegacySeedId = /^prop-(?:0?[1-9]|1[0-9]|2[0-4])$/.test(p.id);
+            const hasUnsplash = p.photos?.some(
+              (ph) => typeof ph?.storage_path === 'string' && ph.storage_path.includes('unsplash.com')
+            );
+            return !isLegacySeedId && !hasUnsplash;
+          });
+        }
       } catch (e) {
         console.error('Erro ao ler dados salvos:', e);
       }
     }
-    return [];
+
+    if (loaded.length === 0) {
+      return initialProperties;
+    }
+
+    // Garante que os imóveis reais canônicos estejam presentes
+    const existingIds = new Set(loaded.map((p) => p.id));
+    const missingCanonicals = initialProperties.filter((p) => !existingIds.has(p.id));
+    return missingCanonicals.length > 0 ? [...loaded, ...missingCanonicals] : loaded;
   });
 
   // Salva no localStorage quando alterado
