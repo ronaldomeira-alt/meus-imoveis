@@ -13,6 +13,7 @@ export interface FilterState {
   sourceType: string;
   status: string;
   sortBy: SortOption;
+  onlyThisWeek?: boolean;
 }
 
 interface PropertyFiltersProps {
@@ -36,7 +37,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
   const labelClass = 'text-[9.5px] font-bold text-ink-secondary uppercase tracking-wider block mb-1';
   const hasActiveFilters = Boolean(
     filters.neighborhood || filters.type || filters.bedrooms || filters.minPrice ||
-    filters.maxPrice || filters.sourceType || filters.status !== 'Ativo'
+    filters.maxPrice || filters.sourceType || filters.onlyThisWeek || filters.status !== 'Ativo'
   );
   const priceMinBound = Math.floor(availablePriceBounds.min / 10000) * 10000;
   const priceMaxBound = Math.max(priceMinBound + 10000, Math.ceil(availablePriceBounds.max / 10000) * 10000);
@@ -63,7 +64,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
 
   const reset = () => onFilterChange({
     neighborhood: '', type: '', bedrooms: '', minPrice: '', maxPrice: '',
-    sourceType: '', status: 'Ativo', sortBy: 'recent',
+    sourceType: '', status: 'Ativo', sortBy: 'recent', onlyThisWeek: false,
   });
 
   return (
@@ -192,9 +193,35 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
         </div>
       )}
       {hasActiveFilters && (
-        <button type="button" onClick={reset} className="inline-flex items-center gap-1 mt-2 text-[11px] text-accent font-semibold">
-          <X className="w-3 h-3" /> Limpar filtros
-        </button>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {filters.onlyThisWeek && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/30 text-[10.5px] font-semibold">
+              Esta semana
+              <button
+                type="button"
+                onClick={() => onFilterChange({ ...filters, onlyThisWeek: false })}
+                className="hover:text-ink-primary ml-0.5 cursor-pointer"
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          {filters.sourceType && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/30 text-[10.5px] font-semibold">
+              {filters.sourceType}
+              <button
+                type="button"
+                onClick={() => onFilterChange({ ...filters, sourceType: '' })}
+                className="hover:text-ink-primary ml-0.5 cursor-pointer"
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          <button type="button" onClick={reset} className="inline-flex items-center gap-1 text-[11px] text-accent font-semibold cursor-pointer">
+            <X className="w-3 h-3" /> Limpar filtros
+          </button>
+        </div>
       )}
     </div>
   );

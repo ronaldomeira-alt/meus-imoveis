@@ -39,6 +39,7 @@ const getStatValue = (id: SummaryFilterType, stats: DashboardStats): number => {
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
   stats,
+  activeFilter,
   onSelectFilter,
 }) => {
   return (
@@ -47,20 +48,26 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         const Icon = card.icon;
         const value = getStatValue(card.id, stats);
 
+        const isActive = activeFilter === card.id;
+
         return (
           <button
             key={card.id}
+            type="button"
             onClick={() => onSelectFilter(card.id)}
-            className="card-surface hover:!border-accent/60 text-left p-3.5 lg:p-4 flex flex-col justify-between group cursor-pointer"
+            className={`card-surface text-left p-3.5 lg:p-4 flex flex-col justify-between group cursor-pointer transition-all duration-150 select-none touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-[0.98] active:border-accent active:bg-accent/5 ${
+              isActive ? '!border-accent bg-accent/[0.06] shadow-sm' : 'hover:!border-accent/60'
+            }`}
             style={{ minHeight: '120px' }}
+            aria-label={`Ver ${card.label}: ${value}`}
           >
             <div className="flex items-center justify-between">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-accent-soft">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-accent-soft group-hover:bg-accent/20 transition-colors">
                 <Icon className="w-4 h-4 text-accent" strokeWidth={2.2} />
               </div>
               <ChevronRight
-                className="w-4 h-4 text-ink-muted opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150"
-                strokeWidth={1.8}
+                className="w-4 h-4 text-ink-muted/60 group-hover:text-accent group-hover:translate-x-0.5 transition-all duration-150"
+                strokeWidth={2}
               />
             </div>
 

@@ -41,6 +41,43 @@ const DEFAULT_FILTERS: FilterState = {
   sourceType: '',
   status: 'Ativo',
   sortBy: 'recent',
+  onlyThisWeek: false,
+};
+
+const SECTION_TO_PATH: Record<NavSection, string> = {
+  dashboard: '/dashboard',
+  estoque: '/estoque',
+  match: '/match',
+  captar: '/adicionar-imovel',
+  piloto: '/piloto-automatico',
+  calendario: '/calendario',
+  parceiros: '/parceiros',
+  arquivados: '/arquivados',
+  relatorios: '/relatorios',
+  configuracoes: '/configuracoes',
+};
+
+const PATH_TO_SECTION: Record<string, NavSection> = {
+  '/': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/estoque': 'estoque',
+  '/match': 'match',
+  '/adicionar-imovel': 'captar',
+  '/captar': 'captar',
+  '/piloto': 'piloto',
+  '/piloto-automatico': 'piloto',
+  '/calendario': 'calendario',
+  '/parceiros': 'parceiros',
+  '/arquivados': 'arquivados',
+  '/relatorios': 'relatorios',
+  '/configuracoes': 'configuracoes',
+  '/config': 'configuracoes',
+};
+
+const getSectionFromPathname = (pathname: string): NavSection => {
+  const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
+  if (clean.startsWith('/match')) return 'match';
+  return PATH_TO_SECTION[clean] || 'dashboard';
 };
 
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
@@ -65,43 +102,6 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = ({ theme, onToggleTheme }) => {
   const { signOut } = useAuth();
   const [currentUser] = useCurrentUser();
-
-  // ── Mapeamento de Rotas e Persistência na URL (F5 / Histórico) ──
-  const SECTION_TO_PATH: Record<NavSection, string> = useMemo(() => ({
-    dashboard: '/dashboard',
-    estoque: '/estoque',
-    match: '/match',
-    captar: '/adicionar-imovel',
-    piloto: '/piloto-automatico',
-    calendario: '/calendario',
-    parceiros: '/parceiros',
-    arquivados: '/arquivados',
-    relatorios: '/relatorios',
-    configuracoes: '/configuracoes',
-  }), []);
-
-  const PATH_TO_SECTION: Record<string, NavSection> = useMemo(() => ({
-    '/': 'dashboard',
-    '/dashboard': 'dashboard',
-    '/estoque': 'estoque',
-    '/match': 'match',
-    '/adicionar-imovel': 'captar',
-    '/captar': 'captar',
-    '/piloto': 'piloto',
-    '/piloto-automatico': 'piloto',
-    '/calendario': 'calendario',
-    '/parceiros': 'parceiros',
-    '/arquivados': 'arquivados',
-    '/relatorios': 'relatorios',
-    '/configuracoes': 'configuracoes',
-    '/config': 'configuracoes',
-  }), []);
-
-  const getSectionFromPathname = (pathname: string): NavSection => {
-    const clean = pathname.toLowerCase().replace(/\/$/, '') || '/';
-    if (clean.startsWith('/match')) return 'match';
-    return PATH_TO_SECTION[clean] || 'dashboard';
-  };
 
   // ── Navegação Ativa (inicializada a partir da URL) ──
   const [activeSection, setActiveSection] = useState<NavSection>(() => {
@@ -254,7 +254,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
     window.addEventListener('popstate', parseUrl);
     return () => window.removeEventListener('popstate', parseUrl);
-  }, [getSectionFromPathname]);
+  }, []);
 
   const handleOpenDetail = (property: Property) => {
     setViewingPropertyId(property.id);
@@ -400,6 +400,13 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         return false;
       }
 
+      // Filtro de Adicionados Esta Semana
+      if (filters.onlyThisWeek) {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        if (new Date(p.created_at) < oneWeekAgo) return false;
+      }
+
       return true;
     }).sort((a, b) => {
       if (filters.sortBy === 'price_asc') return a.price - b.price;
@@ -537,14 +544,17 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
   };
 
   const handleKpiCardClick = (filter: SummaryFilterType) => {
+    setSearchQuery('');
     if (filter === 'own') {
       setFilters({ ...DEFAULT_FILTERS, sourceType: 'Próprio' });
     } else if (filter === 'partner') {
       setFilters({ ...DEFAULT_FILTERS, sourceType: 'Parceiro' });
+    } else if (filter === 'this_week') {
+      setFilters({ ...DEFAULT_FILTERS, onlyThisWeek: true });
     } else {
       setFilters(DEFAULT_FILTERS);
     }
-    setActiveSection('estoque');
+    navigateToSection('estoque');
   };
 
   // ── Exportação de Dados ──
@@ -656,11 +666,23 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
           <div className="dashboard-scroll flex-1 flex flex-col min-h-0 gap-3 overflow-y-auto no-scrollbar animate-fade-in">
             {/* 1. TOPO: 4 KPI Cards */}
             <div className="flex-shrink-0">
-              <SummaryCards stats={stats} onSelectFilter={handleKpiCardClick} />
+              <SummaryCards
+                stats={stats}
+                activeFilter={
+                  filters.onlyThisWeek
+                    ? 'this_week'
+                    : filters.sourceType === 'Próprio'
+                    ? 'own'
+                    : filters.sourceType === 'Parceiro'
+                    ? 'partner'
+                    : undefined
+                }
+                onSelectFilter={handleKpiCardClick}
+              />
             </div>
 
             {/* Barra de Filtros Ativos Coordenados no Dashboard */}
-            {(filters.neighborhood || filters.type || filters.minPrice || filters.maxPrice) && (
+            {(filters.neighborhood || filters.type || filters.minPrice || filters.maxPrice || filters.sourceType || filters.onlyThisWeek) && (
               <div className="flex-shrink-0 flex items-center justify-between px-3.5 py-1.5 rounded-xl bg-accent/10 border border-accent/30 animate-fade-in text-xs">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-bold text-accent">Filtros no estoque:</span>
@@ -680,6 +702,18 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/15 text-blue-200 border border-accent/30 text-[10.5px]">
                       Faixa de preço
                       <button onClick={() => setFilters((p) => ({ ...p, minPrice: '', maxPrice: '' }))} className="hover:text-ink-primary ml-0.5">✕</button>
+                    </span>
+                  )}
+                  {filters.sourceType && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/15 text-blue-200 border border-accent/30 text-[10.5px]">
+                      Origem: <strong className="text-ink-primary">{filters.sourceType}</strong>
+                      <button onClick={() => setFilters((p) => ({ ...p, sourceType: '' }))} className="hover:text-ink-primary ml-0.5">✕</button>
+                    </span>
+                  )}
+                  {filters.onlyThisWeek && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/15 text-blue-200 border border-accent/30 text-[10.5px]">
+                      Cadastrados: <strong className="text-ink-primary">Esta semana</strong>
+                      <button onClick={() => setFilters((p) => ({ ...p, onlyThisWeek: false }))} className="hover:text-ink-primary ml-0.5">✕</button>
                     </span>
                   )}
                   <span className="text-ink-secondary text-[11px] font-medium">
