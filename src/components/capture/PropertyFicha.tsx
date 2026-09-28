@@ -14,11 +14,16 @@ import {
   AlignLeft,
   Check,
   X,
+  Calendar,
+  FileCheck,
+  Layers,
+  Bath,
 } from 'lucide-react';
 import type { ExtractedPropertyData } from '../../lib/gemini';
-import type { PropertyType } from '../../types/property';
+import type { PropertyType, DevelopmentStage, FeeStatus } from '../../types/property';
 import type { RequiredFieldsValidationResult, MandatoryPropertyFieldKey } from '../../lib/property-validation';
 import { VoiceNotesInput } from '../ui/VoiceNotesInput';
+import { DevelopmentTypologiesSection } from './DevelopmentTypologiesSection';
 
 interface PropertyFichaProps {
   data: ExtractedPropertyData;
@@ -30,6 +35,11 @@ interface PropertyFichaProps {
 }
 
 const PROPERTY_TYPES: PropertyType[] = ['Apartamento', 'Casa', 'Flat', 'Studio', 'Cobertura', 'Terreno', 'Outro'];
+
+const DEVELOPMENT_STAGES: DevelopmentStage[] = [
+  'Pré-lançamento',
+  'Lançamento',
+];
 
 const COMMON_NEIGHBORHOODS = [
   'Aeroclube',
@@ -91,12 +101,42 @@ const parseCurrencyInput = (value: string) => {
   return normalized !== '' ? parseFloat(normalized) : null;
 };
 
+export const formatBedroomsOptions = (options?: number[] | null): string => {
+  if (!options || options.length === 0) return '';
+  const sorted = Array.from(new Set(options)).sort((a, b) => a - b);
+  if (sorted.length === 1) {
+    return sorted[0] === 0 ? 'Studio' : `${sorted[0]} ${sorted[0] === 1 ? 'quarto' : 'quartos'}`;
+  }
+
+  if (sorted.length === 2) {
+    const firstStr = sorted[0] === 0 ? 'Studio' : `${sorted[0]}`;
+    const secondStr = `${sorted[1]} ${sorted[1] === 1 ? 'quarto' : 'quartos'}`;
+    return `${firstStr} e ${secondStr}`;
+  }
+
+  let isConsecutive = true;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i + 1] !== sorted[i] + 1) {
+      isConsecutive = false;
+      break;
+    }
+  }
+
+  if (isConsecutive) {
+    const firstStr = sorted[0] === 0 ? 'Studio' : String(sorted[0]);
+    const lastStr = `${sorted[sorted.length - 1]} quartos`;
+    return `${firstStr} a ${lastStr}`;
+  }
+
+  const labels = sorted.map((n) => (n === 0 ? 'Studio' : String(n)));
+  const allExceptLast = labels.slice(0, -1).join(', ');
+  const last = labels[labels.length - 1];
+  return `${allExceptLast} e ${last} quartos`;
+};
+
 const formatBedrooms = (data: ExtractedPropertyData): string => {
   if (data.bedrooms_options && data.bedrooms_options.length > 0) {
-    const opts = data.bedrooms_options;
-    if (opts.length === 1) return `${opts[0]} ${opts[0] === 1 ? 'quarto' : 'quartos'}`;
-    if (opts.length === 2) return `${opts[0]} e ${opts[1]} quartos`;
-    return `${opts.slice(0, -1).join(', ')} e ${opts[opts.length - 1]} quartos`;
+    return formatBedroomsOptions(data.bedrooms_options);
   }
   if (data.bedrooms != null) {
     return `${data.bedrooms} ${data.bedrooms === 1 ? 'quarto' : 'quartos'}`;
@@ -270,6 +310,7 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
   };
 
   const isComplete = requiredValidation.valid && pendingLabels.length === 0;
+  const isDevelopment = Boolean(data.is_development);
 
   return (
     <div className="space-y-5">
@@ -278,10 +319,12 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-ink-primary flex items-center gap-2">
             <AlignLeft className="w-3.5 h-3.5 text-accent" strokeWidth={2.2} />
-            Ficha do imóvel
+            {isDevelopment ? 'Ficha do empreendimento' : 'Ficha do imóvel'}
           </h3>
           <p className="text-[11.5px] text-ink-secondary mt-0.5">
-            Construída em tempo real a partir de áudio, texto ou edição direta.
+            {isDevelopment
+              ? 'Dados do empreendimento construídos em tempo real a partir de áudio, texto ou edição direta.'
+              : 'Construída em tempo real a partir de áudio, texto ou edição direta.'}
           </p>
         </div>
 
@@ -311,7 +354,572 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
         </div>
       </div>
 
-      {/* ── SEÇÃO 1: Espaço & Dimensões ── */}
+      {isDevelopment ? (
+        <>
+          {/* ── SEÇÃO 1: Identificação do Empreendimento ── */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-secondary/70 block">
+              Identificação do Empreendimento
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {/* Nome do Empreendimento / Prédio (Obrigatório) */}
+              <FichaItem
+                label="Nome do empreendimento"
+                icon={Building2}
+                required
+                resolved={!!(data.condominium_name || data.internal_name || data.title)}
+                showError={showValidationErrors}
+                errorMessage={errors.condominium_name}
+                className="sm:col-span-2"
+              >
+                <input
+                  type="text"
+                  value={data.condominium_name || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onUpdateField('condominium_name', val);
+                    onUpdateField('title', val);
+                  }}
+                  placeholder="Ex: Residencial Vivant, Infinity Coast..."
+                  className="w-full bg-transparent text-sm font-semibold text-ink-primary focus:outline-none border-b border-transparent focus:border-accent pb-0.5 placeholder-ink-secondary/50 placeholder:italic placeholder:font-normal placeholder:text-xs"
+                />
+              </FichaItem>
+
+              {/* Bairro (Obrigatório) */}
+              <FichaItem
+                label="Bairro"
+                icon={MapPin}
+                required
+                resolved={!!data.neighborhood}
+                showError={showValidationErrors}
+                errorMessage={errors.neighborhood}
+              >
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setNeighborhoodMenuOpen((value) => !value)}
+                    className="w-full text-left cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    <span className={`text-sm ${data.neighborhood ? 'font-semibold text-ink-primary' : 'text-ink-secondary/50 text-xs italic'}`}>
+                      {data.neighborhood || 'Selecionar bairro...'}
+                    </span>
+                  </button>
+                  {neighborhoodMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setNeighborhoodMenuOpen(false)} />
+                      <div className="absolute left-0 top-full mt-1.5 z-20 w-52 max-h-64 overflow-y-auto modal-surface rounded-xl py-1 shadow-modal border border-line-subtle">
+                        <div className="px-2 pb-1.5">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={data.neighborhood || ''}
+                            onChange={(event) => onUpdateField('neighborhood', event.target.value || null)}
+                            placeholder="Digite o bairro..."
+                            className="w-full rounded-lg border border-line-subtle bg-black/20 px-2.5 py-1.5 text-xs text-ink-primary outline-none focus:border-accent"
+                          />
+                        </div>
+                        {filteredNeighborhoods.map((neighborhood) => {
+                          const selected = data.neighborhood === neighborhood;
+                          return (
+                            <button
+                              key={neighborhood}
+                              type="button"
+                              onClick={() => {
+                                onUpdateField('neighborhood', neighborhood);
+                                setNeighborhoodMenuOpen(false);
+                              }}
+                              className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/[0.06] transition-colors cursor-pointer ${selected ? 'text-accent font-semibold' : 'text-ink-secondary'}`}
+                            >
+                              {neighborhood}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </FichaItem>
+
+              {/* Previsão de Entrega (Obrigatório) */}
+              <FichaItem
+                label="Previsão de entrega"
+                icon={Calendar}
+                required
+                resolved={!!data.delivery_date}
+                showError={showValidationErrors}
+                errorMessage={errors.delivery_date}
+              >
+                <input
+                  type="text"
+                  value={data.delivery_date || ''}
+                  onChange={(e) => onUpdateField('delivery_date', e.target.value)}
+                  placeholder="Ex: Dez/2026 ou 12/2026"
+                  className="w-full bg-transparent text-sm font-semibold text-ink-primary focus:outline-none border-b border-transparent focus:border-accent pb-0.5 placeholder-ink-secondary/50 placeholder:italic placeholder:font-normal placeholder:text-xs"
+                />
+              </FichaItem>
+
+              {/* Fase Comercial */}
+              <FichaItem
+                label="Fase comercial"
+                icon={Building2}
+                resolved={!!data.stage}
+                className="sm:col-span-2"
+              >
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {DEVELOPMENT_STAGES.map((st) => {
+                    const currentStage = data.stage || 'Lançamento';
+                    const isSelected = currentStage === st;
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => onUpdateField('stage', st)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-accent bg-accent/15 text-accent font-semibold'
+                            : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FichaItem>
+
+              {/* Registro de Incorporação (RI) */}
+              <FichaItem
+                label="Registro de Incorporação (RI)"
+                icon={FileCheck}
+                resolved={!!data.incorporation_registration}
+                className="sm:col-span-2"
+              >
+                <input
+                  type="text"
+                  value={data.incorporation_registration || ''}
+                  onChange={(e) => onUpdateField('incorporation_registration', e.target.value)}
+                  placeholder="Ex: R-3-145.892 (opcional)"
+                  className="w-full bg-transparent text-sm font-semibold text-ink-primary focus:outline-none border-b border-transparent focus:border-accent pb-0.5 placeholder-ink-secondary/50 placeholder:italic placeholder:font-normal placeholder:text-xs"
+                />
+              </FichaItem>
+
+              {/* Tipos presentes no empreendimento */}
+              <FichaItem
+                label="Tipos no empreendimento"
+                icon={Layers}
+                required
+                resolved={(data.development_types && data.development_types.length > 0) || !!data.type}
+                showError={showValidationErrors}
+                errorMessage={errors.type}
+                className="sm:col-span-2 lg:col-span-4"
+              >
+                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                  {PROPERTY_TYPES.map((t) => {
+                    const activeList = data.development_types || (data.type ? [data.type] : []);
+                    const isSelected = activeList.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? activeList.filter((x) => x !== t)
+                            : [...activeList, t];
+                          onUpdateField('development_types', next);
+                          if (next.length > 0) {
+                            onUpdateField('type', next[0]);
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-accent bg-accent/15 text-accent font-semibold shadow-sm'
+                            : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FichaItem>
+            </div>
+          </div>
+
+          {/* ── SEÇÃO 2: Metragem & Opções de Plantas ── */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-secondary/70 block">
+              Metragem & Estrutura das Unidades
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {/* Faixa de Área / Metragem */}
+              <FichaItem
+                label="Faixa de metragem (m²)"
+                icon={Maximize2}
+                required
+                resolved={Boolean((data.area_range && (data.area_range.min > 0 || data.area_range.max > 0)) || (data.area_m2 && data.area_m2 > 0))}
+                showError={showValidationErrors}
+                errorMessage={errors.area_m2}
+                className="sm:col-span-2"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <span className="text-[10px] text-ink-muted block mb-0.5">Mínima (m²) *</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={data.area_range?.min || data.area_m2 || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const min = !isNaN(val) ? val : 0;
+                        const max = data.area_range?.max || min;
+                        onUpdateField('area_range', { min, max: Math.max(min, max) });
+                        onUpdateField('area_m2', min);
+                      }}
+                      placeholder="Ex: 24"
+                      className="w-full h-8 px-2 text-xs rounded-lg border border-line-subtle bg-surface-2 text-ink-primary focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <span className="text-ink-muted text-xs mt-3">até</span>
+                  <div className="flex-1">
+                    <span className="text-[10px] text-ink-muted block mb-0.5">Máxima (m²)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={data.area_range?.max || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        const max = !isNaN(val) ? val : 0;
+                        const min = data.area_range?.min || data.area_m2 || max;
+                        onUpdateField('area_range', { min, max });
+                      }}
+                      placeholder="Ex: 68"
+                      className="w-full h-8 px-2 text-xs rounded-lg border border-line-subtle bg-surface-2 text-ink-primary focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+              </FichaItem>
+
+              {/* Opções de Quartos */}
+              <FichaItem
+                label="Opções de quartos"
+                icon={BedDouble}
+                required
+                resolved={Boolean((data.bedrooms_options && data.bedrooms_options.length > 0) || data.bedrooms != null)}
+                showError={showValidationErrors}
+                errorMessage={errors.bedrooms}
+                className="sm:col-span-2"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    {[0, 1, 2, 3, 4].map((num) => {
+                      const currentOpts = data.bedrooms_options || (data.bedrooms != null ? [data.bedrooms] : []);
+                      const isSelected = currentOpts.includes(num);
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => {
+                            const next = isSelected
+                              ? currentOpts.filter((n) => n !== num)
+                              : [...currentOpts, num].sort((a, b) => a - b);
+                            onUpdateField('bedrooms_options', next.length > 0 ? next : null);
+                            onUpdateField('bedrooms', next.length > 0 ? next[0] : null);
+                          }}
+                          className={`flex-1 h-8 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-accent bg-accent text-white shadow-sm'
+                              : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                          }`}
+                        >
+                          {num === 0 ? 'Studio' : `${num}Q`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {data.bedrooms_options && data.bedrooms_options.length > 0 && (
+                    <span className="text-[11px] text-accent font-medium block">
+                      {formatBedroomsOptions(data.bedrooms_options)}
+                    </span>
+                  )}
+                </div>
+              </FichaItem>
+
+              {/* Opções de Suítes */}
+              <FichaItem
+                label="Opções de suítes"
+                icon={DoorClosed}
+                resolved={Boolean(data.suites_options && data.suites_options.length > 0)}
+              >
+                <div className="flex gap-1">
+                  {[0, 1, 2, 3].map((num) => {
+                    const currentOpts = data.suites_options || [];
+                    const isSelected = currentOpts.includes(num);
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? currentOpts.filter((n) => n !== num)
+                            : [...currentOpts, num].sort((a, b) => a - b);
+                          onUpdateField('suites_options', next.length > 0 ? next : null);
+                        }}
+                        className={`flex-1 h-8 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-accent bg-accent/20 text-accent font-bold'
+                            : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                        }`}
+                      >
+                        {num === 0 ? '0' : num}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FichaItem>
+
+              {/* Opções de Banheiros */}
+              <FichaItem
+                label="Opções de banheiros"
+                icon={Bath}
+                resolved={Boolean(data.bathrooms_options && data.bathrooms_options.length > 0)}
+              >
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((num) => {
+                    const currentOpts = data.bathrooms_options || [];
+                    const isSelected = currentOpts.includes(num);
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? currentOpts.filter((n) => n !== num)
+                            : [...currentOpts, num].sort((a, b) => a - b);
+                          onUpdateField('bathrooms_options', next.length > 0 ? next : null);
+                        }}
+                        className={`flex-1 h-8 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-accent bg-accent/20 text-accent font-bold'
+                            : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                        }`}
+                      >
+                        {num === 5 ? '5+' : num}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FichaItem>
+
+              {/* Opções de Vagas */}
+              <FichaItem
+                label="Opções de vagas"
+                icon={Car}
+                resolved={Boolean((data.parking_options && data.parking_options.length > 0) || data.parking_spaces_type === 'Rotativas')}
+              >
+                <div className="flex gap-1">
+                  {[0, 1, 2, 3].map((num) => {
+                    const currentOpts = data.parking_options || [];
+                    const isSelected = currentOpts.includes(num);
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? currentOpts.filter((n) => n !== num)
+                            : [...currentOpts, num].sort((a, b) => a - b);
+                          onUpdateField('parking_options', next.length > 0 ? next : null);
+                        }}
+                        className={`flex-1 h-8 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-accent bg-accent/20 text-accent font-bold'
+                            : 'border-line-subtle bg-surface-2 text-ink-secondary hover:text-ink-primary'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+              </FichaItem>
+            </div>
+          </div>
+
+          {/* ── SEÇÃO 3: Valores & Encargos do Empreendimento ── */}
+          <div className="space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-secondary/70 block">
+              Valores & Custos do Empreendimento
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {/* Preço a partir de (R$) */}
+              <FichaItem
+                label="Preço a partir de"
+                icon={DollarSign}
+                required
+                resolved={Boolean((data.price_from && data.price_from > 0) || (data.price && data.price > 0))}
+                showError={showValidationErrors}
+                errorMessage={errors.price}
+              >
+                <InlineValue
+                  rawValue={(data.price_from || data.price)?.toString() ?? ''}
+                  displayValue={(data.price_from || data.price) != null ? currency(data.price_from || data.price!) : ''}
+                  placeholder="Ex: R$ 280.000"
+                  formatDraft={(value) => (value ? formatCurrencyValue(value) : '')}
+                  formatInput={formatCurrencyTyping}
+                  onCommit={(v) => {
+                    const parsed = parseCurrencyInput(v);
+                    onUpdateField('price_from', parsed);
+                    onUpdateField('price', parsed);
+                  }}
+                />
+              </FichaItem>
+
+              {/* Preço teto / até (R$, opcional) */}
+              <FichaItem
+                label="Preço até (opcional)"
+                icon={DollarSign}
+                resolved={Boolean(data.price_to && data.price_to > 0)}
+              >
+                <InlineValue
+                  rawValue={data.price_to?.toString() ?? ''}
+                  displayValue={data.price_to != null ? currency(data.price_to) : ''}
+                  placeholder="Ex: R$ 850.000"
+                  formatDraft={(value) => (value ? formatCurrencyValue(value) : '')}
+                  formatInput={formatCurrencyTyping}
+                  onCommit={(v) => onUpdateField('price_to', parseCurrencyInput(v))}
+                />
+              </FichaItem>
+
+              {/* Condomínio com Status Semântico */}
+              <FichaItem
+                label="Taxa de condomínio"
+                icon={Landmark}
+                resolved={true}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    {[
+                      { id: 'not_defined', label: 'Indefinido' },
+                      { id: 'estimated', label: 'Estimado' },
+                      { id: 'not_applicable', label: 'Não se aplica' },
+                    ].map((item) => {
+                      const currentStatus = data.condo_status || 'not_defined';
+                      const isSelected = currentStatus === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            onUpdateField('condo_status', item.id as FeeStatus);
+                            if (item.id === 'not_applicable') {
+                              onUpdateField('condo_not_applicable', true);
+                              onUpdateField('condo_fee', null);
+                            } else if (item.id === 'not_defined') {
+                              onUpdateField('condo_not_applicable', false);
+                              onUpdateField('condo_fee', null);
+                            } else {
+                              onUpdateField('condo_not_applicable', false);
+                            }
+                          }}
+                          className={`flex-1 px-1.5 py-0.5 text-[9.5px] rounded border transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'border-accent bg-accent/15 text-accent font-semibold'
+                              : 'border-line-subtle text-ink-secondary hover:text-ink-primary'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {data.condo_status === 'estimated' && (
+                    <InlineValue
+                      rawValue={data.condo_fee?.toString() ?? ''}
+                      displayValue={data.condo_fee != null ? currency(data.condo_fee) : ''}
+                      placeholder="R$ estimado..."
+                      formatDraft={(value) => (value ? formatCurrencyValue(value) : '')}
+                      formatInput={formatCurrencyTyping}
+                      onCommit={(v) => onUpdateField('condo_fee', parseCurrencyInput(v))}
+                    />
+                  )}
+                </div>
+              </FichaItem>
+
+              {/* IPTU com Status Semântico */}
+              <FichaItem
+                label="IPTU"
+                icon={Receipt}
+                resolved={true}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    {[
+                      { id: 'not_defined', label: 'Indefinido' },
+                      { id: 'estimated', label: 'Estimado' },
+                      { id: 'not_applicable', label: 'Não se aplica' },
+                    ].map((item) => {
+                      const currentStatus = data.iptu_status || 'not_defined';
+                      const isSelected = currentStatus === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            onUpdateField('iptu_status', item.id as FeeStatus);
+                            if (item.id !== 'estimated') {
+                              onUpdateField('iptu', null);
+                            }
+                          }}
+                          className={`flex-1 px-1.5 py-0.5 text-[9.5px] rounded border transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'border-accent bg-accent/15 text-accent font-semibold'
+                              : 'border-line-subtle text-ink-secondary hover:text-ink-primary'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {data.iptu_status === 'estimated' && (
+                    <InlineValue
+                      rawValue={data.iptu?.toString() ?? ''}
+                      displayValue={data.iptu != null ? currency(data.iptu) : ''}
+                      placeholder="R$ estimado..."
+                      formatDraft={(value) => (value ? formatCurrencyValue(value) : '')}
+                      formatInput={formatCurrencyTyping}
+                      onCommit={(v) => onUpdateField('iptu', parseCurrencyInput(v))}
+                    />
+                  )}
+                </div>
+              </FichaItem>
+            </div>
+          </div>
+
+          {/* ── SEÇÃO 4: Tipologias Disponíveis (Plantas) ── */}
+          <DevelopmentTypologiesSection
+            typologies={data.typologies || []}
+            onChange={(newTypologies) => {
+              onUpdateField('typologies', newTypologies);
+              if (newTypologies.length > 0) {
+                const prices = newTypologies.map((t) => t.price_from).filter((p) => p > 0);
+                if (prices.length > 0 && (!data.price_from || data.price_from === 0)) {
+                  const minPrice = Math.min(...prices);
+                  onUpdateField('price_from', minPrice);
+                  onUpdateField('price', minPrice);
+                }
+                const allBeds = Array.from(new Set(newTypologies.map((t) => t.bedrooms))).sort((a, b) => a - b);
+                if (allBeds.length > 0 && (!data.bedrooms_options || data.bedrooms_options.length === 0)) {
+                  onUpdateField('bedrooms_options', allBeds);
+                  onUpdateField('bedrooms', allBeds[0]);
+                }
+              }
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {/* ── SEÇÃO 1: Espaço & Dimensões ── */}
       <div className="space-y-2">
         <span className="text-[10px] font-bold uppercase tracking-wider text-ink-secondary/70 block">
           Identificação & Dimensões
@@ -738,6 +1346,8 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
           </FichaItem>
         </div>
       </div>
+        </>
+      )}
 
       {/* ── SEÇÃO 3: Lazer & Comodidades ── */}
       <div className="space-y-2">
@@ -831,8 +1441,12 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
       <VoiceNotesInput
         value={data.notes || ''}
         onChange={(val) => onUpdateField('notes', val)}
-        label="Observações & Percepções do Imóvel"
-        placeholder="Observações livres sobre o imóvel, vizinhança, proximidade do mar, rotina local, comércio ou pontos fortes da negociação..."
+        label={isDevelopment ? 'Observações & Percepções do Empreendimento' : 'Observações & Percepções do Imóvel'}
+        placeholder={
+          isDevelopment
+            ? 'Observações sobre o empreendimento, construtora, localização, previsão de valorização, condições de pagamento ou pontos fortes da negociação...'
+            : 'Observações livres sobre o imóvel, vizinhança, proximidade do mar, rotina local, comércio ou pontos fortes da negociação...'
+        }
         rows={3}
       />
     </div>

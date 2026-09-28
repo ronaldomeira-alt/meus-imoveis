@@ -17,7 +17,7 @@ import { ReportsView } from './components/reports/ReportsView';
 import { PilotoAutomaticoView } from './components/marketing/PilotoAutomaticoView';
 import { MarketingCalendarView } from './components/marketing/MarketingCalendarView';
 import { PostEditorModal } from './components/marketing/PostEditorModal';
-import { calculateDashboardStats } from './lib/supabase';
+import { calculateDashboardStats, supabase } from './lib/supabase';
 import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
@@ -30,7 +30,8 @@ import { AuthGuard } from './components/auth/AuthGuard';
 import { MatchView } from './components/match/MatchView';
 import { syncPropertyToMatch, deletePropertyFromMatch } from './lib/match/service';
 import { isMatchRelevantPropertyChange } from './lib/match/property-adapter';
-import { initialProperties } from './data/initialProperties';
+import type { InventorySnapshot } from './lib/inventorySync';
+import { deleteInventoryProperty, fetchInventorySnapshot, mergeInventoryProperties, syncInventoryProperties } from './lib/inventorySync';
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -80,6 +81,17 @@ const getSectionFromPathname = (pathname: string): NavSection => {
   return PATH_TO_SECTION[clean] || 'dashboard';
 };
 
+const PENDING_INVENTORY_DELETES_KEY = 'meus_imoveis_pending_deletes';
+
+const readPendingInventoryDeletes = (): string[] => {
+  try {
+    const value = JSON.parse(localStorage.getItem(PENDING_INVENTORY_DELETES_KEY) || '[]');
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
 const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'n1',
@@ -100,7 +112,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 ];
 
 const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = ({ theme, onToggleTheme }) => {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [currentUser] = useCurrentUser();
 
   // ── Navegação Ativa (inicializada a partir da URL) ──
@@ -150,20 +162,94 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       }
     }
 
-    if (loaded.length === 0) {
-      return initialProperties;
+    return loaded;
+  });
+
+  const [inventoryReady, setInventoryReady] = useState(() => !supabase);
+  const inventorySnapshotRef = React.useRef<InventorySnapshot>({ properties: [], deletedIds: [] });
+
+  // O Supabase é a fonte compartilhada; o localStorage mantém o app utilizável offline.
+  useEffect(() => {
+    const client = supabase;
+    if (!client || !user) {
+      return;
     }
 
-    // Garante que os imóveis reais canônicos estejam presentes
-    const existingIds = new Set(loaded.map((p) => p.id));
-    const missingCanonicals = initialProperties.filter((p) => !existingIds.has(p.id));
-    return missingCanonicals.length > 0 ? [...loaded, ...missingCanonicals] : loaded;
-  });
+    let disposed = false;
+    const flushPendingDeletes = async (): Promise<string[]> => {
+      const pending = readPendingInventoryDeletes();
+      const failed: string[] = [];
+      for (const id of pending) {
+        try {
+          await deletePropertyFromMatch(id);
+          await deleteInventoryProperty(id);
+        } catch {
+          failed.push(id);
+        }
+      }
+      localStorage.setItem(PENDING_INVENTORY_DELETES_KEY, JSON.stringify(failed));
+      return failed;
+    };
+    const bootstrap = async () => {
+      try {
+        const pendingDeletes = await flushPendingDeletes();
+        const snapshot = await fetchInventorySnapshot();
+        if (disposed) return;
+        snapshot.deletedIds = [...new Set([...snapshot.deletedIds, ...pendingDeletes])];
+        inventorySnapshotRef.current = snapshot;
+        const local = JSON.parse(localStorage.getItem('meus_imoveis_data') || '[]') as Property[];
+        const merged = mergeInventoryProperties(local, snapshot);
+        setProperties(merged);
+        await syncInventoryProperties(merged.filter((property) => !snapshot.deletedIds.includes(property.id)));
+      } catch (error) {
+        console.error('[Estoque] Não foi possível carregar a cópia compartilhada:', error);
+      } finally {
+        if (!disposed) setInventoryReady(true);
+      }
+    };
+
+    void bootstrap();
+
+    const refresh = async () => {
+      try {
+        const pendingDeletes = await flushPendingDeletes();
+        const snapshot = await fetchInventorySnapshot();
+        if (disposed) return;
+        snapshot.deletedIds = [...new Set([...snapshot.deletedIds, ...pendingDeletes])];
+        inventorySnapshotRef.current = snapshot;
+        setProperties((current) => {
+          const merged = mergeInventoryProperties(current, snapshot);
+          return JSON.stringify(merged) === JSON.stringify(current) ? current : merged;
+        });
+      } catch (error) {
+        console.error('[Estoque] Falha ao atualizar a sincronização:', error);
+      }
+    };
+    const channel = client
+      .channel('inventory-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_properties' }, () => void refresh())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inventory_property_tombstones' }, () => void refresh())
+      .subscribe();
+    const onResume = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('online', onResume);
+    document.addEventListener('visibilitychange', onResume);
+    return () => {
+      disposed = true;
+      window.removeEventListener('online', onResume);
+      document.removeEventListener('visibilitychange', onResume);
+      void client.removeChannel(channel);
+    };
+  }, [user]);
 
   // Salva no localStorage quando alterado
   useEffect(() => {
     localStorage.setItem('meus_imoveis_data', JSON.stringify(properties));
-  }, [properties]);
+    if (inventoryReady && supabase && user) {
+      const deletedIds = new Set(inventorySnapshotRef.current.deletedIds);
+      void syncInventoryProperties(properties.filter((property) => !deletedIds.has(property.id)))
+        .catch((error) => console.error('[Estoque] Falha ao salvar a cópia compartilhada:', error));
+    }
+  }, [properties, inventoryReady, user]);
 
   // ── Configurações de IA (Groq & Gemini) ──
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
@@ -216,13 +302,16 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
   const [matchToast, setMatchToast] = useState<{ title: string; count: number } | null>(null);
 
   // Sincronização inicial de imóveis ativos com a projeção do Match
+  const initialMatchSyncStarted = React.useRef(false);
   useEffect(() => {
+    if (!inventoryReady || initialMatchSyncStarted.current) return;
+    initialMatchSyncStarted.current = true;
     const activeProps = properties.filter((p) => p.status === 'Ativo');
     // Executa em segundo plano de forma silenciosa e não-bloqueante
     activeProps.forEach((p) => {
       syncPropertyToMatch(p).catch(() => {});
     });
-  }, []);
+  }, [inventoryReady, properties]);
 
 
 
@@ -276,28 +365,29 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
   };
 
   const handleUpdateProperty = (updatedProperty: Property) => {
+    const syncedProperty = { ...updatedProperty, updated_at: new Date().toISOString() };
     const currentProperty = properties.find((property) => property.id === updatedProperty.id);
     if (currentProperty?.public_page_active) {
       const token = getSavedPublicAdminToken();
       if (token) {
-        void setPublicPage(updatedProperty, updatedProperty.status === 'Ativo' && currentProperty.status === 'Ativo', token)
+        void setPublicPage(syncedProperty, syncedProperty.status === 'Ativo' && currentProperty.status === 'Ativo', token)
           .then((result) => setProperties((prev) => prev.map((property) => property.id === updatedProperty.id
-            ? { ...updatedProperty, public_page_id: result.id, public_page_active: result.active }
+            ? { ...syncedProperty, public_page_id: result.id, public_page_active: result.active }
             : property)))
           .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
       }
     }
     setProperties((prev) =>
-      prev.map((p) => (p.id === updatedProperty.id ? updatedProperty : p))
+      prev.map((p) => (p.id === syncedProperty.id ? syncedProperty : p))
     );
 
     // FASE 9 & 28: Recalcula Matches apenas se campos relevantes mudaram
-    if (currentProperty && isMatchRelevantPropertyChange(currentProperty, updatedProperty)) {
-      syncPropertyToMatch(updatedProperty)
+    if (currentProperty && isMatchRelevantPropertyChange(currentProperty, syncedProperty)) {
+      syncPropertyToMatch(syncedProperty)
         .then((res) => {
           if (res.strongMatchesCount > 0) {
             setMatchToast({
-              title: updatedProperty.title || updatedProperty.condominium_name || 'Imóvel atualizado',
+              title: syncedProperty.title || syncedProperty.condominium_name || 'Imóvel atualizado',
               count: res.strongMatchesCount,
             });
           }
@@ -420,34 +510,35 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
   // ── Ações de Imóveis ──
   const handleSaveNewProperty = (newProperty: Property) => {
-    setProperties((prev) => [newProperty, ...prev]);
+    const savedProperty = { ...newProperty, updated_at: new Date().toISOString() };
+    setProperties((prev) => [savedProperty, ...prev]);
 
     // Notificação automática
     const newNotification: NotificationItem = {
       id: `notif-${Date.now()}`,
-      title: `Novo ${newProperty.type} Adicionado`,
-      body: `${newProperty.neighborhood} • ${newProperty.area_m2}m² • R$ ${newProperty.price.toLocaleString('pt-BR')}`,
-      property_id: newProperty.id,
+      title: `Novo ${savedProperty.type} Adicionado`,
+      body: `${savedProperty.neighborhood} • ${savedProperty.area_m2}m² • R$ ${savedProperty.price.toLocaleString('pt-BR')}`,
+      property_id: savedProperty.id,
       read: false,
       created_at: 'Agora mesmo',
     };
     setNotifications((prev) => [newNotification, ...prev]);
 
     // FASE 9 & 10: Evento property.created -> Roda Match com leads elegíveis
-    syncPropertyToMatch(newProperty)
+    syncPropertyToMatch(savedProperty)
       .then((res) => {
         if (res.strongMatchesCount > 0) {
           const strongNotif: NotificationItem = {
             id: `match-strong-${Date.now()}`,
             title: 'Matches Fortes Encontrados 🎯',
-            body: `${newProperty.title || newProperty.condominium_name || 'Novo imóvel'} gerou ${res.strongMatchesCount} Matches fortes (${res.matchesCount} no total)!`,
-            property_id: newProperty.id,
+            body: `${savedProperty.title || savedProperty.condominium_name || 'Novo imóvel'} gerou ${res.strongMatchesCount} Matches fortes (${res.matchesCount} no total)!`,
+            property_id: savedProperty.id,
             read: false,
             created_at: 'Agora mesmo',
           };
           setNotifications((prev) => [strongNotif, ...prev]);
           setMatchToast({
-            title: newProperty.title || newProperty.condominium_name || 'Novo imóvel',
+            title: savedProperty.title || savedProperty.condominium_name || 'Novo imóvel',
             count: res.strongMatchesCount,
           });
         }
@@ -455,7 +546,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       .catch((err) => console.error('[Match] Erro ao sincronizar novo imóvel:', err));
 
     // Pergunta 1-Click: deseja agendar/criar publicação no Instagram para o imóvel?
-    setSavedPropertyPrompt(newProperty);
+    setSavedPropertyPrompt(savedProperty);
   };
 
   const handleArchiveProperty = async (id: string) => {
@@ -501,8 +592,20 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       try {
         await deletePropertyFromMatch(id);
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Não foi possível excluir o imóvel. Tente novamente.');
-        return;
+        const pending = new Set(readPendingInventoryDeletes());
+        pending.add(id);
+        localStorage.setItem(PENDING_INVENTORY_DELETES_KEY, JSON.stringify([...pending]));
+        inventorySnapshotRef.current.deletedIds = [...new Set([...inventorySnapshotRef.current.deletedIds, id])];
+        console.warn('[Match] Exclusão será reenviada quando houver conexão:', error);
+      }
+      try {
+        await deleteInventoryProperty(id);
+      } catch (error) {
+        const pending = new Set(readPendingInventoryDeletes());
+        pending.add(id);
+        localStorage.setItem(PENDING_INVENTORY_DELETES_KEY, JSON.stringify([...pending]));
+        inventorySnapshotRef.current.deletedIds = [...new Set([...inventorySnapshotRef.current.deletedIds, id])];
+        console.warn('[Estoque] Exclusão compartilhada será reenviada quando houver conexão:', error);
       }
       const property = properties.find((item) => item.id === id);
       const token = getSavedPublicAdminToken();
@@ -824,7 +927,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                       key={property.id}
                       property={property}
                       onClick={() => handleOpenDetail(property)}
-                      onUpdateProperty={(updated) => setProperties((current) => current.map((item) => item.id === updated.id ? updated : item))}
+                      onUpdateProperty={handleUpdateProperty}
                     />
                   ))}
                 </div>

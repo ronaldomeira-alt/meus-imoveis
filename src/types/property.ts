@@ -17,6 +17,28 @@ export type PropertyPosition =
 
 export type PropertyCondition = 'Novo' | 'Usado' | 'Reformado' | 'Outro';
 
+export type DevelopmentStage =
+  | 'Pré-lançamento'
+  | 'Lançamento'
+  | 'Em construção'
+  | 'Pronto para morar';
+
+export type FeeStatus = 'defined' | 'estimated' | 'not_defined' | 'not_applicable';
+
+export interface DevelopmentTypology {
+  id: string;
+  title?: string;
+  type: PropertyType;
+  area_min: number;
+  area_max?: number;
+  bedrooms: number;
+  suites?: number;
+  bathrooms?: number;
+  parking_spaces?: number;
+  price_from: number;
+  price_to?: number;
+}
+
 export type PropertyPurpose = 'Venda' | 'Locação';
 
 export type FieldState = 'informed' | 'missing' | 'ambiguous';
@@ -74,6 +96,18 @@ export interface Property {
   is_development?: boolean;
   area_range?: { min: number; max: number } | null;
   bedrooms_options?: number[] | null;
+  stage?: DevelopmentStage;
+  delivery_date?: string;
+  incorporation_registration?: string;
+  development_types?: PropertyType[];
+  suites_options?: number[] | null;
+  bathrooms_options?: number[] | null;
+  parking_options?: number[] | null;
+  price_from?: number;
+  price_to?: number;
+  condo_status?: FeeStatus;
+  iptu_status?: FeeStatus;
+  typologies?: DevelopmentTypology[];
   social_publications?: SocialPublications;
   price: number;
   condo_fee?: number;

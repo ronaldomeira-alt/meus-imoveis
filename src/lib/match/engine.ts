@@ -35,6 +35,85 @@ export function evaluateMatch(
   };
 
   // ------------------------------------------------------------
+  // 0. AVALIAÇÃO DE TIPOLOGIAS (PARA EMPREENDIMENTOS)
+  // Previne falsos positivos entre extremos (ex: lead de 3 quartos e 400k dando match em empreendimento com studio de 270k e 3Q de 790k)
+  // ------------------------------------------------------------
+  let activeEntryPrice = property.priceMin > 0 ? property.priceMin : property.priceMax;
+  let activeBedroomsMin = property.bedroomsMin;
+  let activeBedroomsMax = property.bedroomsMax;
+  let activeAreaMin = property.areaMin;
+  let activeAreaMax = property.areaMax;
+
+  if (property.typologies && property.typologies.length > 0) {
+    const validTypologies = property.typologies.filter((t) => {
+      // 1. Tipologia de imóvel restrita
+      if (profile.propertyTypeStrict && profile.propertyTypes.length > 0) {
+        const normType = normalizeString(t.type);
+        const matchType = profile.propertyTypes.some((pt) => {
+          const normPt = normalizeString(pt);
+          return normType.includes(normPt) || normPt.includes(normType);
+        });
+        if (!matchType) return false;
+      }
+
+      // 2. Quartos simultâneos com preço
+      if (profile.bedrooms.length > 0) {
+        if (profile.bedroomsStrict) {
+          const minRequiredBedrooms = Math.min(...profile.bedrooms);
+          if (t.bedrooms < minRequiredBedrooms) return false;
+        } else {
+          const hasBedroomFit = profile.bedrooms.some((b) => b === t.bedrooms || Math.abs(b - t.bedrooms) <= 1);
+          if (!hasBedroomFit) return false;
+        }
+      }
+
+      // 3. Preço da tipologia específica
+      if (profile.priceMax !== null && profile.priceMax > 0 && t.priceFrom > 0) {
+        const budgetLimit = profile.priceStrictMax ? profile.priceMax : profile.priceMax * 1.1;
+        if (t.priceFrom > budgetLimit) return false;
+      }
+
+      return true;
+    });
+
+    if (validTypologies.length === 0) {
+      if (profile.bedrooms.length > 0 && profile.priceMax !== null && profile.priceMax > 0) {
+        const matchingBedTypologies = property.typologies.filter((t) => {
+          if (profile.bedroomsStrict) return t.bedrooms >= Math.min(...profile.bedrooms);
+          return profile.bedrooms.includes(t.bedrooms);
+        });
+        if (matchingBedTypologies.length > 0) {
+          const lowestMatchingPrice = Math.min(...matchingBedTypologies.map((t) => t.priceFrom));
+          return eliminated(
+            `Unidades com ${matchingBedTypologies[0].bedrooms} quarto(s) iniciam em R$ ${lowestMatchingPrice.toLocaleString('pt-BR')}, acima do orçamento de R$ ${profile.priceMax.toLocaleString('pt-BR')}`,
+            breakdown
+          );
+        }
+      }
+      return eliminated(
+        'Nenhuma tipologia do empreendimento atende simultaneamente aos requisitos de quartos, tipo e orçamento do cliente',
+        breakdown
+      );
+    }
+
+    // Se há tipologias válidas, calibra os valores ativos com base na tipologia mais aderente
+    let bestTypology = validTypologies[0];
+    if (profile.bedrooms.length > 0) {
+      const exactBedTyp = validTypologies.find((t) => profile.bedrooms.includes(t.bedrooms));
+      if (exactBedTyp) bestTypology = exactBedTyp;
+    }
+
+    activeEntryPrice = bestTypology.priceFrom;
+    activeBedroomsMin = bestTypology.bedrooms;
+    activeBedroomsMax = bestTypology.bedrooms;
+    activeAreaMin = bestTypology.areaMin;
+    activeAreaMax = bestTypology.areaMax ?? bestTypology.areaMin;
+    breakdown.reasons.push(
+      `Tipologia compatível: ${bestTypology.title || `${bestTypology.type} (${bestTypology.bedrooms === 0 ? 'Studio' : `${bestTypology.bedrooms}Q`})`} a partir de R$ ${bestTypology.priceFrom.toLocaleString('pt-BR')}`
+    );
+  }
+
+  // ------------------------------------------------------------
   // 1. CRITÉRIOS ELIMINATÓRIOS INEQUÍVOCOS (FASE 6)
   // ------------------------------------------------------------
 
@@ -109,7 +188,7 @@ export function evaluateMatch(
   const isResidential = !['terreno', 'lote', 'comercial', 'sala'].includes(propTypeNorm);
   if (isResidential && profile.bedroomsStrict && profile.bedrooms.length > 0) {
     const minRequiredBedrooms = Math.min(...profile.bedrooms);
-    const propMaxBedrooms = property.bedroomsMax ?? property.bedroomsMin ?? 0;
+    const propMaxBedrooms = activeBedroomsMax ?? activeBedroomsMin ?? property.bedroomsMax ?? property.bedroomsMin ?? 0;
     if (propMaxBedrooms < minRequiredBedrooms) {
       return eliminated(
         `Cliente exige no mínimo ${minRequiredBedrooms} quarto(s) e imóvel possui no máximo ${propMaxBedrooms}`,
@@ -134,7 +213,7 @@ export function evaluateMatch(
   }
 
   // 1.8 Preço e Orçamento (com interseção de faixas e tolerância de 10%)
-  const entryPrice = property.priceMin > 0 ? property.priceMin : property.priceMax;
+  const entryPrice = activeEntryPrice;
   if (profile.priceMax !== null && profile.priceMax > 0 && entryPrice > 0) {
     const clientBudget = profile.priceMax;
     // Se o cliente declarou limite absoluto (FASE 6: não ultrapassar sequer 1 real)
@@ -249,8 +328,8 @@ export function evaluateMatch(
     if (profile.bedrooms.length === 0) {
       breakdown.bedrooms = Math.round(weightBedrooms * 0.8 * 10) / 10;
     } else {
-      const propMinBed = property.bedroomsMin ?? 1;
-      const propMaxBed = property.bedroomsMax ?? propMinBed;
+      const propMinBed = activeBedroomsMin ?? property.bedroomsMin ?? 1;
+      const propMaxBed = activeBedroomsMax ?? property.bedroomsMax ?? propMinBed;
       const hasIntersection = profile.bedrooms.some((b) => b >= propMinBed && b <= propMaxBed);
 
       if (hasIntersection) {

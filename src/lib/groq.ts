@@ -4,6 +4,7 @@ import type {
   PropertyPurpose,
   FieldState,
   SourceType,
+  DevelopmentStage,
 } from '../types/property';
 import { type ExtractedPropertyData, validatePropertyExtraction } from './gemini';
 
@@ -158,12 +159,22 @@ DIRETRIZES FUNDAMENTAIS DE CONFIABILIDADE (REGRA ZERO ALUCINAÇÃO):
    - Se não houver pedido expresso de anotação, RETORNE notes = null. NUNCA coloque a fala ou descrição geral do imóvel em notes.
 10. AMBIGUIDADES:
    - Se houver termos conflitantes ou ininteligíveis, adicione o nome do campo na lista "ambiguous_fields".
+11. EMPREENDIMENTO / NA PLANTA:
+   - Se for lançamento, na planta, pré-lançamento, em obras/construção, tiver faixa de metragens/quartos, ou citar RI / entrega futura, defina is_development = true.
+   - stage: Identifique o estágio se citado: "Pré-lançamento" | "Lançamento" | "Em construção" | "Pronto para morar" | null.
+   - delivery_date: Extraia data/previsão de entrega se citada (ex: "12/2026", "2027", "Dezembro 2026").
+   - incorporation_registration: Registro de Incorporação (RI) se citado (ex: "R-3-12345", "RI 45.678").
+   - price_from: Se o preço for no formato "a partir de...", extraia em price_from e também em price.
 
 Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao redor:
 {
   "purpose": "Venda" | "Locação" | null,
   "type": "Apartamento" | "Casa" | "Cobertura" | "Flat" | "Studio" | "Terreno" | "Comercial" | "Outro" | null,
   "is_development": boolean,
+  "stage": "Pré-lançamento" | "Lançamento" | "Em construção" | "Pronto para morar" | null,
+  "delivery_date": string | null,
+  "incorporation_registration": string | null,
+  "price_from": number | null,
   "neighborhood": string | null,
   "address": string | null,
   "number": string | null,
@@ -172,8 +183,11 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
   "bedrooms": number | null,
   "bedrooms_options": number[] | null,
   "suites": number | null,
+  "suites_options": number[] | null,
   "bathrooms": number | null,
+  "bathrooms_options": number[] | null,
   "parking_spaces": number | null,
+  "parking_options": number[] | null,
   "area_m2": number | null,
   "area_range": { "min": number, "max": number } | null,
   "is_approximate_area": boolean,
@@ -315,13 +329,32 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
     complement: parsed.complement ? String(parsed.complement).trim() : null,
     condominium_name: parsed.condominium_name ? String(parsed.condominium_name).trim() : null,
     is_development: Boolean(parsed.is_development),
+    stage: (['Pré-lançamento', 'Lançamento', 'Em construção', 'Pronto para morar'].includes(parsed.stage)
+      ? parsed.stage
+      : null) as DevelopmentStage | null,
+    delivery_date: parsed.delivery_date ? String(parsed.delivery_date).trim() : null,
+    incorporation_registration: parsed.incorporation_registration
+      ? String(parsed.incorporation_registration).trim()
+      : null,
+    price_from:
+      parseNullableNumber(parsed.price_from) ||
+      (Boolean(parsed.is_development) ? parseNullableNumber(parsed.price) : null),
     bedrooms: parseNullableNumber(parsed.bedrooms),
     bedrooms_options: Array.isArray(parsed.bedrooms_options)
       ? parsed.bedrooms_options.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
       : null,
     suites: parseNullableNumber(parsed.suites),
+    suites_options: Array.isArray(parsed.suites_options)
+      ? parsed.suites_options.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
+      : null,
     bathrooms: parseNullableNumber(parsed.bathrooms),
+    bathrooms_options: Array.isArray(parsed.bathrooms_options)
+      ? parsed.bathrooms_options.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
+      : null,
     parking_spaces: parseNullableNumber(parsed.parking_spaces),
+    parking_options: Array.isArray(parsed.parking_options)
+      ? parsed.parking_options.map((n: any) => parseInt(n, 10)).filter((n: number) => !isNaN(n))
+      : null,
     area_m2: parseNullableNumber(parsed.area_m2),
     area_range:
       parsed.area_range && (parsed.area_range.min || parsed.area_range.max)

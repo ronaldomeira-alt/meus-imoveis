@@ -9,6 +9,7 @@ interface PropertyGalleryProps {
   onSetCover: (index: number) => void;
   onReorderImages?: (newImages: ProcessedImage[]) => void;
   isProcessing: boolean;
+  isDevelopment?: boolean;
 }
 
 const VISIBLE_THUMBS = 10;
@@ -20,6 +21,7 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
   onSetCover,
   onReorderImages,
   isProcessing,
+  isDevelopment = false,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showAll, setShowAll] = useState(false);
@@ -116,7 +118,7 @@ export const PropertyGallery: React.FC<PropertyGalleryProps> = ({
           </div>
           <div className="text-center">
             <p className="text-xs font-medium text-ink-primary">
-              Clique para selecionar fotos e vídeos do imóvel
+              Clique para selecionar fotos e vídeos do {isDevelopment ? 'empreendimento' : 'imóvel'}
             </p>
             <p className="text-[11px] text-ink-secondary mt-0.5">
               A primeira foto será destacada automaticamente como foto principal

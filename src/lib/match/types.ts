@@ -89,6 +89,19 @@ export interface PropertyProjection {
   coverUrl?: string | null;
   publicUrl?: string | null;
   status: 'ativo' | 'inativo' | 'arquivado';
+  isDevelopment?: boolean;
+  typologies?: Array<{
+    id: string;
+    title?: string;
+    type: string;
+    areaMin: number;
+    areaMax?: number;
+    bedrooms: number;
+    suites?: number;
+    bathrooms?: number;
+    parkingSpaces?: number;
+    priceFrom: number;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

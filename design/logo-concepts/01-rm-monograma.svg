@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">RM monograma — conceito de logomarca</title>
+  <rect width="64" height="64" rx="14" fill="#173E77"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M13.5 47V17h11c5.8 0 9 3.1 9 8.5s-3.2 8.5-9 8.5h-11"/>
+    <path d="M24.5 34 34 47"/>
+    <path d="M37 47V17l8.5 14L54 17v30"/>
+  </g>
+</svg>

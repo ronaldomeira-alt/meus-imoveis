@@ -3,6 +3,7 @@ import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
 import { PropertyShareMenu } from './PropertyShareMenu';
 import { InstagramIcon } from '../ui/InstagramIcon';
+import { formatBedroomsOptions } from '../capture/PropertyFicha';
 
 interface PropertyCardProps {
   property: Property;
@@ -22,15 +23,20 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, o
 
   const areaText =
     property.area_range && (property.area_range.min || property.area_range.max)
-      ? `${property.area_range.min}–${property.area_range.max} m²`
+      ? property.area_range.min === property.area_range.max
+        ? `${property.area_range.min} m²`
+        : `${property.area_range.min}–${property.area_range.max} m²`
       : `${property.area_m2} m²`;
 
-  const bedroomsText =
-    property.bedrooms_options && property.bedrooms_options.length > 0
-      ? `${property.bedrooms_options.join(', ')} qts`
+  const bedroomsText = property.is_development
+    ? property.bedrooms_options && property.bedrooms_options.length > 0
+      ? formatBedroomsOptions(property.bedrooms_options)
       : property.type === 'Studio'
       ? 'Studio'
-      : `${property.bedrooms} quartos · ${property.suites} suíte${property.suites > 1 ? 's' : ''}`;
+      : `${property.bedrooms} quartos`
+    : property.type === 'Studio'
+    ? 'Studio'
+    : `${property.bedrooms} quartos · ${property.suites} suíte${property.suites > 1 ? 's' : ''}`;
 
   return (
     <div
@@ -68,14 +74,22 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, o
             className="font-bold text-[13px] text-ink-primary truncate group-hover:text-accent transition-colors leading-tight"
             style={{ letterSpacing: '-0.01em' }}
           >
-            {property.neighborhood}
+            {property.is_development && property.condominium_name
+              ? property.condominium_name
+              : property.neighborhood}
           </h4>
           {property.is_development && (
-            <span className="px-1.5 py-0.2 rounded text-[8.5px] font-bold uppercase tracking-wider bg-accent/15 text-accent border border-accent/30 flex-shrink-0">
-              Planta
+            <span className="px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase tracking-wider bg-accent/15 text-accent border border-accent/30 flex-shrink-0">
+              {property.stage || 'Na planta'}
             </span>
           )}
         </div>
+
+        {property.is_development && property.condominium_name && (
+          <span className="text-[10.5px] text-ink-muted block truncate mt-0.5">
+            {property.neighborhood}
+          </span>
+        )}
 
         <p className="text-[11px] text-ink-secondary mt-1 truncate">
           {bedroomsText} · {areaText}
@@ -102,12 +116,17 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, o
 
         {/* Preço + Origem */}
         <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-line-subtle">
-          <span
-            className="font-black text-[12.5px] text-ink-primary tabular"
-            style={{ letterSpacing: '-0.03em' }}
-          >
-            {formatPrice(property.price)}
-          </span>
+          <div className="flex flex-col">
+            {property.is_development && (
+              <span className="text-[9px] uppercase tracking-wider text-ink-muted font-medium">A partir de</span>
+            )}
+            <span
+              className="font-black text-[12.5px] text-ink-primary tabular"
+              style={{ letterSpacing: '-0.03em' }}
+            >
+              {formatPrice(property.price_from || property.price)}
+            </span>
+          </div>
 
           <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.05] text-ink-secondary border border-line-subtle">
             {property.source_type}

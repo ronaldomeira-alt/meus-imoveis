@@ -5,6 +5,9 @@ import type {
   PropertyPurpose,
   FieldState,
   SourceType,
+  DevelopmentStage,
+  FeeStatus,
+  DevelopmentTypology,
 } from '../types/property';
 
 export interface ExtractedPropertyData {
@@ -17,6 +20,7 @@ export interface ExtractedPropertyData {
   cep?: string | null;
   condominium_name?: string | null;
   internal_name?: string | null;
+  title?: string | null;
   unit?: string | null;
   bedrooms?: number | null;
   suites?: number | null;
@@ -30,6 +34,18 @@ export interface ExtractedPropertyData {
   is_development?: boolean;
   area_range?: { min: number; max: number } | null;
   bedrooms_options?: number[] | null;
+  stage?: DevelopmentStage | null;
+  delivery_date?: string | null;
+  incorporation_registration?: string | null;
+  development_types?: PropertyType[] | null;
+  suites_options?: number[] | null;
+  bathrooms_options?: number[] | null;
+  parking_options?: number[] | null;
+  price_from?: number | null;
+  price_to?: number | null;
+  condo_status?: FeeStatus | null;
+  iptu_status?: FeeStatus | null;
+  typologies?: DevelopmentTypology[] | null;
   social_publications?: any;
   condo_fee?: number | null;
   condo_included?: boolean;
@@ -202,41 +218,68 @@ export const extractPropertyWithGemini = async (
     new RegExp(`(?:n[ãa]o (?:tem|possui|há)|sem)\\s+(?:\\w+\\s+){0,2}${subject}`).test(textLower);
 
   let suites: number | null = null;
-  const matchSuites = textLower.match(/(\d+|uma?|dois|duas|três|tres|quatro)\s*su[íi]tes?/);
-  if (matchSuites) {
-    const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3, quatro: 4 };
-    suites = wordMap[matchSuites[1]] || parseInt(matchSuites[1], 10) || null;
-    field_states.suites = 'informed';
-  } else if (isNegated('su[íi]tes?')) {
-    suites = 0;
+  let suites_options: number[] | null = null;
+  const multiSuitesMatch = textLower.match(/([0-3])\s*(?:,|\s*e|\s*ou)\s*([1-4])\s*su[íi]tes?/);
+  if (multiSuitesMatch) {
+    const opts = [parseInt(multiSuitesMatch[1], 10), parseInt(multiSuitesMatch[2], 10)].sort((a, b) => a - b);
+    suites_options = Array.from(new Set(opts));
+    suites = suites_options[0];
     field_states.suites = 'informed';
   } else {
-    field_states.suites = 'missing';
+    const matchSuites = textLower.match(/(\d+|uma?|dois|duas|três|tres|quatro)\s*su[íi]tes?/);
+    if (matchSuites) {
+      const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3, quatro: 4 };
+      suites = wordMap[matchSuites[1]] || parseInt(matchSuites[1], 10) || null;
+      field_states.suites = 'informed';
+    } else if (isNegated('su[íi]tes?')) {
+      suites = 0;
+      field_states.suites = 'informed';
+    } else {
+      field_states.suites = 'missing';
+    }
   }
 
-  // Banheiros (somente se dito explicitamente, sem inventar suites > 1 ? suites : 2)
+  // Banheiros
   let bathrooms: number | null = null;
-  const matchBanheiros = textLower.match(/(\d+|um|dois|três|tres|quatro)\s*banheiros?/);
-  if (matchBanheiros) {
-    const wordMap: Record<string, number> = { um: 1, dois: 2, três: 3, tres: 3, quatro: 4 };
-    bathrooms = wordMap[matchBanheiros[1]] || parseInt(matchBanheiros[1], 10) || null;
+  let bathrooms_options: number[] | null = null;
+  const multiBathMatch = textLower.match(/([1-4])\s*(?:,|\s*e|\s*ou|-|a)\s*([1-5])\s*banheiros?/);
+  if (multiBathMatch) {
+    const opts = [parseInt(multiBathMatch[1], 10), parseInt(multiBathMatch[2], 10)].sort((a, b) => a - b);
+    bathrooms_options = Array.from(new Set(opts));
+    bathrooms = bathrooms_options[0];
     field_states.bathrooms = 'informed';
   } else {
-    field_states.bathrooms = 'missing';
+    const matchBanheiros = textLower.match(/(\d+|um|dois|três|tres|quatro)\s*banheiros?/);
+    if (matchBanheiros) {
+      const wordMap: Record<string, number> = { um: 1, dois: 2, três: 3, tres: 3, quatro: 4 };
+      bathrooms = wordMap[matchBanheiros[1]] || parseInt(matchBanheiros[1], 10) || null;
+      field_states.bathrooms = 'informed';
+    } else {
+      field_states.bathrooms = 'missing';
+    }
   }
 
   // Vagas
   let parking_spaces: number | null = null;
-  const matchVagas = textLower.match(/(\d+|uma?|dois|duas|três|tres)\s*(?:vagas?|garagens?)/);
-  if (matchVagas) {
-    const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3 };
-    parking_spaces = wordMap[matchVagas[1]] || parseInt(matchVagas[1], 10) || null;
-    field_states.parking_spaces = 'informed';
-  } else if (isNegated('vagas?|garagens?')) {
-    parking_spaces = 0;
+  let parking_options: number[] | null = null;
+  const multiVagasMatch = textLower.match(/([0-3])\s*(?:,|\s*e|\s*ou|-|a)\s*([1-4])\s*(?:vagas?|garagens?)/);
+  if (multiVagasMatch) {
+    const opts = [parseInt(multiVagasMatch[1], 10), parseInt(multiVagasMatch[2], 10)].sort((a, b) => a - b);
+    parking_options = Array.from(new Set(opts));
+    parking_spaces = parking_options[0];
     field_states.parking_spaces = 'informed';
   } else {
-    field_states.parking_spaces = 'missing';
+    const matchVagas = textLower.match(/(\d+|uma?|dois|duas|três|tres)\s*(?:vagas?|garagens?)/);
+    if (matchVagas) {
+      const wordMap: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, três: 3, tres: 3 };
+      parking_spaces = wordMap[matchVagas[1]] || parseInt(matchVagas[1], 10) || null;
+      field_states.parking_spaces = 'informed';
+    } else if (isNegated('vagas?|garagens?')) {
+      parking_spaces = 0;
+      field_states.parking_spaces = 'informed';
+    } else {
+      field_states.parking_spaces = 'missing';
+    }
   }
 
   // 5. Área m² (com suporte a faixa ex: 19 a 39 m² ou 19–39 metros e incerteza)
@@ -404,6 +447,37 @@ export const extractPropertyWithGemini = async (
     notes = explicitNoteMatch[1].trim();
   }
 
+  // 12. Estágio, Previsão de Entrega e RI para Empreendimentos
+  let stage: DevelopmentStage | null = null;
+  if (textLower.includes('pré-lançamento') || textLower.includes('pre lancamento')) {
+    stage = 'Pré-lançamento';
+    is_development = true;
+  } else if (textLower.includes('lançamento') || textLower.includes('lancamento')) {
+    stage = 'Lançamento';
+    is_development = true;
+  } else if (textLower.includes('em construção') || textLower.includes('em construcao') || textLower.includes('em obra')) {
+    stage = 'Em construção';
+    is_development = true;
+  } else if (textLower.includes('pronto para morar')) {
+    stage = 'Pronto para morar';
+  }
+
+  let delivery_date: string | null = null;
+  const matchDelivery = text.match(/(?:entrega|previsão de entrega|previsao de entrega|prazo de entrega|previsto para|conclusão em)[:\s]+([a-zA-Z0-9\s/.-]{3,25})/i);
+  if (matchDelivery) {
+    delivery_date = matchDelivery[1].trim();
+    is_development = true;
+  }
+
+  let incorporation_registration: string | null = null;
+  const matchRI = text.match(/(?:r\.?i\.?|registro de incorpora[çc][ãa]o)[:\s]+([a-zA-Z0-9\-./]{3,25})/i);
+  if (matchRI) {
+    incorporation_registration = matchRI[1].trim();
+    is_development = true;
+  }
+
+  const price_from = is_development && price ? price : null;
+
   const resultData: ExtractedPropertyData = {
     purpose,
     type,
@@ -411,12 +485,19 @@ export const extractPropertyWithGemini = async (
     bedrooms,
     bedrooms_options,
     suites,
+    suites_options,
     bathrooms,
+    bathrooms_options,
     parking_spaces,
+    parking_options,
     area_m2,
     area_range,
     is_approximate_area,
     is_development,
+    stage,
+    delivery_date,
+    incorporation_registration,
+    price_from,
     price,
     is_approximate_price,
     condo_fee,

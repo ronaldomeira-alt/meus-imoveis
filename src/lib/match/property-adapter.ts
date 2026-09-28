@@ -55,8 +55,8 @@ export function propertyToProjection(
 
   // Preço e faixas (FASE 3)
   const propWithRange = property as Property & { price_range?: { min: number; max: number } | null };
-  const priceMin = propWithRange.price_range?.min ?? property.price ?? 0;
-  const priceMax = propWithRange.price_range?.max ?? property.price ?? priceMin;
+  const priceMin = propWithRange.price_range?.min ?? property.price_from ?? property.price ?? 0;
+  const priceMax = propWithRange.price_range?.max ?? property.price_to ?? property.price ?? priceMin;
 
   // Metragem e faixas (FASE 3)
   const areaMin = property.area_range?.min ?? property.area_m2 ?? null;
@@ -81,7 +81,17 @@ export function propertyToProjection(
     property.notes || '',
   ].join(' ').toLowerCase();
 
-  if (notesAndFeatures.includes('na planta') || notesAndFeatures.includes('lançamento')) {
+  if (property.is_development) {
+    if (property.stage === 'Pré-lançamento' || property.stage === 'Lançamento') {
+      deliveryStatus = 'planta';
+    } else if (property.stage === 'Em construção') {
+      deliveryStatus = 'em_construcao';
+    } else if (property.stage === 'Pronto para morar') {
+      deliveryStatus = 'pronto';
+    } else {
+      deliveryStatus = 'planta';
+    }
+  } else if (notesAndFeatures.includes('na planta') || notesAndFeatures.includes('lançamento')) {
     deliveryStatus = 'planta';
   } else if (notesAndFeatures.includes('em construção') || notesAndFeatures.includes('obra')) {
     deliveryStatus = 'em_construcao';
@@ -108,6 +118,21 @@ export function propertyToProjection(
     ])
   );
 
+  const typologies = property.typologies && property.typologies.length > 0
+    ? property.typologies.map((t) => ({
+        id: t.id,
+        title: t.title,
+        type: t.type,
+        areaMin: Number(t.area_min) || 0,
+        areaMax: t.area_max ? Number(t.area_max) : undefined,
+        bedrooms: t.bedrooms,
+        suites: t.suites,
+        bathrooms: t.bathrooms,
+        parkingSpaces: t.parking_spaces,
+        priceFrom: Number(t.price_from) || 0,
+      }))
+    : undefined;
+
   return {
     propertyId,
     accountId,
@@ -124,11 +149,13 @@ export function propertyToProjection(
     bedroomsMin,
     bedroomsMax,
     deliveryStatus,
-    deliveryDeadline: null,
+    deliveryDeadline: property.delivery_date || null,
     features,
     coverUrl,
     publicUrl: property.public_page_id ? `/imovel/${property.public_page_id}` : undefined,
     status,
+    isDevelopment: Boolean(property.is_development),
+    typologies,
     updatedAt: property.updated_at || new Date().toISOString(),
   };
 }
@@ -147,12 +174,14 @@ export function isMatchRelevantPropertyChange(oldProp: Property, newProp: Proper
   if (oldProp.area_m2 !== newProp.area_m2) return true;
   if (oldProp.parking_spaces !== newProp.parking_spaces) return true;
   if (oldProp.condition !== newProp.condition) return true;
+  if (oldProp.is_development !== newProp.is_development) return true;
 
   // Empreendimentos
   const oldAny = oldProp as any;
   const newAny = newProp as any;
   if (JSON.stringify(oldProp.bedrooms_options) !== JSON.stringify(newProp.bedrooms_options)) return true;
   if (JSON.stringify(oldProp.area_range) !== JSON.stringify(newProp.area_range)) return true;
+  if (JSON.stringify(oldProp.typologies) !== JSON.stringify(newProp.typologies)) return true;
   if (JSON.stringify(oldAny.price_range) !== JSON.stringify(newAny.price_range)) return true;
 
   // Features estruturais (elevador, acessibilidade, piscina)
