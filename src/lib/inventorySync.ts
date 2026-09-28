@@ -6,13 +6,57 @@ export interface InventorySnapshot {
   deletedIds: string[];
 }
 
+const restoreMissingPropertyPhotos = async (properties: Property[]): Promise<Property[]> => {
+  if (!supabase) return properties;
+
+  const missingPhotoIds = properties
+    .filter((property) => property.id && (!Array.isArray(property.photos) || property.photos.length === 0))
+    .map((property) => property.id);
+  if (missingPhotoIds.length === 0) return properties;
+
+  const { data, error } = await supabase
+    .from('property_media')
+    .select('id, property_id, storage_path, object_key, storage_provider, sort_order, is_cover, media_type, mime_type, size_bytes')
+    .in('property_id', missingPhotoIds)
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    console.warn('[Estoque] Não foi possível recuperar referências de fotos:', error);
+    return properties;
+  }
+
+  const photosByPropertyId = new Map<string, NonNullable<Property['photos']>>();
+  for (const media of data || []) {
+    if (!media.property_id || !media.storage_path) continue;
+    const photos = photosByPropertyId.get(media.property_id) || [];
+    photos.push({
+      id: media.id,
+      property_id: media.property_id,
+      storage_path: media.storage_path,
+      object_key: media.object_key || undefined,
+      storage_provider: media.storage_provider,
+      sort_order: media.sort_order,
+      is_cover: media.is_cover,
+      media_type: media.media_type,
+      mime_type: media.mime_type || undefined,
+      size_bytes: media.size_bytes || undefined,
+    });
+    photosByPropertyId.set(media.property_id, photos);
+  }
+
+  return properties.map((property) => {
+    const restoredPhotos = photosByPropertyId.get(property.id);
+    return restoredPhotos?.length ? { ...property, photos: restoredPhotos } : property;
+  });
+};
+
 export const fetchInventorySnapshot = async (): Promise<InventorySnapshot> => {
   if (!supabase) throw new Error('Supabase não está configurado.');
   const { data, error } = await supabase.rpc('get_inventory_snapshot');
   if (error) throw error;
   const snapshot = data as Partial<InventorySnapshot> | null;
   return {
-    properties: Array.isArray(snapshot?.properties) ? snapshot.properties : [],
+    properties: await restoreMissingPropertyPhotos(Array.isArray(snapshot?.properties) ? snapshot.properties : []),
     deletedIds: Array.isArray(snapshot?.deletedIds) ? snapshot.deletedIds : [],
   };
 };
@@ -45,7 +89,12 @@ export const mergeInventoryProperties = (
     const localUpdatedAt = Date.parse(property.updated_at || property.created_at || '');
     const remoteUpdatedAt = Date.parse(remote?.updated_at || remote?.created_at || '');
     if (!remote || (Number.isFinite(localUpdatedAt) && localUpdatedAt > remoteUpdatedAt)) {
-      merged.set(property.id, property);
+      merged.set(
+        property.id,
+        !property.photos?.length && remote?.photos?.length
+          ? { ...property, photos: remote.photos }
+          : property
+      );
     }
   }
   return [...merged.values()].sort((a, b) =>
