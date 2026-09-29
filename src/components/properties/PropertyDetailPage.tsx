@@ -27,7 +27,7 @@ import { InstagramIcon } from '../ui/InstagramIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Property } from '../../types/property';
 import { getPhotoUrl } from '../../lib/supabase';
-import { sharePropertySafely } from '../../lib/share-sanitizer';
+import { PropertyShareModal } from './PropertyShareModal';
 import { PostEditorModal } from '../marketing/PostEditorModal';
 
 interface PropertyDetailPageProps {
@@ -55,7 +55,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
   const [fullscreenDragX, setFullscreenDragX] = useState(0);
   const [fullscreenTrackAnimating, setFullscreenTrackAnimating] = useState(false);
-  const [shareSuccess, setShareSuccess] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
@@ -154,12 +154,8 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       maximumFractionDigits: 0,
     }).format(val);
 
-  const handleShare = async () => {
-    const success = await sharePropertySafely(property);
-    if (success) {
-      setShareSuccess(true);
-      setTimeout(() => setShareSuccess(false), 3000);
-    }
+  const handleShare = () => {
+    setIsShareModalOpen(true);
   };
 
   const cleanPhone = (phone?: string) => (phone ? phone.replace(/\D/g, '') : '');
@@ -237,14 +233,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           {/* Compartilhar */}
           <button
             onClick={handleShare}
-            className={`h-9 w-9 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] ${
-              shareSuccess
-                ? 'bg-status-success/20 text-status-success border border-status-success/40'
-                : 'pill-surface text-ink-primary hover:text-ink-primary'
-            }`}
+            title="Compartilhar imóvel com cliente"
+            className="h-9 w-9 md:w-auto md:h-auto md:px-3 md:py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] pill-surface text-ink-primary hover:text-ink-primary"
           >
-            {shareSuccess ? <Check className="w-3.5 h-3.5 text-status-success" /> : <Share2 className="w-3.5 h-3.5 text-accent" />}
-            <span className="hidden md:inline">{shareSuccess ? 'Copiado!' : 'Compartilhar'}</span>
+            <Share2 className="w-3.5 h-3.5 text-accent" />
+            <span className="hidden md:inline">Compartilhar</span>
           </button>
 
           {/* Menu de Ações Secundárias (•••) */}
@@ -913,6 +906,13 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           }}
         />
       )}
+
+      {/* Modal Universal de Compartilhamento */}
+      <PropertyShareModal
+        property={property}
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+      />
     </div>
   );
 };

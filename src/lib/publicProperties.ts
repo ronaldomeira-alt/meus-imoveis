@@ -1,9 +1,12 @@
 import { getPhotoUrl } from './supabase';
 import type { Property } from '../types/property';
 
+import { getPropertyPublicUrl } from './propertyShare';
+export { getPropertyPublicUrl };
+
 const ADMIN_TOKEN_KEY = 'meus-imoveis-public-pages-admin-token';
 
-export const getPublicPageUrl = (id: string) => `${window.location.origin}/imovel/${encodeURIComponent(id)}`;
+export const getPublicPageUrl = (id: string) => getPropertyPublicUrl(id);
 export const getSavedPublicAdminToken = () => localStorage.getItem(ADMIN_TOKEN_KEY) || '';
 export const savePublicAdminToken = (token: string) => localStorage.setItem(ADMIN_TOKEN_KEY, token);
 

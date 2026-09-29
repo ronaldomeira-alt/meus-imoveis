@@ -29,10 +29,12 @@ const publicPagesPlugin = {
     server.middlewares.use('/api/property-lifecycle', propertyLifecycleApi.handlePropertyDeletion)
     server.middlewares.use('/api/instagram-import', instagramImportApi.handleInstagramImport)
     server.middlewares.use('/imovel', (req, res, next) => {
-      const match = req.url?.match(/^\/([0-9a-f-]{36})(?:\?.*)?$/i)
-      if (!match) return next()
-      req.url = `/?id=${encodeURIComponent(match[1])}`
-      return publicApi.handlePublicPageHtml(req, res, next)
+      const parsedUrl = new URL(req.url || '/', 'http://localhost');
+      const match = parsedUrl.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
+      if (!match) return next();
+      parsedUrl.searchParams.set('id', match[1]);
+      req.url = `${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
+      return publicApi.handlePublicPageHtml(req, res, next);
     })
   },
   configurePreviewServer(server: { middlewares: Connect.Server }) {
@@ -42,16 +44,21 @@ const publicPagesPlugin = {
     server.middlewares.use('/api/property-lifecycle', propertyLifecycleApi.handlePropertyDeletion)
     server.middlewares.use('/api/instagram-import', instagramImportApi.handleInstagramImport)
     server.middlewares.use('/imovel', (req, res, next) => {
-      const match = req.url?.match(/^\/([0-9a-f-]{36})(?:\?.*)?$/i)
-      if (!match) return next()
-      req.url = `/?id=${encodeURIComponent(match[1])}`
-      return publicApi.handlePublicPageHtml(req, res, next)
+      const parsedUrl = new URL(req.url || '/', 'http://localhost');
+      const match = parsedUrl.pathname.match(/^\/([a-zA-Z0-9_-]+)/);
+      if (!match) return next();
+      parsedUrl.searchParams.set('id', match[1]);
+      req.url = `${parsedUrl.pathname}?${parsedUrl.searchParams.toString()}`;
+      return publicApi.handlePublicPageHtml(req, res, next);
     })
   },
 }
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  }
   const env = loadEnv(mode, process.cwd(), '')
   process.env.VITE_SUPABASE_URL ||= env.VITE_SUPABASE_URL
   process.env.VITE_SUPABASE_ANON_KEY ||= env.VITE_SUPABASE_ANON_KEY
