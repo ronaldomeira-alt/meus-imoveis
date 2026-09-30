@@ -130,6 +130,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -684,10 +685,18 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const progressPct = Math.round(((10 - pendingKeys.length) / 10) * 100);
 
   const handleConfirmSave = () => {
-    if (isImportingInstagram || isProcessingImages || isProcessingAI || images.some((image) => image.isUploading || image.uploadError)) {
-      setErrorMessage('Aguarde o fim da importação e confira as fotos antes de salvar.');
+    if (isSaving) return;
+
+    if (isImportingInstagram || isImportingDocument || isProcessingImages || isProcessingAI) {
+      setErrorMessage('Aguarde a leitura e o processamento dos dados terminarem antes de salvar.');
       return;
     }
+
+    if (images.some((image) => image.isUploading)) {
+      setErrorMessage('Aguarde o envio das fotos terminar antes de salvar o imóvel.');
+      return;
+    }
+
     if (!requiredValidation.valid) {
       setShowValidationErrors(true);
       setShowMissingFieldsModal(true);
@@ -695,99 +704,123 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       return;
     }
 
-    const newPropertyId = propertyIdRef.current;
-    const photos: PropertyPhoto[] = images.map((img, idx) => ({
-      id: img.id || `photo-${idx}`,
-      property_id: newPropertyId,
-      storage_path: img.objectKey || img.storagePath || img.previewUrl,
-      sort_order: idx,
-      is_cover: img.isCover,
-      object_key: img.objectKey,
-      storage_provider: img.storageProvider || (img.objectKey ? 'r2' : 'external'),
-    }));
+    setIsSaving(true);
+    setErrorMessage(null);
 
-    if (photos.length === 0) {
-      photos.push({
-        id: 'photo-0',
+    try {
+      const newPropertyId = propertyIdRef.current || `prop-${Date.now()}`;
+      const photos: PropertyPhoto[] = images.map((img, idx) => ({
+        id: img.id || `photo-${idx}`,
         property_id: newPropertyId,
-        storage_path: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80',
-        sort_order: 0,
-        is_cover: true,
-      });
+        storage_path: img.objectKey || img.storagePath || img.previewUrl,
+        sort_order: idx,
+        is_cover: img.isCover,
+        object_key: img.objectKey,
+        storage_provider: img.storageProvider || (img.objectKey ? 'r2' : 'external'),
+      }));
+
+      if (photos.length === 0) {
+        photos.push({
+          id: 'photo-0',
+          property_id: newPropertyId,
+          storage_path: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80',
+          sort_order: 0,
+          is_cover: true,
+        });
+      }
+
+      const rawPrice = reviewData.price || reviewData.price_from || 0;
+      const resolvedPrice = typeof rawPrice === 'number'
+        ? (isNaN(rawPrice) ? 0 : rawPrice)
+        : (parseFloat(String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+
+      const rawArea = reviewData.area_m2 || (reviewData.area_range?.min ? reviewData.area_range.min : 0);
+      const resolvedArea = typeof rawArea === 'number'
+        ? (isNaN(rawArea) ? 0 : rawArea)
+        : (parseFloat(String(rawArea).replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+
+      const rawBedrooms = reviewData.bedrooms ?? (reviewData.bedrooms_options?.length ? reviewData.bedrooms_options[0] : 0);
+      const resolvedBedrooms = typeof rawBedrooms === 'number'
+        ? (isNaN(rawBedrooms) ? 0 : rawBedrooms)
+        : (parseInt(String(rawBedrooms), 10) || 0);
+
+      const resolvedType = reviewData.type || (reviewData.development_types?.length ? reviewData.development_types[0] : 'Apartamento');
+
+      const newProp: Property = {
+        id: newPropertyId,
+        purpose: reviewData.purpose || 'Venda',
+        type: resolvedType,
+        neighborhood: reviewData.neighborhood || '',
+        address: reviewData.address || undefined,
+        number: reviewData.number || undefined,
+        complement: reviewData.complement || undefined,
+        condominium_name: reviewData.condominium_name || reviewData.internal_name || reviewData.title || undefined,
+        internal_name: reviewData.internal_name || undefined,
+        title: reviewData.title || reviewData.condominium_name || undefined,
+        bedrooms: resolvedBedrooms,
+        suites: Number(reviewData.suites) || 0,
+        bathrooms: Number(reviewData.bathrooms) || 0,
+        parking_spaces: Number(reviewData.parking_spaces) || 0,
+        parking_spaces_type: reviewData.parking_spaces_type === 'Rotativas' ? 'Rotativas' : undefined,
+        area_m2: resolvedArea,
+        is_development: isDevelopment,
+        area_range: reviewData.area_range || null,
+        bedrooms_options: reviewData.bedrooms_options || null,
+        stage: reviewData.stage || (isDevelopment ? 'Lançamento' : undefined),
+        delivery_date: reviewData.delivery_date || undefined,
+        incorporation_registration: reviewData.incorporation_registration || undefined,
+        development_types: reviewData.development_types || undefined,
+        suites_options: reviewData.suites_options || null,
+        bathrooms_options: reviewData.bathrooms_options || null,
+        parking_options: reviewData.parking_options || null,
+        price_from: reviewData.price_from || resolvedPrice,
+        price_to: reviewData.price_to || undefined,
+        condo_status: reviewData.condo_status || undefined,
+        iptu_status: reviewData.iptu_status || undefined,
+        typologies: reviewData.typologies || undefined,
+        social_publications: reviewData.social_publications || {
+          instagram: { status: 'not_published' },
+        },
+        price: resolvedPrice,
+        condo_fee: reviewData.condo_included || reviewData.condo_not_applicable ? 0 : (Number(reviewData.condo_fee) || 0),
+        iptu: reviewData.iptu !== null && reviewData.iptu !== undefined ? Number(reviewData.iptu) : undefined,
+        floor: isDevelopment ? null : (reviewData.floor !== null && reviewData.floor !== undefined ? Number(reviewData.floor) : null),
+        position: isDevelopment ? undefined : (reviewData.position ?? undefined),
+        furnished: isDevelopment ? false : Boolean(reviewData.furnished),
+        condition: isDevelopment ? undefined : (reviewData.condition ?? undefined),
+        building_features: reviewData.building_features || [],
+        apartment_features: isDevelopment ? [] : (reviewData.apartment_features || []),
+        source_type: reviewData.source_type || 'Próprio',
+        owner_name: reviewData.owner_name || undefined,
+        owner_phone: reviewData.owner_phone || undefined,
+        partner_name: reviewData.partner_name || undefined,
+        partner_phone: reviewData.partner_phone || undefined,
+        instagram_source_url: reviewData.instagram_source_url || undefined,
+        notes: reviewData.notes || '',
+        status: 'Ativo',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        photos,
+      };
+
+      onSaveProperty(newProp);
+
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#3B82F6', '#60A5FA', '#93C5FD', '#10B981'],
+        });
+      } catch (confettiErr) {
+        console.warn('Efeito confetti ignorado:', confettiErr);
+      }
+    } catch (saveError: any) {
+      console.error('Erro ao salvar imóvel:', saveError);
+      setErrorMessage(saveError?.message || 'Ocorreu um erro ao salvar o imóvel. Tente novamente.');
+    } finally {
+      setIsSaving(false);
     }
-
-    const resolvedPrice = reviewData.price || reviewData.price_from || 0;
-    const resolvedArea = reviewData.area_m2 || (reviewData.area_range?.min ? reviewData.area_range.min : 0);
-    const resolvedBedrooms = reviewData.bedrooms ?? (reviewData.bedrooms_options?.length ? reviewData.bedrooms_options[0] : 0);
-    const resolvedType = reviewData.type || (reviewData.development_types?.length ? reviewData.development_types[0] : 'Apartamento');
-
-    const newProp: Property = {
-      id: newPropertyId,
-      purpose: reviewData.purpose || 'Venda',
-      type: resolvedType,
-      neighborhood: reviewData.neighborhood || '',
-      address: reviewData.address || undefined,
-      number: reviewData.number || undefined,
-      complement: reviewData.complement || undefined,
-      condominium_name: reviewData.condominium_name || reviewData.internal_name || reviewData.title || undefined,
-      internal_name: reviewData.internal_name || undefined,
-      title: reviewData.title || reviewData.condominium_name || undefined,
-      bedrooms: resolvedBedrooms,
-      suites: reviewData.suites ?? 0,
-      bathrooms: reviewData.bathrooms ?? 0,
-      parking_spaces: reviewData.parking_spaces ?? 0,
-      parking_spaces_type: reviewData.parking_spaces_type === 'Rotativas' ? 'Rotativas' : undefined,
-      area_m2: resolvedArea,
-      is_development: isDevelopment,
-      area_range: reviewData.area_range || null,
-      bedrooms_options: reviewData.bedrooms_options || null,
-      stage: reviewData.stage || (isDevelopment ? 'Lançamento' : undefined),
-      delivery_date: reviewData.delivery_date || undefined,
-      incorporation_registration: reviewData.incorporation_registration || undefined,
-      development_types: reviewData.development_types || undefined,
-      suites_options: reviewData.suites_options || null,
-      bathrooms_options: reviewData.bathrooms_options || null,
-      parking_options: reviewData.parking_options || null,
-      price_from: reviewData.price_from || resolvedPrice,
-      price_to: reviewData.price_to || undefined,
-      condo_status: reviewData.condo_status || undefined,
-      iptu_status: reviewData.iptu_status || undefined,
-      typologies: reviewData.typologies || undefined,
-      social_publications: reviewData.social_publications || {
-        instagram: { status: 'not_published' },
-      },
-      price: resolvedPrice,
-      condo_fee: reviewData.condo_included || reviewData.condo_not_applicable ? 0 : (reviewData.condo_fee ?? 0),
-      iptu: reviewData.iptu ?? undefined,
-      floor: isDevelopment ? null : (reviewData.floor ?? null),
-      position: isDevelopment ? undefined : (reviewData.position ?? undefined),
-      furnished: isDevelopment ? false : Boolean(reviewData.furnished),
-      condition: isDevelopment ? undefined : (reviewData.condition ?? undefined),
-      building_features: reviewData.building_features || [],
-      apartment_features: isDevelopment ? [] : (reviewData.apartment_features || []),
-      source_type: reviewData.source_type || 'Próprio',
-      owner_name: reviewData.owner_name || undefined,
-      owner_phone: reviewData.owner_phone || undefined,
-      partner_name: reviewData.partner_name || undefined,
-      partner_phone: reviewData.partner_phone || undefined,
-      instagram_source_url: reviewData.instagram_source_url || undefined,
-      notes: reviewData.notes || '',
-      status: 'Ativo',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      photos,
-    };
-
-    onSaveProperty(newProp);
-
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#3B82F6', '#60A5FA', '#93C5FD', '#10B981'],
-    });
-
-    onBack();
   };
 
   return (
@@ -869,17 +902,23 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
                   setShowMissingFieldsModal(true);
                 }
               }}
-              disabled={isImportingInstagram || isImportingDocument || isProcessingImages || isProcessingAI || images.some((image) => image.isUploading || image.uploadError)}
+              disabled={isSaving}
               title={!requiredValidation.valid ? 'Clique para conferir os campos obrigatórios pendentes' : (isDevelopment ? 'Salvar empreendimento' : 'Salvar imóvel')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-75 disabled:cursor-wait ${
                 requiredValidation.valid
                   ? 'bg-status-success hover:bg-status-success/90 text-white shadow-sm'
                   : 'bg-white/[0.05] hover:bg-white/[0.08] text-ink-secondary hover:text-ink-primary border border-line-subtle'
               }`}
             >
-              <Check className="w-4 h-4 stroke-[2.5]" />
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin stroke-[2.5]" />
+              ) : (
+                <Check className="w-4 h-4 stroke-[2.5]" />
+              )}
               <span>
-                {requiredValidation.valid
+                {isSaving
+                  ? 'Salvando...'
+                  : requiredValidation.valid
                   ? (isDevelopment ? 'Salvar empreendimento' : 'Salvar imóvel')
                   : `Faltam ${requiredValidation.missing.length}`}
               </span>
@@ -1054,6 +1093,45 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             progressPct={progressPct}
             showValidationErrors={showValidationErrors}
           />
+
+          {/* Botão de Rodapé da Ficha (Ideal para Mobile / pós-preenchimento) */}
+          <div className="pt-6 pb-2 border-t border-line-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs text-ink-secondary text-center sm:text-left">
+              {requiredValidation.valid
+                ? `Tudo pronto! Ficha com os dados essenciais preenchidos para o ${isDevelopment ? 'empreendimento' : 'imóvel'}.`
+                : `Faltam ${requiredValidation.missing.length} campo(s) obrigatório(s): ${requiredValidation.missingLabels.join(', ')}.`}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (requiredValidation.valid) {
+                  handleConfirmSave();
+                } else {
+                  setShowMissingFieldsModal(true);
+                }
+              }}
+              disabled={isSaving}
+              className={`w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-sm disabled:opacity-75 disabled:cursor-wait ${
+                requiredValidation.valid
+                  ? 'bg-status-success hover:bg-status-success/90 text-white shadow-emerald-500/20'
+                  : 'bg-white/[0.05] hover:bg-white/[0.08] text-ink-secondary hover:text-ink-primary border border-line-subtle'
+              }`}
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin stroke-[2.5]" />
+              ) : (
+                <Check className="w-4 h-4 stroke-[2.5]" />
+              )}
+              <span>
+                {isSaving
+                  ? 'Salvando no estoque...'
+                  : requiredValidation.valid
+                  ? (isDevelopment ? 'Salvar empreendimento no estoque' : 'Salvar imóvel no estoque')
+                  : `Faltam ${requiredValidation.missing.length} campos obrigatórios`}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 

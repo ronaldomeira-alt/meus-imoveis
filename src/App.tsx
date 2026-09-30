@@ -517,7 +517,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
     const newNotification: NotificationItem = {
       id: `notif-${Date.now()}`,
       title: `Novo ${savedProperty.type} Adicionado`,
-      body: `${savedProperty.neighborhood} • ${savedProperty.area_m2}m² • R$ ${savedProperty.price.toLocaleString('pt-BR')}`,
+      body: `${savedProperty.neighborhood} • ${savedProperty.area_m2 || 0}m² • R$ ${(Number(savedProperty.price) || 0).toLocaleString('pt-BR')}`,
       property_id: savedProperty.id,
       read: false,
       created_at: 'Agora mesmo',
@@ -1035,7 +1035,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                   {savedPropertyPrompt.type} · {savedPropertyPrompt.neighborhood}
                 </p>
                 <p className="text-[11px] font-semibold text-accent mt-0.5">
-                  R$ {savedPropertyPrompt.price.toLocaleString('pt-BR')} • {savedPropertyPrompt.area_m2}m²
+                  R$ {(Number(savedPropertyPrompt.price) || 0).toLocaleString('pt-BR')} • {savedPropertyPrompt.area_m2 || 0}m²
                 </p>
               </div>
             </div>
