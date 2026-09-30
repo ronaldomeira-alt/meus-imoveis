@@ -1,5 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Carrega .env em ambiente de desenvolvimento local
+try {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const rawEnv = fs.readFileSync(envPath, 'utf-8');
+    rawEnv.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx !== -1) {
+        const k = trimmed.slice(0, eqIdx).trim();
+        let v = trimmed.slice(eqIdx + 1).trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1);
+        }
+        if (!process.env[k]) {
+          process.env[k] = v;
+        }
+      }
+    });
+  }
+} catch {
+  // Ignora em produção na Vercel
+}
 
 if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -361,6 +388,131 @@ export async function handlePublicPages(req, res) {
 }
 
 /**
+ * Handler do endpoint de imagem Open Graph 1200x630 (proporção 1.91:1)
+ * Enquadramento cover centralizado sem distorção para WhatsApp e redes sociais.
+ */
+export async function handlePublicOgImage(req, res) {
+  try {
+    const urlObj = new URL(req.url, 'http://local');
+    let id = urlObj.searchParams.get('id') || '';
+    const token = urlObj.searchParams.get('token') || '';
+
+    if (!id) {
+      const match = urlObj.pathname.match(/\/imovel\/([^/]+)\/og\.jpg/i);
+      if (match) id = decodeURIComponent(match[1]);
+    }
+
+    if (token && !id) {
+      try {
+        const db = client();
+        const { data: share } = await db
+          .from('property_shares')
+          .select('property_id')
+          .eq('tracking_token', token)
+          .maybeSingle();
+        if (share?.property_id) {
+          id = share.property_id;
+        }
+      } catch {}
+    }
+
+    const record = id ? await getPublicRecord(id).catch(() => null) : null;
+    const item = record?.listing;
+    const photoUrl = item?.photos?.[0] || '';
+
+    const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+    const width = 1200;
+    const height = 630;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+
+    if (photoUrl) {
+      try {
+        const fetchRes = await fetch(photoUrl, { signal: AbortSignal.timeout(6000) });
+        if (fetchRes.ok) {
+          const imgBuf = Buffer.from(await fetchRes.arrayBuffer());
+          const img = await loadImage(imgBuf);
+
+          // Enquadramento object-fit: cover, object-position: center
+          const scale = Math.max(width / img.width, height / img.height);
+          const sw = width / scale;
+          const sh = height / scale;
+          const sx = (img.width - sw) / 2;
+          const sy = (img.height - sh) / 2;
+
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height);
+
+          const jpegBuf = canvas.toBuffer('image/jpeg', { quality: 86 });
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
+          res.setHeader('Content-Length', jpegBuf.length);
+          return res.end(jpegBuf);
+        }
+      } catch (imgErr) {
+        console.error('[handlePublicOgImage] Erro ao carregar foto do imóvel:', imgErr);
+      }
+    }
+
+    // Fallback: Card elegante com identidade visual do catálogo
+    const grad = ctx.createRadialGradient(width / 2, height / 2, 50, width / 2, height / 2, 700);
+    grad.addColorStop(0, '#151a26');
+    grad.addColorStop(1, '#090b10');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = '#1e2430';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(24, 24, width - 48, height - 48);
+
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(80, 80, 80, 80);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('RM', 120, 120);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 34px sans-serif';
+    ctx.fillStyle = '#f3f5f9';
+    ctx.fillText('RM Imóveis', 180, 125);
+
+    const titleText = item?.title || 'Imóvel Exclusivo';
+    ctx.font = 'bold 52px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(titleText.slice(0, 42), 80, 260);
+
+    const locText = item?.neighborhood ? `📍 ${item.neighborhood}, João Pessoa - PB` : 'João Pessoa - PB';
+    ctx.font = '28px sans-serif';
+    ctx.fillStyle = '#9ba5b7';
+    ctx.fillText(locText, 80, 320);
+
+    if (item?.price) {
+      ctx.font = 'bold 60px sans-serif';
+      ctx.fillStyle = '#10b981';
+      ctx.fillText(money(item.price), 80, 430);
+    }
+
+    ctx.font = '22px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('ronaldomeira.com.br · Ronaldo Meira Corretor de Imóveis', 80, 540);
+
+    const fallbackBuf = canvas.toBuffer('image/jpeg', { quality: 86 });
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
+    res.setHeader('Content-Length', fallbackBuf.length);
+    return res.end(fallbackBuf);
+  } catch (err) {
+    console.error('[handlePublicOgImage] Erro crítico:', err);
+    res.statusCode = 302;
+    res.setHeader('Location', 'https://ronaldomeira.com.br/apple-touch-icon.png');
+    return res.end();
+  }
+}
+
+/**
  * Card HTML de recomendação similar com navegação contínua
  */
 function renderRelatedCard(row, token) {
@@ -451,6 +603,7 @@ export async function handlePublicPageHtml(req, res) {
       ? `${item.type} para ${item.purpose.toLowerCase()} em ${item.neighborhood}, João Pessoa. ${item.bedrooms ? `${item.bedrooms} quartos · ` : ''}${item.areaM2 ? `${item.areaM2} m² · ` : ''}${money(item.price)}.`
       : 'Este imóvel não está mais disponível no catálogo. Conheça outras opções selecionadas em João Pessoa.';
     const cover = item?.photos?.[0] || '';
+    const ogImageUrl = id ? `${origin}/imovel/${encodeURIComponent(id)}/og.jpg` : `${origin}/apple-touch-icon.png`;
 
     // WhatsApp CTA link
     const waText = item
@@ -639,16 +792,24 @@ export async function handlePublicPageHtml(req, res) {
   <meta name="description" content="${escapeHtml(summary)}">
   <link rel="canonical" href="${escapeHtml(canonical)}">
   
-  <!-- Open Graph / WhatsApp Preview -->
+  <!-- Open Graph / WhatsApp Preview (Proporção 1200x630 1.91:1) -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="RM Imóveis">
   <meta property="og:title" content="${escapeHtml(title)}">
   <meta property="og:description" content="${escapeHtml(summary)}">
   <meta property="og:url" content="${escapeHtml(canonical)}">
-  ${cover ? `<meta property="og:image" content="${escapeHtml(cover)}">` : ''}
-  ${cover ? `<meta property="og:image:width" content="1200">` : ''}
-  ${cover ? `<meta property="og:image:height" content="800">` : ''}
-  <meta name="twitter:card" content="${cover ? 'summary_large_image' : 'summary'}">
+  <meta property="og:image" content="${escapeHtml(ogImageUrl)}">
+  <meta property="og:image:secure_url" content="${escapeHtml(ogImageUrl)}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="${escapeHtml(title)}">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(title)}">
+  <meta name="twitter:description" content="${escapeHtml(summary)}">
+  <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}">
 
   <style>
     :root {
@@ -663,7 +824,17 @@ export async function handlePublicPageHtml(req, res) {
       --green: #10b981;
       --green-hover: #059669;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      width: 100%;
+      overflow-x: hidden;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: radial-gradient(circle at 50% 0%, #151a26 0%, #090b10 55%);
@@ -671,20 +842,30 @@ export async function handlePublicPageHtml(req, res) {
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
       padding-bottom: max(32px, env(safe-area-inset-bottom));
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden;
     }
     a { color: inherit; text-decoration: none; }
+
     .container {
-      width: min(1180px, calc(100% - 32px));
+      width: 100%;
+      max-width: 1180px;
       margin: 0 auto;
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
       padding-top: max(16px, env(safe-area-inset-top));
+      min-width: 0;
     }
     .top-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
       padding: 16px 0 24px;
       border-bottom: 1px solid var(--card-border);
       margin-bottom: 24px;
+      min-width: 0;
     }
     .brand-logo {
       display: flex;
@@ -693,6 +874,7 @@ export async function handlePublicPageHtml(req, res) {
       font-weight: 800;
       font-size: 18px;
       letter-spacing: -0.02em;
+      min-width: 0;
     }
     .brand-logo-mark {
       width: 32px;
@@ -705,17 +887,30 @@ export async function handlePublicPageHtml(req, res) {
       justify-content: center;
       font-size: 14px;
       font-weight: 900;
+      flex-shrink: 0;
     }
+
     .property-layout {
       display: grid;
       grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.95fr);
       gap: 36px;
       align-items: start;
+      width: 100%;
+      min-width: 0;
     }
-    /* Galeria */
-    .gallery-col { display: flex; flex-direction: column; gap: 12px; }
+
+    /* Galeria Principal */
+    .gallery-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+    }
     .main-photo-wrap {
       position: relative;
+      width: 100%;
       aspect-ratio: 16 / 10;
       border-radius: 18px;
       overflow: hidden;
@@ -744,6 +939,7 @@ export async function handlePublicPageHtml(req, res) {
       font-size: 12px;
       font-weight: 600;
       border: 1px solid rgba(255,255,255,0.2);
+      pointer-events: none;
     }
     .no-photo {
       height: 100%;
@@ -755,12 +951,24 @@ export async function handlePublicPageHtml(req, res) {
       color: var(--text-muted);
       font-size: 13px;
     }
+
+    /* Thumbnails com rolagem horizontal interna */
     .thumbs-strip {
       display: flex;
       gap: 8px;
       overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding-bottom: 6px;
-      scrollbar-width: thin;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .thumbs-strip::-webkit-scrollbar {
+      display: none;
     }
     .thumb-btn {
       width: 76px;
@@ -770,7 +978,7 @@ export async function handlePublicPageHtml(req, res) {
       background: #131720;
       border: 2px solid transparent;
       cursor: pointer;
-      flex-shrink: 0;
+      flex: 0 0 76px;
       padding: 0;
       transition: border-color 0.15s, opacity 0.15s;
       opacity: 0.65;
@@ -830,7 +1038,13 @@ export async function handlePublicPageHtml(req, res) {
     .lightbox-next { right: 20px; }
 
     /* Detalhes */
-    .info-col { display: flex; flex-direction: column; gap: 18px; }
+    .info-col {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-width: 0;
+      width: 100%;
+    }
     .property-eyebrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .badge-purpose, .badge-type, .badge-condo {
       font-size: 11px;
@@ -844,20 +1058,22 @@ export async function handlePublicPageHtml(req, res) {
     .badge-type { background: rgba(255,255,255,0.06); color: var(--text-muted); border: 1px solid var(--card-border); }
     .badge-condo { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
 
-    .property-title { font-size: clamp(24px, 3.5vw, 34px); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; }
-    .property-location { color: var(--text-muted); font-size: 14px; margin-top: -6px; }
+    .property-title { font-size: clamp(24px, 3.5vw, 34px); font-weight: 800; line-height: 1.15; letter-spacing: -0.03em; word-break: break-word; }
+    .property-location { color: var(--text-muted); font-size: 14px; margin-top: -6px; word-break: break-word; }
 
     .price-box {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 18px 20px;
+      width: 100%;
+      min-width: 0;
     }
     .main-price { font-size: 32px; font-weight: 850; letter-spacing: -0.03em; color: #fff; }
     .fees-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px; font-size: 12px; color: var(--text-muted); }
     .fee-item b { color: var(--text-main); }
 
-    .cta-wrap { margin-top: 4px; }
+    .cta-wrap { margin-top: 4px; width: 100%; min-width: 0; }
     .btn-cta-whatsapp {
       display: flex;
       align-items: center;
@@ -873,13 +1089,27 @@ export async function handlePublicPageHtml(req, res) {
       transition: background 0.18s, transform 0.18s;
       min-height: 52px;
       text-align: center;
+      width: 100%;
+      word-break: break-word;
     }
     .btn-cta-whatsapp:hover { background: var(--green-hover); transform: translateY(-1px); }
 
     .specs-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+      width: 100%;
+      min-width: 0;
+    }
+    @media (min-width: 480px) and (max-width: 820px) {
+      .specs-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 821px) {
+      .specs-grid {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      }
     }
     .spec-item {
       background: var(--card-bg);
@@ -889,9 +1119,27 @@ export async function handlePublicPageHtml(req, res) {
       display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
+      overflow: hidden;
     }
-    .spec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
-    .spec-val { font-size: 14px; font-weight: 700; color: var(--text-main); }
+    .spec-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spec-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     .subheading { font-size: 16px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.01em; }
     .description-box, .features-box {
@@ -899,8 +1147,10 @@ export async function handlePublicPageHtml(req, res) {
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 18px 20px;
+      width: 100%;
+      min-width: 0;
     }
-    .description-text { font-size: 14px; line-height: 1.65; color: #cbd5e1; white-space: pre-line; }
+    .description-text { font-size: 14px; line-height: 1.65; color: #cbd5e1; white-space: pre-line; word-break: break-word; }
 
     .features-list { display: flex; flex-wrap: wrap; gap: 8px; }
     .feature-pill {
@@ -910,6 +1160,7 @@ export async function handlePublicPageHtml(req, res) {
       border-radius: 8px;
       font-size: 12.5px;
       color: #e2e8f0;
+      word-break: break-word;
     }
 
     .broker-card {
@@ -920,6 +1171,8 @@ export async function handlePublicPageHtml(req, res) {
       background: rgba(255,255,255,0.02);
       border: 1px solid var(--card-border);
       border-radius: 14px;
+      width: 100%;
+      min-width: 0;
     }
     .broker-avatar {
       width: 40px;
@@ -934,20 +1187,27 @@ export async function handlePublicPageHtml(req, res) {
       font-size: 14px;
       flex-shrink: 0;
     }
-    .broker-info { display: flex; flex-direction: column; }
-    .broker-name { font-size: 14px; color: #fff; }
-    .broker-role { font-size: 12px; color: var(--text-muted); }
+    .broker-info { display: flex; flex-direction: column; min-width: 0; }
+    .broker-name { font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .broker-role { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* Seção de Recomendações */
-    .related-section { margin-top: 64px; }
+    .related-section {
+      margin-top: 56px;
+      width: 100%;
+      min-width: 0;
+    }
     .section-header { margin-bottom: 20px; }
-    .section-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
-    .section-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .section-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; word-break: break-word; }
+    .section-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; word-break: break-word; }
 
+    /* Desktop (default): Grid limpo de 3 colunas */
     .related-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
+      width: 100%;
+      min-width: 0;
     }
     .related-card {
       background: var(--card-bg);
@@ -957,12 +1217,14 @@ export async function handlePublicPageHtml(req, res) {
       display: flex;
       flex-direction: column;
       transition: transform 0.2s, border-color 0.2s;
+      min-width: 0;
     }
     .related-card:hover { transform: translateY(-3px); border-color: var(--accent); }
     .related-media {
       aspect-ratio: 16 / 10;
       background: #141822;
       overflow: hidden;
+      width: 100%;
     }
     .related-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .related-placeholder {
@@ -974,44 +1236,63 @@ export async function handlePublicPageHtml(req, res) {
       color: var(--text-muted);
       font-size: 12px;
     }
-    .related-copy { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-    .related-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--accent); }
+    .related-copy { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+    .related-badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .related-title { font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .related-specs { font-size: 12px; color: var(--text-muted); }
+    .related-specs { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .related-price { font-size: 15px; font-weight: 800; color: #fff; margin-top: 4px; }
 
-    /* Estado Indisponível */
-    .unavailable-card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 20px;
-      padding: 44px 28px;
-      text-align: center;
-      max-width: 640px;
-      margin: 20px auto 40px;
-    }
-    .unavailable-badge {
-      display: inline-block;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      color: var(--accent);
-      margin-bottom: 12px;
-    }
-    .unavailable-title { font-size: 26px; font-weight: 850; letter-spacing: -0.02em; margin-bottom: 12px; }
-    .unavailable-desc { font-size: 14px; line-height: 1.6; color: var(--text-muted); margin-bottom: 24px; }
-    .unavailable-cta { max-width: 380px; margin: 0 auto; }
-
-    /* Mobile */
+    /* Breakpoints Responsivos */
     @media (max-width: 820px) {
-      .property-layout { grid-template-columns: 1fr; gap: 24px; }
-      .related-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .property-layout {
+        grid-template-columns: 1fr;
+        gap: 24px;
+      }
     }
-    @media (max-width: 520px) {
-      .container { width: calc(100% - 24px); }
-      .related-grid { grid-template-columns: 1fr; }
+    @media (min-width: 641px) and (max-width: 820px) {
+      .related-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+    }
+
+    /* Mobile: Carrossel Horizontal e Escala Ideal (<= 640px) */
+    @media (max-width: 640px) {
+      .container {
+        padding-left: max(14px, env(safe-area-inset-left));
+        padding-right: max(14px, env(safe-area-inset-right));
+      }
       .main-price { font-size: 28px; }
       .btn-cta-whatsapp { font-size: 15px; padding: 14px 18px; }
+
+      /* Carrossel de Imóveis Relacionados com indicação de continuidade */
+      .related-grid {
+        display: flex;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        gap: 14px;
+        padding-bottom: 14px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .related-grid::-webkit-scrollbar {
+        display: none;
+      }
+      .related-card {
+        flex: 0 0 82%;
+        max-width: 84%;
+        min-width: 250px;
+        scroll-snap-align: start;
+        scroll-snap-stop: normal;
+      }
+      .related-title {
+        font-size: 14.5px;
+      }
     }
   </style>
 </head>
@@ -1047,8 +1328,14 @@ export async function handlePublicPageHtml(req, res) {
 
       var thumbs = document.querySelectorAll('.thumb-btn');
       thumbs.forEach(function(btn, i) {
-        if (i === index) btn.classList.add('active');
-        else btn.classList.remove('active');
+        if (i === index) {
+          btn.classList.add('active');
+          try {
+            btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          } catch(e) {}
+        } else {
+          btn.classList.remove('active');
+        }
       });
     }
 

@@ -5,6 +5,10 @@
       "destination": "/api/public-page?token=:token"
     },
     {
+      "source": "/imovel/:id/og.jpg",
+      "destination": "/api/og-image?id=:id"
+    },
+    {
       "source": "/imovel/:id",
       "destination": "/api/public-page?id=:id"
     },
