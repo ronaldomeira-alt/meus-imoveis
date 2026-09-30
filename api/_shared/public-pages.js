@@ -83,6 +83,94 @@ export function resolvePhotoUrl(path) {
   return path;
 }
 
+const CANONICAL_SYNONYMS = {
+  'area gourmet': 'Espaço gourmet',
+  'área gourmet': 'Espaço gourmet',
+  'espaco gourmet': 'Espaço gourmet',
+  'espaço gourmet': 'Espaço gourmet',
+};
+
+const CANONICAL_FEATURE_LABELS = {
+  'academia': 'Academia',
+  'elevador': 'Elevador',
+  'piscina': 'Piscina',
+  'rooftop': 'Rooftop',
+  'lavanderia': 'Lavanderia',
+  'recepcao': 'Recepção',
+  'recepção': 'Recepção',
+  'portaria 24h': 'Portaria 24h',
+  'portaria virtual': 'Portaria virtual',
+  'portaria fisica': 'Portaria física',
+  'portaria física': 'Portaria física',
+  'salao de festas': 'Salão de festas',
+  'salão de festas': 'Salão de festas',
+  'salao de jogos': 'Salão de jogos',
+  'salão de jogos': 'Salão de jogos',
+  'brinquedoteca': 'Brinquedoteca',
+  'playground': 'Playground',
+  'quadra poliesportiva': 'Quadra poliesportiva',
+  'quadra': 'Quadra poliesportiva',
+  'sauna': 'Sauna',
+  'spa': 'Spa',
+  'cinema': 'Cinema',
+  'mini mercado': 'Mini mercado',
+  'coworking': 'Coworking',
+  'bicicletario': 'Bicicletário',
+  'bicicletário': 'Bicicletário',
+  'churrasqueira': 'Churrasqueira',
+  'varanda': 'Varanda',
+  'varanda gourmet': 'Varanda gourmet',
+  'vista mar': 'Vista mar',
+  'vista para o mar': 'Vista mar',
+  'ar-condicionado': 'Ar-condicionado',
+  'ar condicionado': 'Ar-condicionado',
+  'moveis projetados': 'Móveis projetados',
+  'móveis projetados': 'Móveis projetados',
+  'mobiliado': 'Mobiliado',
+  'decorado': 'Decorado',
+  'porteira fechada': 'Porteira fechada',
+};
+
+export function normalizeFeatureLabel(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim().replace(/\s+/g, ' ');
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  const unaccented = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  if (CANONICAL_SYNONYMS[lower]) return CANONICAL_SYNONYMS[lower];
+  if (CANONICAL_SYNONYMS[unaccented]) return CANONICAL_SYNONYMS[unaccented];
+  if (CANONICAL_FEATURE_LABELS[unaccented]) return CANONICAL_FEATURE_LABELS[unaccented];
+  if (CANONICAL_FEATURE_LABELS[lower]) return CANONICAL_FEATURE_LABELS[lower];
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+export function normalizeAndDeduplicateFeatures(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  const seenKeys = new Set();
+  const result = [];
+
+  for (const item of rawList) {
+    const formatted = normalizeFeatureLabel(item);
+    if (!formatted) continue;
+
+    const key = formatted
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      result.push(formatted);
+    }
+  }
+
+  return result;
+}
+
 /**
  * Serializador com WHITELIST ESTRITA.
  * Garante que dados internos (proprietário, parceiro, comissão, anotações de negociação)
@@ -125,7 +213,7 @@ export function buildPublicListing(prop) {
     .map((item) => safeText(item, 64))
     .filter(Boolean);
 
-  const features = [...new Set([...apartmentFeatures, ...buildingFeatures])].slice(0, 30);
+  const features = normalizeAndDeduplicateFeatures([...apartmentFeatures, ...buildingFeatures]).slice(0, 30);
 
   // Sanitização de descrição: usamos apenas texto comercial descritivo
   let rawDescription = typeof prop.notes === 'string' ? prop.notes.trim() : '';
@@ -677,8 +765,9 @@ export async function handlePublicPageHtml(req, res) {
         .join('');
 
       // Diferenciais
-      const featuresBadges = item.features.length
-        ? `<div class="features-list">${item.features.map((f) => `<span class="feature-pill">${escapeHtml(f)}</span>`).join('')}</div>`
+      const normalizedFeatures = normalizeAndDeduplicateFeatures(item.features || []);
+      const featuresBadges = normalizedFeatures.length
+        ? `<div class="features-list">${normalizedFeatures.map((f) => `<span class="feature-pill">${escapeHtml(f)}</span>`).join('')}</div>`
         : '';
 
       mainContentHtml = `
@@ -750,15 +839,6 @@ export async function handlePublicPageHtml(req, res) {
             `
                 : ''
             }
-
-            <!-- Corretor Responsável -->
-            <div class="broker-card">
-              <div class="broker-avatar">RM</div>
-              <div class="broker-info">
-                <strong class="broker-name">${escapeHtml(item.agentName)}</strong>
-                <span class="broker-role">${escapeHtml(item.agentRole)} · ${escapeHtml(item.brand)}</span>
-              </div>
-            </div>
           </div>
         </div>
         ${photoViewerModalHtml}
@@ -776,7 +856,7 @@ export async function handlePublicPageHtml(req, res) {
           <div class="unavailable-cta">
             <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn-cta-whatsapp">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2z"/></svg>
-              <span>Consultar outras opções com Ronaldo Meira</span>
+              <span>Consultar outras opções</span>
             </a>
           </div>
         </div>
@@ -1163,33 +1243,43 @@ export async function handlePublicPageHtml(req, res) {
       word-break: break-word;
     }
 
-    .broker-card {
-      display: flex;
+    .btn-share-header {
+      display: inline-flex;
       align-items: center;
-      gap: 12px;
-      padding: 14px 18px;
-      background: rgba(255,255,255,0.02);
+      gap: 7px;
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--card-border);
-      border-radius: 14px;
-      width: 100%;
-      min-width: 0;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: inherit;
     }
-    .broker-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--accent);
+    .btn-share-header:hover {
+      background: rgba(255, 255, 255, 0.1);
       color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 14px;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .btn-share-header:active {
+      transform: scale(0.97);
+    }
+    .btn-share-header.copied {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .btn-share-header svg {
+      width: 14px;
+      height: 14px;
       flex-shrink: 0;
     }
-    .broker-info { display: flex; flex-direction: column; min-width: 0; }
-    .broker-name { font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .broker-role { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* Seção de Recomendações */
     .related-section {
@@ -1303,9 +1393,16 @@ export async function handlePublicPageHtml(req, res) {
         <div class="brand-logo-mark">RM</div>
         <span>RM Imóveis</span>
       </div>
-      <a href="https://wa.me/${phone}" target="_blank" rel="noopener noreferrer" style="font-size:13px;color:var(--text-muted);font-weight:600">
-        Falar com Ronaldo Meira ↗
-      </a>
+      <button type="button" class="btn-share-header" id="header-share-btn" onclick="handleShare()" aria-label="Compartilhar imóvel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+        <span id="header-share-label">Compartilhar</span>
+      </button>
     </header>
 
     <main>
@@ -1393,6 +1490,54 @@ export async function handlePublicPageHtml(req, res) {
         nextPhoto();
       }
     });
+
+    async function handleShare() {
+      var btn = document.getElementById('header-share-btn');
+      var label = document.getElementById('header-share-label');
+      var shareData = {
+        title: document.title,
+        url: window.location.href
+      };
+
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (err) {
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) {
+            return;
+          }
+        }
+      }
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(window.location.href);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = window.location.href;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.top = '0';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        if (label) {
+          var original = label.innerText;
+          label.innerText = 'Link copiado!';
+          if (btn) btn.classList.add('copied');
+          setTimeout(function() {
+            label.innerText = original;
+            if (btn) btn.classList.remove('copied');
+          }, 2200);
+        }
+      } catch (e) {
+        console.warn('Erro ao copiar link:', e);
+      }
+    }
   </script>
 </body>
 </html>`;
