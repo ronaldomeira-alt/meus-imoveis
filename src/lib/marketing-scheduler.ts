@@ -34,11 +34,20 @@ export async function publishMarketingPostNow(post: MarketingPost): Promise<{
 
     if (error) {
       console.error('Erro na chamada da Edge Function publish-instagram-post:', error);
-      return { success: false, error: error.message || 'Erro ao comunicar com a Edge Function' };
+      let detailedMsg = error.message;
+      if (error && typeof (error as any).context?.json === 'function') {
+        try {
+          const body = await (error as any).context.json();
+          if (body?.error || body?.message) {
+            detailedMsg = body.error || body.message;
+          }
+        } catch {}
+      }
+      return { success: false, error: detailedMsg || 'Erro ao comunicar com a Edge Function' };
     }
 
     if (!data || !data.success) {
-      return { success: false, error: data?.error || 'Falha na publicação retornada pela Edge Function' };
+      return { success: false, error: data?.error || data?.message || 'Falha na publicação retornada pela Edge Function' };
     }
 
     // Notifica componentes na interface para recarregar o grid/feed

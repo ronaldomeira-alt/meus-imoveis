@@ -21,6 +21,7 @@ import {
   MandatoryPropertyFieldKey,
 } from '../../lib/property-validation';
 import { VoiceNotesInput } from '../ui/VoiceNotesInput';
+import { CANONICAL_AMENITIES, normalizeAmenityInput } from '../../lib/amenity-normalization';
 import type {
   Property,
   PropertyPhoto,
@@ -38,18 +39,7 @@ interface ManualPropertyFormProps {
   submitButtonLabel?: string;
 }
 
-const COMMON_BUILDING_FEATURES = [
-  'Piscina',
-  'Elevador',
-  'Academia',
-  'Portaria 24h',
-  'Salão de festas',
-  'Rooftop',
-  'Espaço gourmet',
-  'Brinquedoteca',
-  'Gerador',
-  'Quadra',
-];
+const COMMON_BUILDING_FEATURES = CANONICAL_AMENITIES;
 
 const COMMON_APARTMENT_FEATURES = [
   'Varanda gourmet',
@@ -292,9 +282,24 @@ export const ManualPropertyForm: React.FC<ManualPropertyFormProps> = ({
   const handleAddCustomFeature = () => {
     const trimmed = customFeature.trim();
     if (!trimmed) return;
-    if (!apartmentFeatures.includes(trimmed)) {
-      setApartmentFeatures((prev) => [...prev, trimmed]);
+
+    const norm = normalizeAmenityInput(trimmed, buildingFeatures);
+    setBuildingFeatures(norm.buildingFeatures);
+
+    if (norm.inferredParkingSpaces && (!parkingSpaces || parkingSpaces === 0)) {
+      setParkingSpaces(norm.inferredParkingSpaces);
     }
+
+    if (norm.apartmentFeaturesToAdd && norm.apartmentFeaturesToAdd.length > 0) {
+      setApartmentFeatures((prev) => {
+        const next = [...prev];
+        norm.apartmentFeaturesToAdd?.forEach((f) => {
+          if (!next.includes(f)) next.push(f);
+        });
+        return next;
+      });
+    }
+
     setCustomFeature('');
   };
 

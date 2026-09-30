@@ -33,6 +33,7 @@ import { PropertyFicha } from './PropertyFicha';
 import { AudioWaveform } from '../ui/AudioWaveform';
 import { supabase } from '../../lib/supabase';
 import { prepareInstagramProperty, type InstagramPost } from '../../lib/instagram-import';
+import { normalizeAmenityList } from '../../lib/amenity-normalization';
 
 const emptyReviewData: ExtractedPropertyData = {
   purpose: null,
@@ -304,10 +305,8 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
     }
   };
 
-  const propertyIdRef = useRef<string>('');
-  if (!propertyIdRef.current) {
-    propertyIdRef.current = `prop-${Date.now()}`;
-  }
+  const [propertyId] = useState(() => `prop-${Date.now()}`);
+  const propertyIdRef = useRef<string>(propertyId);
 
   // ── Mídias ──
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -546,7 +545,21 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
             return;
           }
           if (Array.isArray(val)) {
-            if (val.length > 0) (merged as any)[key] = val;
+            if (val.length > 0) {
+              if (key === 'building_features') {
+                const combined = [...(prev.building_features || []), ...(val as string[])];
+                const normalized = normalizeAmenityList(combined, {
+                  parking_spaces: merged.parking_spaces,
+                  apartment_features: merged.apartment_features,
+                });
+                merged.building_features = normalized.building_features;
+                if ((!merged.parking_spaces || merged.parking_spaces === 0) && normalized.parking_spaces) {
+                  merged.parking_spaces = normalized.parking_spaces;
+                }
+              } else {
+                (merged as any)[key] = val;
+              }
+            }
             return;
           }
           if (val !== null && val !== undefined && val !== '') {
@@ -636,10 +649,23 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
           }
 
           // Arrays (comodidades etc.): um array vazio nesta frase significa "não
-          // mencionado agora", não "limpar o que já tínhamos" — só substitui se vier
-          // algo de fato novo.
+          // mencionado agora", não "limpar o que já tínhamos" — se vier algo novo, normaliza semânticamente.
           if (Array.isArray(val)) {
-            if (val.length > 0) (merged as any)[key] = val;
+            if (val.length > 0) {
+              if (key === 'building_features') {
+                const combined = [...(prev.building_features || []), ...(val as string[])];
+                const normalized = normalizeAmenityList(combined, {
+                  parking_spaces: merged.parking_spaces,
+                  apartment_features: merged.apartment_features,
+                });
+                merged.building_features = normalized.building_features;
+                if ((!merged.parking_spaces || merged.parking_spaces === 0) && normalized.parking_spaces) {
+                  merged.parking_spaces = normalized.parking_spaces;
+                }
+              } else {
+                (merged as any)[key] = val;
+              }
+            }
             return;
           }
 

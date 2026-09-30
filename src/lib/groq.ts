@@ -7,6 +7,7 @@ import type {
   DevelopmentStage,
 } from '../types/property';
 import { type ExtractedPropertyData, validatePropertyExtraction } from './gemini';
+import { normalizeAmenityList, CANONICAL_AMENITIES } from './amenity-normalization';
 
 export const GROQ_MODELS = {
   TRANSCRIPTION: 'whisper-large-v3-turbo',
@@ -152,8 +153,24 @@ DIRETRIZES FUNDAMENTAIS DE CONFIABILIDADE (REGRA ZERO ALUCINAÇÃO):
    - IMPORTANTE: "não tem suíte", "sem vaga", "não possui banheiro extra" são respostas VÁLIDAS e EXPLÍCITAS — retorne 0 (zero), NUNCA null.
 7. CONDOMÍNIO NÃO SE APLICA:
    - Se o usuário disser explicitamente que o imóvel não paga condomínio, ou que condomínio "não se aplica" (comum em casas e terrenos), defina condo_not_applicable = true e condo_fee = null.
-8. ÁREA DE LAZER/COMODIDADES:
-   - Se o usuário disser explicitamente que não há área de lazer ou comodidades ("sem lazer", "não tem área de lazer"), retorne building_features e apartment_features como arrays vazios [] normalmente.
+8. ÁREA DE LAZER/COMODIDADES (TAXONOMIA CANÔNICA E NORMALIZAÇÃO SEMÂNTICA):
+   - TAXONOMIA DE COMODIDADES CANÔNICAS (building_features):
+     Use ESTRITAMENTE as opções canônicas padronizadas sempre que houver equivalência semântica:
+     ["Academia", "Cinema", "Elevador", "Escada", "Espaço gourmet", "Lavanderia", "Minimercado", "Piscina", "Portaria física", "Portaria virtual", "Recepção", "Restaurante", "Rooftop", "Salão de festas", "Salão de jogos", "Sem área de lazer"]
+   - REGRAS MANDATÓRIAS DE MAPEAMENTO:
+     * "elevador", "elevadores", "2 elevadores", "elevador social" -> "Elevador" (NUNCA crie "elevadores")
+     * "portaria 24h", "portaria 24 horas", "porteiro 24h", "portaria presencial" -> "Portaria física" (NUNCA crie "portaria 24h")
+     * "portaria remota", "portaria virtual", "portaria digital" -> "Portaria virtual"
+     * "piscina na cobertura", "piscina no rooftop" -> DEVE MARCAR DUAS COMODIDADES CANÔNICAS: "Piscina" e "Rooftop" (NUNCA crie "piscina na cobertura")
+     * "garagem privativa coberta" -> NUNCA coloque em building_features! Preencha o campo estruturado parking_spaces = 1.
+     * "área gourmet", "espaco gourmet" -> "Espaço gourmet"
+     * "mini mercado", "minimercado" -> "Minimercado"
+     * "salão de festas", "espaço festas" -> "Salão de festas"
+     * "salão de jogos" -> "Salão de jogos"
+     * "academia", "fitness", "academia equipada" -> "Academia"
+     * "lavanderia compartilhada" -> "Lavanderia"
+   - Se o usuário disser que não há área de lazer ou comodidades ("sem lazer", "não tem área de lazer"), retorne building_features: ["Sem área de lazer"].
+   - SÓ permita itens customizados em building_features se for uma comodidade real de condomínio que NÃO exista na lista acima (ex: "Quadra de tênis", "Coworking", "Pet place").
 9. OBSERVAÇÕES E NOTAS (CRÍTICO - NUNCA DESPEJE O TEXTO INTEIRO):
    - O campo "notes" SÓ DEVE SER PREENCHIDO se o usuário der uma instrução explícita de anotação, como: "guarde nas observações que...", "anota aí que...", "observações: ...", "adicione na descrição que...".
    - Se não houver pedido expresso de anotação, RETORNE notes = null. NUNCA coloque a fala ou descrição geral do imóvel em notes.
@@ -374,7 +391,7 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
     position: parsed.position && parsed.position !== 'Não informado' ? (parsed.position as PropertyPosition) : null,
     furnished: parsed.furnished === true ? true : parsed.furnished === false ? false : null,
     condition: parsed.condition ? (parsed.condition as PropertyCondition) : null,
-    building_features: Array.isArray(parsed.building_features) ? parsed.building_features : [],
+    building_features: [],
     apartment_features: Array.isArray(parsed.apartment_features) ? parsed.apartment_features : [],
     source_type: (parsed.source_type || 'Próprio') as SourceType,
     owner_name: parsed.owner_name ? String(parsed.owner_name).trim() : null,
@@ -387,6 +404,20 @@ Responda EXCLUSIVAMENTE em formato JSON estrito, sem formatação markdown ao re
         ? parsed.notes.trim()
         : undefined,
   };
+
+  // Normalização semântica rigorosa das comodidades extraídas pela IA
+  const rawBuildingFeatures = Array.isArray(parsed.building_features) ? parsed.building_features : [];
+  const normalizedAmenities = normalizeAmenityList(rawBuildingFeatures, {
+    parking_spaces: result.parking_spaces,
+    apartment_features: result.apartment_features,
+  });
+  result.building_features = normalizedAmenities.building_features;
+  if ((result.parking_spaces === null || result.parking_spaces === 0) && normalizedAmenities.parking_spaces) {
+    result.parking_spaces = normalizedAmenities.parking_spaces;
+  }
+  if (normalizedAmenities.apartment_features && normalizedAmenities.apartment_features.length > 0) {
+    result.apartment_features = normalizedAmenities.apartment_features;
+  }
 
   // Validação do núcleo obrigatório e campos desejáveis
   const validation = validatePropertyExtraction(result);

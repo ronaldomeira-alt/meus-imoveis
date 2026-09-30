@@ -8,12 +8,26 @@ const corsHeaders = {
 
 // Configuração Centralizada da Meta Graph API (Auditada)
 const META_GRAPH_VERSION = Deno.env.get("META_GRAPH_VERSION") || "v21.0";
-const GRAPH_API_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+
+/**
+ * Retorna o endpoint base correto da Meta Graph API dependendo do tipo de token.
+ * Tokens de Instagram Login (iniciados com 'IG' ou 'ig') operam sob graph.instagram.com.
+ * Tokens clássicos de Página do Facebook (iniciados com 'EA') operam sob graph.facebook.com.
+ */
+function getGraphApiBase(token: string): string {
+  if (token && (token.startsWith("IG") || token.startsWith("ig"))) {
+    return `https://graph.instagram.com/${META_GRAPH_VERSION}`;
+  }
+  return `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+}
 
 interface PublishResult {
   success: boolean;
   externalMediaId?: string;
   error?: string;
+  stage?: string;
+  code?: string;
+  retryable?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -155,8 +169,16 @@ serve(async (req: Request) => {
           p_max_retries: 3,
         });
         return new Response(
-          JSON.stringify({ success: false, postId, error: pubResult.error }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            success: false,
+            postId,
+            error: pubResult.error,
+            message: pubResult.error,
+            stage: pubResult.stage,
+            code: pubResult.code,
+            retryable: pubResult.retryable,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -228,6 +250,7 @@ async function executeInstagramPublish(
   instagramUserId: string,
   accessToken: string
 ): Promise<PublishResult> {
+  const graphApiBase = getGraphApiBase(accessToken);
   const mediaUrls = (post.media_urls || []).filter(
     (url: string) => url && typeof url === "string" && url.startsWith("http")
   );
@@ -235,7 +258,9 @@ async function executeInstagramPublish(
   if (mediaUrls.length === 0) {
     return {
       success: false,
+      stage: "validation",
       error: "O post não contém nenhuma URL de mídia pública acessível pela Meta.",
+      retryable: false,
     };
   }
 
@@ -244,7 +269,7 @@ async function executeInstagramPublish(
 
     // 1. Post de Imagem Única
     if (mediaUrls.length === 1 && post.post_type !== "reel") {
-      const res = await fetch(`${GRAPH_API_BASE}/${instagramUserId}/media`, {
+      const res = await fetch(`${graphApiBase}/${instagramUserId}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -258,10 +283,31 @@ async function executeInstagramPublish(
       if (!res.ok || !data.id) {
         return {
           success: false,
+          stage: "single_image_create",
+          code: String(data.error?.code || res.status),
           error: data.error?.message || `Falha ao criar container de imagem (HTTP ${res.status})`,
+          retryable: res.status >= 500,
         };
       }
       containerId = data.id;
+
+      // Polling de verificação de status do container de imagem
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const stRes = await fetch(`${graphApiBase}/${containerId}?fields=status_code&access_token=${accessToken}`);
+        const stData = await stRes.json();
+        if (stData.status_code === "FINISHED" || !stData.status_code) {
+          break;
+        }
+        if (stData.status_code === "ERROR") {
+          return {
+            success: false,
+            stage: "single_image_processing",
+            error: "Processamento da imagem rejeitado pela Meta.",
+            retryable: false,
+          };
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
     }
     // 2. Post Carrossel (> 1 foto)
     else if (mediaUrls.length > 1) {
@@ -269,7 +315,7 @@ async function executeInstagramPublish(
 
       for (let i = 0; i < Math.min(mediaUrls.length, 10); i++) {
         const itemUrl = mediaUrls[i];
-        const itemRes = await fetch(`${GRAPH_API_BASE}/${instagramUserId}/media`, {
+        const itemRes = await fetch(`${graphApiBase}/${instagramUserId}/media`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -283,36 +329,108 @@ async function executeInstagramPublish(
         if (!itemRes.ok || !itemData.id) {
           return {
             success: false,
+            stage: "carousel_item_create",
+            code: String(itemData.error?.code || itemRes.status),
             error: `Falha ao preparar item ${i + 1} do carrossel: ${itemData.error?.message || "Erro Meta"}`,
+            retryable: itemRes.status >= 500,
           };
         }
         childContainerIds.push(itemData.id);
       }
 
-      // Cria container mestre do Carrossel
-      const carouselRes = await fetch(`${GRAPH_API_BASE}/${instagramUserId}/media`, {
+      // Polling de prontidão dos containers filhos antes de criar o carrossel mestre
+      for (const childId of childContainerIds) {
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const stRes = await fetch(`${graphApiBase}/${childId}?fields=status_code&access_token=${accessToken}`);
+          const stData = await stRes.json();
+          if (stData.status_code === "FINISHED" || !stData.status_code) {
+            break;
+          }
+          if (stData.status_code === "ERROR") {
+            return {
+              success: false,
+              stage: "carousel_item_processing",
+              error: `Item do carrossel ${childId} rejeitado pela Meta.`,
+              retryable: false,
+            };
+          }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+
+      // Cria container mestre do Carrossel (Graph API suporta array e comma-separated)
+      const carouselRes = await fetch(`${graphApiBase}/${instagramUserId}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           media_type: "CAROUSEL",
-          children: childContainerIds.join(","),
+          children: childContainerIds,
           caption: post.caption,
           access_token: accessToken,
         }),
       });
 
-      const carouselData = await carouselRes.json();
+      let carouselData = await carouselRes.json();
       if (!carouselRes.ok || !carouselData.id) {
-        return {
-          success: false,
-          error: `Falha ao criar container do carrossel: ${carouselData.error?.message || "Erro Meta"}`,
-        };
+        // Fallback: tenta com string separada por vírgula se a Meta exigir
+        const fallbackRes = await fetch(`${graphApiBase}/${instagramUserId}/media`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            media_type: "CAROUSEL",
+            children: childContainerIds.join(","),
+            caption: post.caption,
+            access_token: accessToken,
+          }),
+        });
+        const fallbackData = await fallbackRes.json();
+        if (!fallbackRes.ok || !fallbackData.id) {
+          return {
+            success: false,
+            stage: "carousel_container_create",
+            code: String(carouselData.error?.code || fallbackData.error?.code || carouselRes.status),
+            error: `Falha ao criar container do carrossel: ${carouselData.error?.message || fallbackData.error?.message || "Erro Meta"}`,
+            retryable: carouselRes.status >= 500,
+          };
+        }
+        carouselData = fallbackData;
       }
       containerId = carouselData.id;
+
+      // Polling obrigatório de prontidão do container mestre do Carrossel
+      let carouselReady = false;
+      for (let attempt = 0; attempt < 15; attempt++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const statusRes = await fetch(
+          `${graphApiBase}/${containerId}?fields=status_code&access_token=${accessToken}`
+        );
+        const statusData = await statusRes.json();
+
+        if (statusData.status_code === "FINISHED" || !statusData.status_code) {
+          carouselReady = true;
+          break;
+        } else if (statusData.status_code === "ERROR") {
+          return {
+            success: false,
+            stage: "carousel_processing",
+            error: "Processamento do carrossel rejeitado pela Meta.",
+            retryable: false,
+          };
+        }
+      }
+
+      if (!carouselReady) {
+        return {
+          success: false,
+          stage: "carousel_timeout",
+          error: "Tempo limite esgotado no processamento do Carrossel na Meta.",
+          retryable: true,
+        };
+      }
     }
     // 3. Post de Vídeo / Reel
     else if (post.post_type === "reel") {
-      const reelRes = await fetch(`${GRAPH_API_BASE}/${instagramUserId}/media`, {
+      const reelRes = await fetch(`${graphApiBase}/${instagramUserId}/media`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -327,17 +445,20 @@ async function executeInstagramPublish(
       if (!reelRes.ok || !reelData.id) {
         return {
           success: false,
+          stage: "reel_create",
+          code: String(reelData.error?.code || reelRes.status),
           error: `Falha ao criar container do Reel: ${reelData.error?.message || "Erro Meta"}`,
+          retryable: reelRes.status >= 500,
         };
       }
       containerId = reelData.id;
 
       // Polling de processamento do vídeo
       let isReady = false;
-      for (let attempt = 0; attempt < 12; attempt++) {
+      for (let attempt = 0; attempt < 15; attempt++) {
         await new Promise((r) => setTimeout(r, 4000));
         const statusRes = await fetch(
-          `${GRAPH_API_BASE}/${containerId}?fields=status_code&access_token=${accessToken}`
+          `${graphApiBase}/${containerId}?fields=status_code&access_token=${accessToken}`
         );
         const statusData = await statusRes.json();
 
@@ -345,22 +466,29 @@ async function executeInstagramPublish(
           isReady = true;
           break;
         } else if (statusData.status_code === "ERROR") {
-          return { success: false, error: "Processamento de vídeo rejeitado pela Meta." };
+          return {
+            success: false,
+            stage: "reel_processing",
+            error: "Processamento de vídeo rejeitado pela Meta.",
+            retryable: false,
+          };
         }
       }
 
       if (!isReady) {
         return {
           success: false,
+          stage: "reel_timeout",
           error: "Tempo limite esgotado no processamento do Reel na Meta.",
+          retryable: true,
         };
       }
     } else {
-      return { success: false, error: `Tipo de post inválido: ${post.post_type}` };
+      return { success: false, stage: "validation", error: `Tipo de post inválido: ${post.post_type}` };
     }
 
     // Publicação Efetiva (media_publish)
-    const pubRes = await fetch(`${GRAPH_API_BASE}/${instagramUserId}/media_publish`, {
+    const pubRes = await fetch(`${graphApiBase}/${instagramUserId}/media_publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -373,7 +501,10 @@ async function executeInstagramPublish(
     if (!pubRes.ok || !pubData.id) {
       return {
         success: false,
+        stage: "media_publish",
+        code: String(pubData.error?.code || pubRes.status),
         error: pubData.error?.message || `Falha na publicação final (HTTP ${pubRes.status})`,
+        retryable: pubRes.status >= 500,
       };
     }
 
@@ -384,7 +515,9 @@ async function executeInstagramPublish(
   } catch (err: any) {
     return {
       success: false,
+      stage: "exception",
       error: `Exceção na chamada da Meta Graph API: ${err.message}`,
+      retryable: true,
     };
   }
 }

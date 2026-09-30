@@ -9,6 +9,7 @@ import type {
   FeeStatus,
   DevelopmentTypology,
 } from '../types/property';
+import { normalizeAmenityList } from './amenity-normalization';
 
 export interface ExtractedPropertyData {
   purpose?: PropertyPurpose | null;
@@ -410,15 +411,37 @@ export const extractPropertyWithGemini = async (
   else if (textLower.includes('norte')) position = 'Norte';
   else if (textLower.includes('sul')) position = 'Sul';
 
-  // 10. Características
-  const building_features: string[] = [];
-  if (textLower.includes('piscina')) building_features.push('Piscina');
-  if (textLower.includes('academia')) building_features.push('Academia');
-  if (textLower.includes('elevador')) building_features.push('Elevador');
-  if (textLower.includes('portaria')) building_features.push('Portaria 24h');
-  if (textLower.includes('salão de festas') || textLower.includes('salao de festas')) building_features.push('Salão de festas');
-  if (textLower.includes('rooftop')) building_features.push('Rooftop');
-  if (textLower.includes('espaço gourmet') || textLower.includes('espaco gourmet')) building_features.push('Espaço gourmet');
+  // 10. Características & Comodidades Canônicas
+  const rawFeaturesFound: string[] = [];
+  if (textLower.includes('piscina na cobertura') || textLower.includes('piscina no rooftop')) {
+    rawFeaturesFound.push('piscina na cobertura');
+  } else {
+    if (textLower.includes('piscina')) rawFeaturesFound.push('Piscina');
+    if (textLower.includes('rooftop')) rawFeaturesFound.push('Rooftop');
+  }
+  if (textLower.includes('academia')) rawFeaturesFound.push('Academia');
+  if (/\belevador(es)?\b/.test(textLower)) rawFeaturesFound.push('Elevador');
+  if (textLower.includes('portaria remota') || textLower.includes('portaria virtual') || textLower.includes('portaria eletrônica') || textLower.includes('portaria digital')) {
+    rawFeaturesFound.push('Portaria virtual');
+  } else if (textLower.includes('portaria') || textLower.includes('porteiro')) {
+    rawFeaturesFound.push('Portaria física');
+  }
+  if (textLower.includes('salão de festas') || textLower.includes('salao de festas')) rawFeaturesFound.push('Salão de festas');
+  if (textLower.includes('salão de jogos') || textLower.includes('salao de jogos')) rawFeaturesFound.push('Salão de jogos');
+  if (textLower.includes('espaço gourmet') || textLower.includes('espaco gourmet') || textLower.includes('área gourmet')) rawFeaturesFound.push('Espaço gourmet');
+  if (textLower.includes('minimercado') || textLower.includes('mini mercado')) rawFeaturesFound.push('Minimercado');
+  if (textLower.includes('lavanderia')) rawFeaturesFound.push('Lavanderia');
+  if (textLower.includes('cinema')) rawFeaturesFound.push('Cinema');
+  if (textLower.includes('recepção') || textLower.includes('recepcao')) rawFeaturesFound.push('Recepção');
+  if (textLower.includes('restaurante')) rawFeaturesFound.push('Restaurante');
+  if (textLower.includes('escada') || textLower.includes('sem elevador')) rawFeaturesFound.push('Escada');
+
+  if (textLower.includes('garagem privativa coberta') || textLower.includes('vaga coberta')) {
+    if (!parking_spaces || parking_spaces === 0) {
+      parking_spaces = 1;
+      field_states.parking_spaces = 'informed';
+    }
+  }
 
   const apartment_features: string[] = [];
   if (textLower.includes('varanda')) apartment_features.push('Varanda gourmet');
@@ -426,12 +449,29 @@ export const extractPropertyWithGemini = async (
   if (textLower.includes('ar-condicionado') || textLower.includes('ar condicionado')) apartment_features.push('Ar-condicionado');
   if (textLower.includes('projetado') || textLower.includes('planejado')) apartment_features.push('Móveis projetados');
 
+  const normalized = normalizeAmenityList(rawFeaturesFound, {
+    parking_spaces,
+    apartment_features,
+  });
+
+  const building_features: string[] = normalized.building_features;
+  if ((parking_spaces === null || parking_spaces === 0) && normalized.parking_spaces) {
+    parking_spaces = normalized.parking_spaces;
+    field_states.parking_spaces = 'informed';
+  }
+  if (normalized.apartment_features) {
+    normalized.apartment_features.forEach((f) => {
+      if (!apartment_features.includes(f)) apartment_features.push(f);
+    });
+  }
+
   // "Sem área de lazer" é uma resposta válida (não "faltando") — marca o campo como resolvido
   if (building_features.length > 0 || apartment_features.length > 0) {
     field_states.building_features = 'informed';
   } else if (
     /(?:n[ãa]o (?:tem|possui|há)|sem)\s+(?:\w+\s+){0,3}(?:lazer|comodidades?|[áa]rea de lazer)/.test(textLower)
   ) {
+    building_features.push('Sem área de lazer');
     field_states.building_features = 'informed';
   }
 

@@ -60,24 +60,9 @@ const COMMON_NEIGHBORHOODS = [
   'Tambaú',
 ];
 
-const COMMON_AMENITIES = [
-  'Academia',
-  'Cinema',
-  'Elevador',
-  'Escada',
-  'Espaço gourmet',
-  'Lavanderia',
-  'Minimercado',
-  'Piscina',
-  'Portaria física',
-  'Portaria virtual',
-  'Recepção',
-  'Restaurante',
-  'Rooftop',
-  'Salão de festas',
-  'Salão de jogos',
-  'Sem área de lazer',
-];
+import { CANONICAL_AMENITIES, normalizeAmenityInput } from '../../lib/amenity-normalization';
+
+const COMMON_AMENITIES = CANONICAL_AMENITIES;
 
 const currency = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -288,7 +273,7 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
   const amenities = data.building_features || [];
   const amenityOptions = [
     ...COMMON_AMENITIES,
-    ...amenities.filter((feat) => !COMMON_AMENITIES.includes(feat)),
+    ...amenities.filter((feat) => !COMMON_AMENITIES.includes(feat as any)),
   ];
 
   const toggleAmenity = (feat: string) => {
@@ -303,9 +288,24 @@ export const PropertyFicha: React.FC<PropertyFichaProps> = ({
   const addCustomAmenity = () => {
     const trimmed = amenityDraft.trim();
     if (!trimmed) return;
-    if (!amenities.includes(trimmed)) {
-      onUpdateField('building_features', [...amenities.filter((f) => f !== 'Sem área de lazer'), trimmed]);
+    
+    // Normalização semântica da entrada manual do corretor
+    const normResult = normalizeAmenityInput(trimmed, amenities);
+    onUpdateField('building_features', normResult.buildingFeatures);
+    
+    if (normResult.inferredParkingSpaces && (!data.parking_spaces || data.parking_spaces === 0)) {
+      onUpdateField('parking_spaces', normResult.inferredParkingSpaces);
     }
+    
+    if (normResult.apartmentFeaturesToAdd && normResult.apartmentFeaturesToAdd.length > 0) {
+      const currentApt = data.apartment_features || [];
+      const updatedApt = [...currentApt];
+      normResult.apartmentFeaturesToAdd.forEach((f) => {
+        if (!updatedApt.includes(f)) updatedApt.push(f);
+      });
+      onUpdateField('apartment_features', updatedApt);
+    }
+    
     setAmenityDraft('');
   };
 

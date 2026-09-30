@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -13,7 +13,8 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
-  Eye
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import { DateTimePicker } from '../ui/DateTimePicker';
@@ -72,24 +73,36 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   const [selectedCover, setSelectedCover] = useState<string>(
     existingPost?.cover_url || normalizedPhotos[0] || ''
   );
-  const [scheduledDate, setScheduledDate] = useState(() => {
+  const [scheduledDate, setScheduledDate] = useState<string | null>(() => {
     if (existingPost?.scheduled_at) {
       return new Date(existingPost.scheduled_at).toISOString().slice(0, 16);
     }
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(10, 0, 0, 0);
-    return tomorrow.toISOString().slice(0, 16);
+    return null;
+  });
+  const [isScheduleEnabled, setIsScheduleEnabled] = useState<boolean>(() => {
+    return Boolean(existingPost?.scheduled_at);
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const isPublishingRef = useRef(false);
   const [regenDropdownOpen, setRegenDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [previewPhotoIndex, setPreviewPhotoIndex] = useState(0);
   const [igAccount, setIgAccount] = useState<InstagramAccount | null>(null);
   const isLockedPublishing = existingPost?.status === 'publishing';
+
+  // Trava scroll de fundo do body no PWA/iOS
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   // Carregar conta real do Instagram
   useEffect(() => {
@@ -107,11 +120,17 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
         setSelectedCover(existingPost.cover_url || (existingPost.media_urls?.[0] || ''));
         if (existingPost.scheduled_at) {
           setScheduledDate(new Date(existingPost.scheduled_at).toISOString().slice(0, 16));
+          setIsScheduleEnabled(true);
+        } else {
+          setScheduledDate(null);
+          setIsScheduleEnabled(false);
         }
       } else {
         const norm = extractPhotoUrls(property.photos);
         setSelectedPhotos(norm);
         setSelectedCover(norm[0] || '');
+        setScheduledDate(null);
+        setIsScheduleEnabled(false);
         // If caption is empty, auto-generate initial caption
         if (!caption) {
           handleGenerateCaption('default');
@@ -120,6 +139,25 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
       setStatusMessage(null);
     }
   }, [isOpen, property.id, existingPost?.id]);
+
+  const getDefaultFutureSchedule = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  };
+
+  const handleEnableSchedule = () => {
+    setIsScheduleEnabled(true);
+    if (!scheduledDate) {
+      setScheduledDate(getDefaultFutureSchedule());
+    }
+  };
+
+  const handleDisableSchedule = () => {
+    setIsScheduleEnabled(false);
+    setScheduledDate(null);
+  };
 
   if (!isOpen) return null;
 
@@ -157,7 +195,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     }
   };
 
-  const buildPostPayload = (status: PostStatus, scheduleISO?: string): MarketingPost => {
+  const buildPostPayload = (status: PostStatus, explicitScheduleISO?: string | null): MarketingPost => {
     const postType: PostType = selectedPhotos.length > 1 ? 'carousel' : 'feed';
     const snapshot = (existingPost?.property_snapshot && Object.keys(existingPost.property_snapshot).length > 0)
       ? existingPost.property_snapshot
@@ -174,6 +212,13 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
           photos: property.photos,
         };
 
+    let scheduledAt: string | null = null;
+    if (explicitScheduleISO !== undefined) {
+      scheduledAt = explicitScheduleISO;
+    } else if (isScheduleEnabled && scheduledDate) {
+      scheduledAt = new Date(scheduledDate).toISOString();
+    }
+
     return {
       id: existingPost?.id,
       listing_id: property.id,
@@ -184,7 +229,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
       post_type: postType,
       channel: 'instagram',
       status,
-      scheduled_at: scheduleISO || null,
+      scheduled_at: scheduledAt,
       published_at: existingPost?.published_at || null,
       provider: 'instagram',
       external_media_id: existingPost?.external_media_id || null,
@@ -211,8 +256,12 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   };
 
   const handleSchedulePost = async () => {
-    if (!scheduledDate) {
-      setStatusMessage({ type: 'error', text: 'Selecione data e horário para a programação.' });
+    if (!isScheduleEnabled || !scheduledDate) {
+      handleEnableSchedule();
+      setStatusMessage({
+        type: 'error',
+        text: 'Selecione a data e o horário desejados e clique novamente em "Aprovar & Programar" para confirmar.',
+      });
       return;
     }
     const scheduleTime = new Date(scheduledDate).getTime();
@@ -245,6 +294,8 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   };
 
   const handlePublishNow = async () => {
+    if (isPublishingRef.current || isPublishing || isSaving) return;
+
     const account = await getInstagramAccount();
     if (!account || account.status !== 'connected' || !account.instagram_user_id) {
       setStatusMessage({
@@ -258,11 +309,12 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
       return;
     }
 
+    isPublishingRef.current = true;
     setIsPublishing(true);
     setStatusMessage(null);
     try {
-      // First save as approved
-      const payload = buildPostPayload('approved');
+      // Publicação imediata: scheduled_at é explicitamente NULL
+      const payload = buildPostPayload('approved', null);
       const saved = await saveMarketingPost(payload);
 
       // Now invoke publisher
@@ -288,13 +340,14 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: `Erro na publicação: ${err.message}` });
     } finally {
+      isPublishingRef.current = false;
       setIsPublishing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 animate-fade-in">
-      <div className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl bg-surface-3 border border-line-strong shadow-modal overflow-hidden text-ink-primary">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-black/85 animate-fade-in">
+      <div className="relative w-full max-w-5xl max-h-[94dvh] sm:max-h-[92vh] flex flex-col rounded-3xl bg-surface-3 border border-line-strong shadow-modal overflow-hidden text-ink-primary">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-line-subtle bg-surface-2/90 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -350,10 +403,10 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
           </div>
         )}
 
-        {/* Content Body: Two Columns (Editor & Live Preview) - Sem scroll externo */}
-        <div className="flex-1 p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch overflow-hidden">
+        {/* Content Body: Two Columns (Editor & Live Preview) - Scroll suave no mobile com -webkit-overflow-scrolling */}
+        <div className="flex-1 p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch overflow-y-auto lg:overflow-hidden overscroll-contain min-h-0 [WebkitOverflowScrolling:touch]">
           {/* Left Column: Form & Controls (7 cols) */}
-          <div className="lg:col-span-7 flex flex-col h-full gap-3">
+          <div className="lg:col-span-7 flex flex-col lg:h-full lg:overflow-y-auto gap-3 pr-0 lg:pr-1">
             {/* Título Superior: Mídias do Imóvel (mesma altura e linha da Pré-visualização do Feed) */}
             <div className="flex items-center justify-between h-5 flex-shrink-0">
               <span className="text-xs font-bold uppercase tracking-wider text-ink-primary flex items-center gap-1.5">
@@ -476,28 +529,53 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
               </div>
             </div>
 
-            {/* 3. Programação Temporal Minimalista e Fluida (Base alinhada com a base do preview) */}
+            {/* 3. Programação Temporal Minimalista e Fluida */}
             <div className="bg-surface-1 border border-line-subtle p-3 rounded-2xl space-y-2 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-ink-primary flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-ink-secondary" />
                   Data e Horário de Publicação
                 </span>
-                <span className="text-[10px] text-ink-secondary">
-                  Fuso de Brasília (UTC-3)
-                </span>
+                {isScheduleEnabled ? (
+                  <button
+                    type="button"
+                    onClick={handleDisableSchedule}
+                    className="text-[10px] text-red-400 hover:text-red-300 font-semibold transition-colors cursor-pointer"
+                  >
+                    Remover agendamento
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-ink-secondary">
+                    Fuso de Brasília (UTC-3)
+                  </span>
+                )}
               </div>
 
-              {/* DateTimePicker customizado */}
-              <DateTimePicker
-                value={scheduledDate}
-                onChange={setScheduledDate}
-              />
+              {isScheduleEnabled ? (
+                <DateTimePicker
+                  value={scheduledDate || ''}
+                  onChange={setScheduledDate}
+                />
+              ) : (
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-2/60 border border-line-subtle">
+                  <span className="text-xs text-ink-secondary">
+                    Nenhum agendamento ativo (Publicação Imediata ou Rascunho).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleEnableSchedule}
+                    className="text-xs font-semibold text-accent hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Agendar data futura
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Right Column: Instagram Live Preview (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col items-center h-full">
+          <div className="lg:col-span-5 flex flex-col items-center lg:h-full lg:overflow-y-auto pt-2 lg:pt-0">
             {/* Título: Pré-visualização do Feed alinhado exatamente à borda esquerda do card preto */}
             <div className="w-full max-w-[340px] flex items-center h-5 mb-3 flex-shrink-0">
               <span className="text-xs font-bold uppercase tracking-wider text-ink-primary flex items-center gap-1.5">
@@ -650,33 +728,42 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-line-subtle bg-surface-2/90 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-line-subtle bg-surface-2/90 flex-shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <button
             onClick={handleSaveDraft}
             disabled={isSaving || isPublishing || isLockedPublishing}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-surface-1 border border-line-subtle text-xs font-bold text-ink-primary hover:bg-surface-3 transition-colors disabled:opacity-50 cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-surface-1 border border-line-subtle text-xs font-bold text-ink-primary hover:bg-surface-3 transition-colors disabled:opacity-50 cursor-pointer touch-manipulation"
           >
-            <Save className="w-4 h-4 text-ink-secondary" />
-            Salvar Rascunho
+            {isSaving ? <Loader2 className="w-4 h-4 text-ink-secondary animate-spin" /> : <Save className="w-4 h-4 text-ink-secondary" />}
+            <span>Salvar Rascunho</span>
           </button>
 
           <div className="w-full sm:w-auto flex items-center gap-2.5">
             <button
               onClick={handleSchedulePost}
               disabled={isSaving || isPublishing || isLockedPublishing}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-surface-1 hover:bg-surface-3 border border-line-strong text-ink-primary text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-surface-1 hover:bg-surface-3 border border-line-strong text-ink-primary text-xs font-bold transition-all disabled:opacity-50 cursor-pointer touch-manipulation whitespace-nowrap"
             >
               <Calendar className="w-4 h-4 text-ink-secondary" />
-              Aprovar & Programar
+              <span>Aprovar & Programar</span>
             </button>
 
             <button
               onClick={handlePublishNow}
               disabled={isSaving || isPublishing || isLockedPublishing}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white font-bold text-xs shadow-md hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer"
+              className="flex-1 sm:flex-initial min-w-[145px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white font-bold text-xs shadow-md hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer touch-manipulation whitespace-nowrap"
             >
-              <Send className={`w-4 h-4 ${isPublishing ? 'animate-bounce' : ''}`} />
-              {isPublishing ? 'Publicando...' : 'Publicar Agora'}
+              {isPublishing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                  <span>Publicando...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 shrink-0" />
+                  <span>Publicar Agora</span>
+                </>
+              )}
             </button>
           </div>
         </div>

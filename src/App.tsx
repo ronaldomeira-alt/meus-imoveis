@@ -1025,10 +1025,10 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
             <div>
               <h3 className="text-base font-extrabold text-ink-primary">
-                Imóvel Salvo no Catálogo!
+                Imóvel salvo com sucesso!
               </h3>
               <p className="text-xs text-ink-secondary mt-1">
-                Deseja criar a publicação para o Instagram e agendar no piloto automático agora?
+                Deseja preparar a publicação no Instagram agora?
               </p>
               <div className="mt-3 p-3 rounded-xl bg-surface-1 border border-line-subtle text-left">
                 <p className="text-xs font-bold text-ink-primary truncate">
@@ -1056,7 +1056,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white text-xs font-bold shadow-lg shadow-pink-500/20 hover:opacity-95 transition-all cursor-pointer"
               >
-                Criar Post com IA
+                Preparar no Post Studio
               </button>
             </div>
           </div>
