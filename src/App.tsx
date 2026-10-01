@@ -17,6 +17,7 @@ import { ReportsView } from './components/reports/ReportsView';
 import { PilotoAutomaticoView } from './components/marketing/PilotoAutomaticoView';
 import { MarketingCalendarView } from './components/marketing/MarketingCalendarView';
 import { PostEditorModal } from './components/marketing/PostEditorModal';
+import { BotCaptadorView } from './components/bot-captador/BotCaptadorView';
 import { calculateDashboardStats, supabase } from './lib/supabase';
 import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
@@ -50,6 +51,7 @@ const SECTION_TO_PATH: Record<NavSection, string> = {
   estoque: '/estoque',
   match: '/match',
   captar: '/adicionar-imovel',
+  'bot-captador': '/bot-captador',
   piloto: '/piloto-automatico',
   calendario: '/calendario',
   parceiros: '/parceiros',
@@ -65,6 +67,9 @@ const PATH_TO_SECTION: Record<string, NavSection> = {
   '/match': 'match',
   '/adicionar-imovel': 'captar',
   '/captar': 'captar',
+  '/bot-captador': 'bot-captador',
+  '/bot': 'bot-captador',
+  '/captador': 'bot-captador',
   '/piloto': 'piloto',
   '/piloto-automatico': 'piloto',
   '/calendario': 'calendario',
@@ -138,6 +143,16 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         window.history.pushState({ section }, '', targetPath);
       }
     }
+  };
+
+  // ── Importação Originada do Bot Captador ──
+  const [pendingImportUrl, setPendingImportUrl] = useState<string | undefined>(undefined);
+  const [pendingCaptureId, setPendingCaptureId] = useState<string | undefined>(undefined);
+
+  const handleNavigateFromCapture = (url: string, captureId?: string) => {
+    setPendingImportUrl(url);
+    setPendingCaptureId(captureId);
+    navigateToSection('captar');
   };
 
   // ── Dados do Catálogo de Imóveis ──
@@ -722,11 +737,32 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       >
         {activeSection === 'captar' ? (
           <AddPropertyPage
+            initialImportUrl={pendingImportUrl}
+            sourceCaptureId={pendingCaptureId}
+            onCaptureImported={async (captureId, propertyId) => {
+              try {
+                if (supabase) {
+                  await supabase.rpc('mark_bot_capture_imported', {
+                    p_capture_id: captureId,
+                    p_property_id: propertyId,
+                  });
+                }
+              } catch (err) {
+                console.error('Erro ao vincular captação ao imóvel importado:', err);
+              } finally {
+                setPendingImportUrl(undefined);
+                setPendingCaptureId(undefined);
+              }
+            }}
             onSaveProperty={(p) => {
               handleSaveNewProperty(p);
               navigateToSection('estoque');
             }}
-            onBack={() => navigateToSection('dashboard')}
+            onBack={() => {
+              setPendingImportUrl(undefined);
+              setPendingCaptureId(undefined);
+              navigateToSection('dashboard');
+            }}
             geminiApiKey={geminiApiKey}
             groqApiKey={groqApiKey}
             preferredAIProvider={preferredAIProvider}
@@ -940,6 +976,15 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         {activeSection === 'match' && (
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col h-full">
               <MatchView searchQuery={searchQuery} />
+          </div>
+        )}
+
+        {/* ── VIEW BOT CAPTADOR ── */}
+        {activeSection === 'bot-captador' && (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <BotCaptadorView
+              onNavigateToAddProperty={handleNavigateFromCapture}
+            />
           </div>
         )}
 

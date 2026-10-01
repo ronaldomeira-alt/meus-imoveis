@@ -54,7 +54,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const [fullscreenZoom, setFullscreenZoom] = useState(1);
   const [fullscreenPan, setFullscreenPan] = useState({ x: 0, y: 0 });
   const [fullscreenDragX, setFullscreenDragX] = useState(0);
+  const [fullscreenDragY, setFullscreenDragY] = useState(0);
+  const [fullscreenDismissDragX, setFullscreenDismissDragX] = useState(0);
   const [fullscreenTrackAnimating, setFullscreenTrackAnimating] = useState(false);
+  const [isDismissing, setIsDismissing] = useState(false);
+  const [isSnappingBack, setIsSnappingBack] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPostEditorOpen, setIsPostEditorOpen] = useState(false);
@@ -62,7 +66,9 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const galleryTouchStartX = useRef<number | null>(null);
   const gallerySwipeDetected = useRef(false);
   const [galleryDragX, setGalleryDragX] = useState(0);
-  const fullscreenTouchStartX = useRef<number | null>(null);
+  const fullscreenTouchStart = useRef<{ x: number; y: number; time: number } | null>(null);
+  const fullscreenGesture = useRef<'none' | 'horizontal' | 'vertical'>('none');
+  const isMouseDownRef = useRef(false);
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number }; closing: boolean } | null>(null);
   const panRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -74,7 +80,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const closeFullscreen = () => {
     resetFullscreenTransform();
     setFullscreenDragX(0);
+    setFullscreenDragY(0);
+    setFullscreenDismissDragX(0);
     setFullscreenTrackAnimating(false);
+    setIsDismissing(false);
+    setIsSnappingBack(false);
+    fullscreenGesture.current = 'none';
+    fullscreenTouchStart.current = null;
+    isMouseDownRef.current = false;
     setIsFullscreen(false);
   };
 
@@ -118,6 +131,12 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
         selectedPhotoIndex < photos.length - 1 ? selectedPhotoIndex + 1 : 0,
       ]
     : [selectedPhotoIndex];
+
+  const dismissProgress = Math.min(1, Math.max(0, fullscreenDragY / 320));
+  const fullscreenBgOpacity = isDismissing ? 0 : Math.max(0, 1 - dismissProgress * 0.92);
+  const fullscreenPhotoScale = Math.max(0.72, 1 - dismissProgress * 0.22);
+  const fullscreenPhotoRadius = Math.round(dismissProgress * 24);
+  const fullscreenControlsOpacity = isDismissing ? 0 : Math.max(0, 1 - Math.max(0, fullscreenDragY) / 50);
 
   // Pré-carrega as fotos secundárias para que as miniaturas apareçam sem atraso perceptível.
   useEffect(() => {
@@ -770,16 +789,29 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
       <AnimatePresence>
         {isFullscreen && currentPhotoUrl && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black overflow-hidden overscroll-none"
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none select-none"
+            style={{
+              backgroundColor: `rgba(0, 0, 0, ${fullscreenBgOpacity})`,
+              transition: isSnappingBack || isDismissing ? 'background-color 220ms ease-out' : 'none',
+            }}
             onTouchStart={(event) => {
               if (event.touches.length === 2) {
                 pinchRef.current = { distance: touchDistance(event.touches), zoom: fullscreenZoom, pan: fullscreenPan, closing: false };
+                fullscreenGesture.current = 'none';
+                fullscreenTouchStart.current = null;
               } else if (event.touches.length === 1 && fullscreenZoom > 1) {
                 panRef.current = { x: event.touches[0].clientX - fullscreenPan.x, y: event.touches[0].clientY - fullscreenPan.y };
-              } else if (event.touches.length === 1) {
-                fullscreenTouchStartX.current = event.touches[0].clientX;
+                fullscreenGesture.current = 'none';
+                fullscreenTouchStart.current = null;
+              } else if (event.touches.length === 1 && fullscreenZoom === 1 && !isDismissing) {
+                fullscreenTouchStart.current = {
+                  x: event.touches[0].clientX,
+                  y: event.touches[0].clientY,
+                  time: Date.now(),
+                };
+                fullscreenGesture.current = 'none';
                 setFullscreenTrackAnimating(false);
-                setFullscreenDragX(0);
+                setIsSnappingBack(false);
               }
             }}
             onTouchMove={(event) => {
@@ -796,9 +828,39 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   x: event.touches[0].clientX - panRef.current.x,
                   y: event.touches[0].clientY - panRef.current.y,
                 });
-              } else if (event.touches.length === 1 && fullscreenTouchStartX.current !== null && fullscreenZoom === 1) {
-                event.preventDefault();
-                setFullscreenDragX(event.touches[0].clientX - fullscreenTouchStartX.current);
+              } else if (event.touches.length === 1 && fullscreenTouchStart.current !== null && fullscreenZoom === 1 && !isDismissing) {
+                const currentX = event.touches[0].clientX;
+                const currentY = event.touches[0].clientY;
+                const deltaX = currentX - fullscreenTouchStart.current.x;
+                const deltaY = currentY - fullscreenTouchStart.current.y;
+
+                if (fullscreenGesture.current === 'none') {
+                  const absX = Math.abs(deltaX);
+                  const absY = Math.abs(deltaY);
+                  if (absX > 8 || absY > 8) {
+                    if (absX >= absY) {
+                      fullscreenGesture.current = 'horizontal';
+                    } else {
+                      fullscreenGesture.current = 'vertical';
+                    }
+                  }
+                }
+
+                if (fullscreenGesture.current === 'horizontal') {
+                  event.preventDefault();
+                  if (photos.length > 1) {
+                    setFullscreenDragX(deltaX);
+                  }
+                } else if (fullscreenGesture.current === 'vertical') {
+                  event.preventDefault();
+                  if (deltaY > 0) {
+                    setFullscreenDragY(deltaY);
+                    setFullscreenDismissDragX(deltaX * 0.25);
+                  } else {
+                    setFullscreenDragY(deltaY * 0.15);
+                    setFullscreenDismissDragX(deltaX * 0.15);
+                  }
+                }
               }
             }}
             onTouchEnd={(event) => {
@@ -807,32 +869,178 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 pinchRef.current = null;
                 if (closingPinch) closeFullscreen();
                 else if (fullscreenZoom < 1.02) resetFullscreenTransform();
-              } else if (fullscreenTouchStartX.current !== null && photos.length > 1) {
-                const deltaX = (event.changedTouches[0]?.clientX ?? fullscreenTouchStartX.current) - fullscreenTouchStartX.current;
-                if (Math.abs(deltaX) >= 45) {
-                  const direction = deltaX < 0 ? -1 : 1;
-                  setFullscreenTrackAnimating(true);
-                  setFullscreenDragX(deltaX < 0 ? -window.innerWidth : window.innerWidth);
-                  window.setTimeout(() => {
-                    setSelectedPhotoIndex((prev) => direction < 0
-                      ? (prev < photos.length - 1 ? prev + 1 : 0)
-                      : (prev > 0 ? prev - 1 : photos.length - 1));
+              } else if (fullscreenTouchStart.current !== null && !isDismissing) {
+                const start = fullscreenTouchStart.current;
+                const endX = event.changedTouches[0]?.clientX ?? start.x;
+                const endY = event.changedTouches[0]?.clientY ?? start.y;
+                const deltaX = endX - start.x;
+                const deltaY = endY - start.y;
+                const elapsed = Math.max(1, Date.now() - start.time);
+                const velocityY = deltaY / elapsed;
+
+                if (fullscreenGesture.current === 'vertical') {
+                  if (deltaY > 100 || (deltaY > 40 && velocityY > 0.45)) {
+                    setIsDismissing(true);
+                    const targetY = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 600;
+                    setFullscreenDragY(targetY);
+                    setFullscreenDismissDragX(deltaX * 0.4);
+                    window.setTimeout(() => {
+                      closeFullscreen();
+                    }, 220);
+                  } else {
+                    setIsSnappingBack(true);
+                    setFullscreenDragY(0);
+                    setFullscreenDismissDragX(0);
+                    window.setTimeout(() => {
+                      setIsSnappingBack(false);
+                    }, 240);
+                  }
+                } else if (fullscreenGesture.current === 'horizontal' && photos.length > 1) {
+                  if (Math.abs(deltaX) >= 45) {
+                    const direction = deltaX < 0 ? -1 : 1;
+                    setFullscreenTrackAnimating(true);
+                    setFullscreenDragX(deltaX < 0 ? -window.innerWidth : window.innerWidth);
+                    window.setTimeout(() => {
+                      setSelectedPhotoIndex((prev) => direction < 0
+                        ? (prev < photos.length - 1 ? prev + 1 : 0)
+                        : (prev > 0 ? prev - 1 : photos.length - 1));
+                      setFullscreenDragX(0);
+                      setFullscreenTrackAnimating(false);
+                    }, 180);
+                  } else {
+                    setFullscreenTrackAnimating(true);
                     setFullscreenDragX(0);
-                    setFullscreenTrackAnimating(false);
-                  }, 180);
+                  }
+                }
+
+                fullscreenGesture.current = 'none';
+                fullscreenTouchStart.current = null;
+              }
+              if (event.touches.length === 0) panRef.current = null;
+            }}
+            onMouseDown={(event) => {
+              if (event.button !== 0 || fullscreenZoom > 1 || (event.target as HTMLElement).closest('button')) return;
+              isMouseDownRef.current = true;
+              fullscreenTouchStart.current = {
+                x: event.clientX,
+                y: event.clientY,
+                time: Date.now(),
+              };
+              fullscreenGesture.current = 'none';
+              setFullscreenTrackAnimating(false);
+              setIsSnappingBack(false);
+            }}
+            onMouseMove={(event) => {
+              if (!isMouseDownRef.current || !fullscreenTouchStart.current || fullscreenZoom > 1 || isDismissing) return;
+              const currentX = event.clientX;
+              const currentY = event.clientY;
+              const deltaX = currentX - fullscreenTouchStart.current.x;
+              const deltaY = currentY - fullscreenTouchStart.current.y;
+
+              if (fullscreenGesture.current === 'none') {
+                const absX = Math.abs(deltaX);
+                const absY = Math.abs(deltaY);
+                if (absX > 8 || absY > 8) {
+                  if (absX >= absY) {
+                    fullscreenGesture.current = 'horizontal';
+                  } else {
+                    fullscreenGesture.current = 'vertical';
+                  }
+                }
+              }
+
+              if (fullscreenGesture.current === 'horizontal') {
+                if (photos.length > 1) {
+                  setFullscreenDragX(deltaX);
+                }
+              } else if (fullscreenGesture.current === 'vertical') {
+                if (deltaY > 0) {
+                  setFullscreenDragY(deltaY);
+                  setFullscreenDismissDragX(deltaX * 0.25);
                 } else {
+                  setFullscreenDragY(deltaY * 0.15);
+                  setFullscreenDismissDragX(deltaX * 0.15);
+                }
+              }
+            }}
+            onMouseUp={(event) => {
+              if (!isMouseDownRef.current) return;
+              isMouseDownRef.current = false;
+              if (fullscreenTouchStart.current !== null && !isDismissing) {
+                const start = fullscreenTouchStart.current;
+                const deltaX = event.clientX - start.x;
+                const deltaY = event.clientY - start.y;
+                const elapsed = Math.max(1, Date.now() - start.time);
+                const velocityY = deltaY / elapsed;
+
+                if (fullscreenGesture.current === 'vertical') {
+                  if (deltaY > 100 || (deltaY > 40 && velocityY > 0.45)) {
+                    setIsDismissing(true);
+                    const targetY = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 600;
+                    setFullscreenDragY(targetY);
+                    setFullscreenDismissDragX(deltaX * 0.4);
+                    window.setTimeout(() => {
+                      closeFullscreen();
+                    }, 220);
+                  } else {
+                    setIsSnappingBack(true);
+                    setFullscreenDragY(0);
+                    setFullscreenDismissDragX(0);
+                    window.setTimeout(() => {
+                      setIsSnappingBack(false);
+                    }, 240);
+                  }
+                } else if (fullscreenGesture.current === 'horizontal' && photos.length > 1) {
+                  if (Math.abs(deltaX) >= 45) {
+                    const direction = deltaX < 0 ? -1 : 1;
+                    setFullscreenTrackAnimating(true);
+                    setFullscreenDragX(deltaX < 0 ? -window.innerWidth : window.innerWidth);
+                    window.setTimeout(() => {
+                      setSelectedPhotoIndex((prev) => direction < 0
+                        ? (prev < photos.length - 1 ? prev + 1 : 0)
+                        : (prev > 0 ? prev - 1 : photos.length - 1));
+                      setFullscreenDragX(0);
+                      setFullscreenTrackAnimating(false);
+                    }, 180);
+                  } else {
+                    setFullscreenTrackAnimating(true);
+                    setFullscreenDragX(0);
+                  }
+                }
+
+                fullscreenGesture.current = 'none';
+                fullscreenTouchStart.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              if (isMouseDownRef.current) {
+                isMouseDownRef.current = false;
+                if (fullscreenGesture.current === 'vertical' && !isDismissing) {
+                  setIsSnappingBack(true);
+                  setFullscreenDragY(0);
+                  setFullscreenDismissDragX(0);
+                  window.setTimeout(() => setIsSnappingBack(false), 240);
+                } else if (fullscreenGesture.current === 'horizontal') {
                   setFullscreenTrackAnimating(true);
                   setFullscreenDragX(0);
                 }
+                fullscreenGesture.current = 'none';
+                fullscreenTouchStart.current = null;
               }
-              fullscreenTouchStartX.current = null;
-              if (event.touches.length === 0) panRef.current = null;
             }}
           >
             {/* Fechar */}
             <button
               onClick={closeFullscreen}
-              className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                opacity: fullscreenControlsOpacity,
+                pointerEvents: fullscreenControlsOpacity < 0.5 ? 'none' : 'auto',
+                transition: isSnappingBack ? 'opacity 220ms ease-out' : 'none',
+              }}
+              className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-4 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
               aria-label="Fechar tela cheia"
             >
               <X className="w-5 h-5" />
@@ -840,33 +1048,47 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
             {/* Imagem em tamanho grande */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: isDismissing ? 0 : 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
               className="relative w-full h-full flex items-center justify-center overflow-hidden"
             >
               <div
-                className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-[180ms] ease-linear' : ''}`}
+                className="w-full h-full relative flex items-center justify-center will-change-transform"
                 style={{
-                  width: `${fullscreenSlideIndexes.length * 100}%`,
-                  transform: `translateX(calc(-${100 / fullscreenSlideIndexes.length}% + ${fullscreenDragX}px))`,
+                  transform: `translate3d(${fullscreenDismissDragX}px, ${fullscreenDragY}px, 0) scale(${fullscreenPhotoScale})`,
+                  borderRadius: `${fullscreenPhotoRadius}px`,
+                  overflow: 'hidden',
+                  transition: isSnappingBack || isDismissing
+                    ? 'transform 220ms cubic-bezier(0.2, 0.9, 0.4, 1), border-radius 220ms ease-out'
+                    : 'none',
                 }}
               >
-                {fullscreenSlideIndexes.map((photoIndex) => {
-                  const photo = photos[photoIndex];
-                  return (
-                  <div key={photo.id || photoIndex} className="relative h-full flex-shrink-0 flex items-center justify-center" style={{ width: `${100 / fullscreenSlideIndexes.length}%` }}>
-                    <img
-                      src={getPhotoUrl(photo.storage_path)}
-                      alt=""
-                      className="w-full h-full object-contain touch-none select-none"
-                      style={photoIndex === selectedPhotoIndex
-                        ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
-                        : undefined}
-                    />
-                  </div>
-                  );
-                })}
+                <div
+                  className={`absolute inset-0 flex ${fullscreenTrackAnimating ? 'transition-transform duration-[180ms] ease-linear' : ''}`}
+                  style={{
+                    width: `${fullscreenSlideIndexes.length * 100}%`,
+                    transform: `translateX(calc(-${100 / fullscreenSlideIndexes.length}% + ${fullscreenDragX}px))`,
+                  }}
+                >
+                  {fullscreenSlideIndexes.map((photoIndex) => {
+                    const photo = photos[photoIndex];
+                    return (
+                      <div key={photo.id || photoIndex} className="relative h-full flex-shrink-0 flex items-center justify-center" style={{ width: `${100 / fullscreenSlideIndexes.length}%` }}>
+                        <img
+                          src={getPhotoUrl(photo.storage_path)}
+                          alt=""
+                          className="w-full h-full object-contain touch-none select-none"
+                          draggable={false}
+                          style={photoIndex === selectedPhotoIndex
+                            ? { transform: `translate(${fullscreenPan.x}px, ${fullscreenPan.y}px) scale(${fullscreenZoom})`, transition: pinchRef.current ? 'none' : 'transform 120ms ease-out' }
+                            : undefined}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {photos.length > 1 && (
@@ -874,6 +1096,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPhotoIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1))}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{
+                      opacity: fullscreenControlsOpacity,
+                      pointerEvents: fullscreenControlsOpacity < 0.5 ? 'none' : 'auto',
+                      transition: isSnappingBack ? 'opacity 220ms ease-out' : 'none',
+                    }}
                     className="hidden md:flex absolute left-24 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
                     aria-label="Foto anterior"
                   >
@@ -882,6 +1112,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedPhotoIndex((prev) => (prev < photos.length - 1 ? prev + 1 : 0))}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{
+                      opacity: fullscreenControlsOpacity,
+                      pointerEvents: fullscreenControlsOpacity < 0.5 ? 'none' : 'auto',
+                      transition: isSnappingBack ? 'opacity 220ms ease-out' : 'none',
+                    }}
                     className="hidden md:flex absolute right-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 text-white border border-white/30 items-center justify-center transition-colors"
                     aria-label="Próxima foto"
                   >

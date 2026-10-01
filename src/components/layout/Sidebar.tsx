@@ -13,6 +13,7 @@ import {
   Sun,
   Moon,
   Palette,
+  Radar,
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import type { AppUser } from '../../lib/currentUser';
@@ -22,6 +23,7 @@ export type NavSection =
   | 'estoque'
   | 'match'
   | 'captar'
+  | 'bot-captador'
   | 'piloto'
   | 'calendario'
   | 'parceiros'
@@ -46,6 +48,7 @@ const NAV_ITEMS = [
   { id: 'estoque' as NavSection,       label: 'Estoque',          icon: Building2 },
   { id: 'match' as NavSection,         label: 'Match',            icon: Sparkles },
   { id: 'captar' as NavSection,        label: 'Adicionar imóvel', icon: PlusCircle },
+  { id: 'bot-captador' as NavSection,  label: 'Bot Captador',     icon: Radar },
   { id: 'piloto' as NavSection,        label: 'Piloto Automático', icon: InstagramIcon },
   { id: 'calendario' as NavSection,    label: 'Calendário',       icon: Calendar },
   { id: 'parceiros' as NavSection,     label: 'Parceiros',        icon: Users },

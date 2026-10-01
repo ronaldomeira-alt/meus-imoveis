@@ -110,6 +110,9 @@ interface AddPropertyPageProps {
   geminiApiKey?: string;
   groqApiKey?: string;
   preferredAIProvider?: PreferredAIProvider;
+  initialImportUrl?: string;
+  sourceCaptureId?: string;
+  onCaptureImported?: (captureId: string, propertyId: string) => void;
 }
 
 export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
@@ -118,9 +121,12 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   geminiApiKey,
   groqApiKey,
   preferredAIProvider,
+  initialImportUrl,
+  sourceCaptureId,
+  onCaptureImported,
 }) => {
   const [textInput, setTextInput] = useState('');
-  const [instagramUrl, setInstagramUrl] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState(initialImportUrl || '');
   const [isImportingInstagram, setIsImportingInstagram] = useState(false);
   const [importProgress, setImportProgress] = useState('');
   const [isImportingDocument, setIsImportingDocument] = useState(false);
@@ -830,6 +836,10 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       };
 
       onSaveProperty(newProp);
+
+      if (sourceCaptureId) {
+        onCaptureImported?.(sourceCaptureId, newProp.id);
+      }
 
       try {
         confetti({
