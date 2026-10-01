@@ -29,6 +29,9 @@ export interface BotSettings {
   next_round_at?: string | null;
   last_round_summary?: string | null;
   retention_days: number;
+  olx_connected?: boolean;
+  olx_username?: string | null;
+  olx_last_checked_at?: string | null;
   created_at: string;
   updated_at: string;
 }
