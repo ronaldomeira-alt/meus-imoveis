@@ -34,6 +34,7 @@ import {
   getBotExecutionRounds,
 } from '../../lib/bot-captador/database';
 import { runBotRound, RoundExecutionReport } from '../../lib/bot-captador/runner';
+import { calculateNextRoundAt } from '../../lib/bot-captador/engine';
 import { PainelTab } from './PainelTab';
 import { CaptacoesTab } from './CaptacoesTab';
 import { ConfiguracoesTab } from './ConfiguracoesTab';
@@ -91,6 +92,18 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
         getBotDashboardMetrics(metricsPeriod),
       ]);
 
+      // Auto-correção: se o bot estiver ativo, assegura que next_round_at esteja no horário comercial correto
+      if (fetchedSettings?.is_active) {
+        const correctNext = calculateNextRoundAt(fetchedCampaigns, { referenceDate: new Date() });
+        const currentNextTime = fetchedSettings.next_round_at ? new Date(fetchedSettings.next_round_at).getTime() : 0;
+        const correctNextTime = new Date(correctNext).getTime();
+        // Se a próxima rodada no banco estiver descalibrada em relação aos horários oficiais
+        if (Math.abs(currentNextTime - correctNextTime) > 2 * 60 * 1000) {
+          fetchedSettings.next_round_at = correctNext;
+          void updateBotSettings({ next_round_at: correctNext });
+        }
+      }
+
       setSettings(fetchedSettings);
       setCampaigns(fetchedCampaigns);
       setTemplates(fetchedTemplates);
@@ -110,10 +123,12 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
 
   // Ações do Painel
   const handleToggleBotActive = async (active: boolean) => {
+    const nextRound = active ? calculateNextRoundAt(campaigns, { referenceDate: new Date() }) : null;
     const updated = await updateBotSettings({
       is_active: active,
       health_status: active ? 'active' : 'paused',
       health_reason: active ? null : 'Bot pausado pelo usuário',
+      next_round_at: nextRound,
     });
     if (updated) setSettings(updated);
   };
@@ -166,7 +181,13 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
   const handleSaveCampaign = async (campaign: BotCampaign) => {
     const saved = await saveBotCampaign(campaign);
     if (saved) {
-      setCampaigns((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      const updatedCampaigns = campaigns.map((c) => (c.id === saved.id ? saved : c));
+      setCampaigns(updatedCampaigns);
+      if (settings?.is_active) {
+        const nextRound = calculateNextRoundAt(updatedCampaigns, { referenceDate: new Date() });
+        const updated = await updateBotSettings({ next_round_at: nextRound });
+        if (updated) setSettings(updated);
+      }
     }
   };
 

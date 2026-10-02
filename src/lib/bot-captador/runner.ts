@@ -19,6 +19,7 @@ import {
 import {
   evaluateAdEligibility,
   pickMessageTemplate,
+  calculateNextRoundAt,
 } from './engine';
 import { simulationProvider } from './providers/simulation';
 
@@ -262,14 +263,13 @@ export async function runBotRound(options: {
 
     createdRoundId = roundRow?.id;
 
-    // Atualiza saúde e horário da última rodada
-    const now = new Date();
-    const nextRound = new Date(now.getTime() + 10 * 60 * 60 * 1000); // estimativa de próxima rodada
+    // Atualiza saúde e horário da próxima rodada com base nos horários reais configurados
+    const nextRoundIso = calculateNextRoundAt(allCampaigns, { referenceDate: new Date() });
     await supabase
       .from('bot_settings')
       .update({
         last_round_at: roundFinishTime,
-        next_round_at: nextRound.toISOString(),
+        next_round_at: nextRoundIso,
         last_round_summary: `${totalContacted} abordagens realizadas (${totalAnalyzed} analisados, ${totalEligible} elegíveis)`,
         health_status: 'active',
         health_reason: null,

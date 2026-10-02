@@ -9,6 +9,7 @@ import {
   evaluateAdEligibility,
   pickMessageTemplate,
   renderMessageTemplate,
+  calculateNextRoundAt,
 } from '../src/lib/bot-captador/engine.ts';
 
 console.log('🧪 Iniciando testes do módulo Bot Captador...\n');
@@ -404,4 +405,42 @@ console.log('🧪 Iniciando testes do módulo Bot Captador...\n');
   console.log('✅ Teste 9: Mensagens enviadas exatamente como cadastradas sem alteração dinâmica');
 }
 
+// ── Teste 10: Cálculo da Próxima Rodada (Fuso Brasília GMT-3, Sem Horários Bizarros de Madrugada) ──
+{
+  const testCampaigns = [
+    {
+      is_active: true,
+      schedule_times: ['09:00', '19:00'],
+    },
+  ];
+
+  // Cenário A: Execução às 16:59:20 de 02/10/2026 -> Próxima DEVE ser hoje às 19:00 (NÃO 02:59 da madrugada)
+  const ref1659 = new Date('2026-10-02T16:59:20-03:00');
+  const nextIso1 = calculateNextRoundAt(testCampaigns, { referenceDate: ref1659 });
+  const nextDate1 = new Date(nextIso1);
+  const formatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  assert.equal(formatter.format(nextDate1), '02/10, 19:00');
+
+  // Cenário B: Execução às 19:15:00 de 02/10/2026 -> Próxima DEVE ser amanhã às 09:00
+  const ref1915 = new Date('2026-10-02T19:15:00-03:00');
+  const nextIso2 = calculateNextRoundAt(testCampaigns, { referenceDate: ref1915 });
+  const nextDate2 = new Date(nextIso2);
+  assert.equal(formatter.format(nextDate2), '03/10, 09:00');
+
+  // Cenário C: Execução no início da manhã às 08:15:00 de 02/10/2026 -> Próxima DEVE ser hoje às 09:00
+  const ref0815 = new Date('2026-10-02T08:15:00-03:00');
+  const nextIso3 = calculateNextRoundAt(testCampaigns, { referenceDate: ref0815 });
+  const nextDate3 = new Date(nextIso3);
+  assert.equal(formatter.format(nextDate3), '02/10, 09:00');
+
+  console.log('✅ Teste 10: Próxima rodada respeita estritamente os horários comerciais 09:00 e 19:00 (Zero disparos de madrugada)');
+}
+
 console.log('\n🎉 Todos os testes de unidade e regras de negócio passaram com 100% de sucesso!');
+

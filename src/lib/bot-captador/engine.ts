@@ -297,3 +297,80 @@ export function pickMessageTemplate(
   const randomIndex = Math.floor(Math.random() * templates.length);
   return templates[randomIndex];
 }
+
+// ── CÁLCULO PRECISO DA PRÓXIMA RODADA (Horário Oficial de Brasília GMT-3) ───
+
+export interface NextRoundCalculationOptions {
+  referenceDate?: Date;
+  fallbackTimes?: string[];
+}
+
+/**
+ * Calcula com precisão a data/hora da próxima rodada com base nos horários configurados
+ * nas campanhas do usuário, operando no Horário Oficial de Brasília (GMT-3).
+ *
+ * Regras:
+ * 1. NUNCA agenda em horários fora dos configurados (elimina risco de rodar de madrugada).
+ * 2. Se o horário atual for anterior ao próximo horário configurado no mesmo dia,
+ *    o próximo disparo será hoje no respectivo horário.
+ * 3. Se todos os horários do dia atual já passaram, agenda para o primeiro horário de amanhã.
+ */
+export function calculateNextRoundAt(
+  campaigns: Array<{ is_active?: boolean; schedule_times?: string[] }>,
+  options?: NextRoundCalculationOptions
+): string {
+  const referenceDate = options?.referenceDate || new Date();
+  const fallbackTimes = options?.fallbackTimes || ['09:00', '19:00'];
+
+  // Considera campanhas ativas, ou todas caso nenhuma esteja explicitamente ativa
+  const activeCampaigns = campaigns.filter((c) => c.is_active !== false);
+  const targetCampaigns = activeCampaigns.length > 0 ? activeCampaigns : campaigns;
+
+  const rawTimes = targetCampaigns.flatMap((c) => {
+    const times = c.schedule_times || [];
+    const count = (c as any).rounds_per_day === 1 ? 1 : 2;
+    return times.slice(0, count);
+  });
+  const validTimes = Array.from(
+    new Set(
+      rawTimes
+        .map((t) => (typeof t === 'string' ? t.trim() : ''))
+        .filter((t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t))
+    )
+  ).sort();
+
+  const timesToUse = validTimes.length > 0 ? validTimes : fallbackTimes;
+
+  // Formata o dia no fuso de Brasília (en-CA resulta em YYYY-MM-DD)
+  const brasiliaDateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const todayStr = brasiliaDateFormatter.format(referenceDate);
+
+  // Calcula os candidatos futuros para hoje (com margem mínima de 1 minuto)
+  const candidates: Date[] = [];
+  for (const time of timesToUse) {
+    const todayCandidate = new Date(`${todayStr}T${time}:00-03:00`);
+    if (todayCandidate.getTime() > referenceDate.getTime() + 60 * 1000) {
+      candidates.push(todayCandidate);
+    }
+  }
+
+  // Se nenhum horário de hoje é futuro, calcula os horários para o próximo dia
+  if (candidates.length === 0) {
+    const tomorrowRef = new Date(referenceDate.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowStr = brasiliaDateFormatter.format(tomorrowRef);
+    for (const time of timesToUse) {
+      candidates.push(new Date(`${tomorrowStr}T${time}:00-03:00`));
+    }
+  }
+
+  candidates.sort((a, b) => a.getTime() - b.getTime());
+  const nextTarget = candidates[0] || new Date(referenceDate.getTime() + 12 * 60 * 60 * 1000);
+
+  return nextTarget.toISOString();
+}
+
