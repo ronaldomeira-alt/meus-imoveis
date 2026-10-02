@@ -67,7 +67,7 @@ export const CaptureTrendChart: React.FC<CaptureTrendChartProps> = ({
   };
 
   return (
-    <div className="panel-surface rounded-2xl p-4 sm:p-5 border border-line-subtle">
+    <div className="panel-surface rounded-2xl p-4 sm:p-5 border border-line-subtle overflow-hidden min-w-0">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
         <div>
           <h3 className="text-sm font-bold text-ink-primary">Evolução das Abordagens</h3>
@@ -115,7 +115,7 @@ export const CaptureTrendChart: React.FC<CaptureTrendChartProps> = ({
         <div className="w-full overflow-hidden">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="w-full h-36 overflow-visible select-none block"
+            className="w-full h-36 overflow-hidden select-none block"
             preserveAspectRatio="none"
           >
             <defs>

@@ -266,6 +266,37 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
     }
   }, [properties, inventoryReady, user]);
 
+  // Sincroniza em tempo real caso uma publicação no Instagram tenha sido concluída
+  useEffect(() => {
+    const handleInstaPublished = (e: any) => {
+      const { propertyId, mediaId, publishedAt } = e?.detail || {};
+      if (!propertyId) return;
+      setProperties((prev) =>
+        prev.map((p) => {
+          if (p.id === propertyId) {
+            return {
+              ...p,
+              social_publications: {
+                ...(p.social_publications || {}),
+                instagram: {
+                  status: 'published',
+                  published_at: publishedAt || new Date().toISOString(),
+                  external_media_id: mediaId || undefined,
+                },
+              },
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return p;
+        })
+      );
+    };
+    window.addEventListener('property-instagram-published', handleInstaPublished as EventListener);
+    return () => {
+      window.removeEventListener('property-instagram-published', handleInstaPublished as EventListener);
+    };
+  }, []);
+
   // ── Configurações de IA (Groq & Gemini) ──
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     return localStorage.getItem('meus_imoveis_gemini_key') || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
@@ -739,6 +770,8 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
           <AddPropertyPage
             initialImportUrl={pendingImportUrl}
             sourceCaptureId={pendingCaptureId}
+            existingProperties={properties}
+            onOpenExistingProperty={(p) => handleOpenDetail(p)}
             onCaptureImported={async (captureId, propertyId) => {
               try {
                 if (supabase) {
@@ -981,7 +1014,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
         {/* ── VIEW BOT CAPTADOR ── */}
         {activeSection === 'bot-captador' && (
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             <BotCaptadorView
               onNavigateToAddProperty={handleNavigateFromCapture}
             />
@@ -1114,7 +1147,30 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
           isOpen={Boolean(marketingPostProperty)}
           onClose={() => setMarketingPostProperty(null)}
           property={marketingPostProperty}
-          onSaved={() => {
+          onPropertyUpdated={(updated) => handleUpdateProperty(updated)}
+          onSaved={(savedPost) => {
+            if (savedPost?.status === 'published') {
+              const targetPropId = savedPost.listing_id || marketingPostProperty.id;
+              setProperties((prev) =>
+                prev.map((p) => {
+                  if (p.id === targetPropId) {
+                    return {
+                      ...p,
+                      social_publications: {
+                        ...(p.social_publications || {}),
+                        instagram: {
+                          status: 'published',
+                          published_at: savedPost.published_at || new Date().toISOString(),
+                          external_media_id: savedPost.external_media_id || undefined,
+                        },
+                      },
+                      updated_at: new Date().toISOString(),
+                    };
+                  }
+                  return p;
+                })
+              );
+            }
             // Notifica atualização dos posts
             window.dispatchEvent(new CustomEvent('marketing-posts-updated'));
           }}

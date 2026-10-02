@@ -14,7 +14,8 @@ import {
   FileText,
   Layers,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { InstagramIcon } from '../ui/InstagramIcon';
 import type { Property } from '../../types/property';
@@ -493,7 +494,7 @@ export const PilotoAutomaticoView: React.FC<PilotoAutomaticoViewProps> = ({
                       className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white font-semibold text-xs shadow hover:opacity-95 transition-all disabled:opacity-50"
                     >
                       <Send className="w-3 h-3" />
-                      {actionInProgress === post.id ? 'Publicando...' : 'Publicar Agora'}
+                      <span>Publicar Agora</span>
                     </button>
                   )}
                 </div>
@@ -578,6 +579,26 @@ export const PilotoAutomaticoView: React.FC<PilotoAutomaticoViewProps> = ({
             fetchPosts();
           }}
         />
+      )}
+
+      {/* Overlay centralizado de publicação do Piloto Automático */}
+      {actionInProgress && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in pointer-events-auto">
+          <div className="flex flex-col items-center p-6 sm:p-8 rounded-3xl bg-slate-900/95 border border-line-strong shadow-2xl text-center max-w-sm mx-4">
+            <div className="relative flex items-center justify-center mb-4">
+              <div className="absolute w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 blur-xl opacity-40 animate-pulse" />
+              <div className="relative p-4 rounded-2xl bg-surface-2 border border-line-subtle shadow-inner flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
+              </div>
+            </div>
+            <h3 className="text-base font-bold text-white mb-1.5">
+              Publicando no Instagram...
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Processando imagens e enviando para o seu feed. Por favor, aguarde alguns instantes.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Save,
   Plus,
@@ -29,6 +29,23 @@ import type {
   BotCampaign,
   BotMessageTemplate,
 } from '../../types/bot-captador';
+
+const formatMoneyInput = (value: string | number | null | undefined): string => {
+  if (value == null || value === '') return '';
+  const str = typeof value === 'number' ? String(Math.round(value * 100)) : String(value);
+  const digits = str.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  if (!digits) return '';
+  return (Number(digits) / 100).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+  });
+};
+
+const parseMoneyInput = (value: string): number | null => {
+  const normalized = value.replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.');
+  return normalized === '' || isNaN(Number(normalized)) ? null : Number(normalized);
+};
 
 interface ConfiguracoesTabProps {
   settings: BotSettings | null;
@@ -98,6 +115,31 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
 
   const [localVenda, setLocalVenda] = useState<BotCampaign>(vendaCampaign);
   const [localLocacao, setLocalLocacao] = useState<BotCampaign>(locacaoCampaign);
+
+  // Estados com máscara monetária de trás pra frente
+  const [vendaMinPriceInput, setVendaMinPriceInput] = useState(() => formatMoneyInput(vendaCampaign.min_price));
+  const [vendaMaxPriceInput, setVendaMaxPriceInput] = useState(() => formatMoneyInput(vendaCampaign.max_price));
+  const [locacaoMinPriceInput, setLocacaoMinPriceInput] = useState(() => formatMoneyInput(locacaoCampaign.min_price));
+  const [locacaoMaxPriceInput, setLocacaoMaxPriceInput] = useState(() => formatMoneyInput(locacaoCampaign.max_price));
+
+  useEffect(() => {
+    const vc = campaigns.find((c) => c.type === 'venda');
+    if (vc) {
+      setLocalVenda(vc);
+      setVendaMinPriceInput(formatMoneyInput(vc.min_price));
+      setVendaMaxPriceInput(formatMoneyInput(vc.max_price));
+    }
+  }, [campaigns]);
+
+  useEffect(() => {
+    const lc = campaigns.find((c) => c.type === 'locacao');
+    if (lc) {
+      setLocalLocacao(lc);
+      setLocacaoMinPriceInput(formatMoneyInput(lc.min_price));
+      setLocacaoMaxPriceInput(formatMoneyInput(lc.max_price));
+    }
+  }, [campaigns]);
+
   const [newNeighborhoodInput, setNewNeighborhoodInput] = useState('');
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
@@ -211,9 +253,9 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
   };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-16">
+    <div className="space-y-5 animate-fade-in pb-16 w-full min-w-0">
       {/* ── Submenu de Configurações ── */}
-      <div className="flex items-center gap-1 p-1 rounded-2xl bg-surface-1 border border-line-subtle overflow-x-auto text-xs">
+      <div className="flex items-center gap-1 p-1 rounded-2xl bg-surface-1 border border-line-subtle overflow-x-auto text-xs max-w-full">
         <button
           type="button"
           onClick={() => setActiveSubTab('conexao')}
@@ -484,10 +526,15 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
                 Preço Mínimo (R$)
               </label>
               <input
-                type="number"
-                value={localVenda.min_price || ''}
-                onChange={(e) => setLocalVenda({ ...localVenda, min_price: Number(e.target.value) || null })}
-                placeholder="Ex: 250000"
+                type="text"
+                inputMode="numeric"
+                value={vendaMinPriceInput}
+                onChange={(e) => {
+                  const formatted = formatMoneyInput(e.target.value);
+                  setVendaMinPriceInput(formatted);
+                  setLocalVenda((prev) => ({ ...prev, min_price: parseMoneyInput(formatted) }));
+                }}
+                placeholder="R$ 0,00"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-surface-1 border border-line-subtle text-ink-primary focus:outline-none focus:border-accent/50"
               />
             </div>
@@ -496,10 +543,15 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
                 Preço Máximo (R$)
               </label>
               <input
-                type="number"
-                value={localVenda.max_price || ''}
-                onChange={(e) => setLocalVenda({ ...localVenda, max_price: Number(e.target.value) || null })}
-                placeholder="Ex: 1500000"
+                type="text"
+                inputMode="numeric"
+                value={vendaMaxPriceInput}
+                onChange={(e) => {
+                  const formatted = formatMoneyInput(e.target.value);
+                  setVendaMaxPriceInput(formatted);
+                  setLocalVenda((prev) => ({ ...prev, max_price: parseMoneyInput(formatted) }));
+                }}
+                placeholder="R$ 0,00"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-surface-1 border border-line-subtle text-ink-primary focus:outline-none focus:border-accent/50"
               />
             </div>
@@ -669,10 +721,15 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
                 Aluguel Mínimo (R$/mês)
               </label>
               <input
-                type="number"
-                value={localLocacao.min_price || ''}
-                onChange={(e) => setLocalLocacao({ ...localLocacao, min_price: Number(e.target.value) || null })}
-                placeholder="Ex: 1200"
+                type="text"
+                inputMode="numeric"
+                value={locacaoMinPriceInput}
+                onChange={(e) => {
+                  const formatted = formatMoneyInput(e.target.value);
+                  setLocacaoMinPriceInput(formatted);
+                  setLocalLocacao((prev) => ({ ...prev, min_price: parseMoneyInput(formatted) }));
+                }}
+                placeholder="R$ 0,00"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-surface-1 border border-line-subtle text-ink-primary focus:outline-none focus:border-accent/50"
               />
             </div>
@@ -681,10 +738,15 @@ export const ConfiguracoesTab: React.FC<ConfiguracoesTabProps> = ({
                 Aluguel Máximo (R$/mês)
               </label>
               <input
-                type="number"
-                value={localLocacao.max_price || ''}
-                onChange={(e) => setLocalLocacao({ ...localLocacao, max_price: Number(e.target.value) || null })}
-                placeholder="Ex: 5000"
+                type="text"
+                inputMode="numeric"
+                value={locacaoMaxPriceInput}
+                onChange={(e) => {
+                  const formatted = formatMoneyInput(e.target.value);
+                  setLocacaoMaxPriceInput(formatted);
+                  setLocalLocacao((prev) => ({ ...prev, max_price: parseMoneyInput(formatted) }));
+                }}
+                placeholder="R$ 0,00"
                 className="w-full px-3 py-2 text-xs rounded-xl bg-surface-1 border border-line-subtle text-ink-primary focus:outline-none focus:border-accent/50"
               />
             </div>

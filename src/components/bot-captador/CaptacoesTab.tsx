@@ -50,21 +50,21 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/25">
             <Clock className="w-3 h-3" />
-            AGUARDANDO
+            Aguardando
           </span>
         );
       case 'RESPONDED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
             <CheckCircle className="w-3 h-3" />
-            RESPONDEU
+            Respondeu
           </span>
         );
       case 'IMPORTED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/25">
             <Building className="w-3 h-3" />
-            IMPORTADO
+            Importado
           </span>
         );
       case 'ARCHIVED':
@@ -72,21 +72,21 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-surface-3 text-ink-secondary border border-line-subtle">
             <Archive className="w-3 h-3" />
-            ARQUIVADO
+            Arquivado
           </span>
         );
       case 'POSSIBLE_DUPLICATE':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-600/15 text-amber-300 border border-amber-500/30">
             <AlertCircle className="w-3 h-3" />
-            POSSÍVEL DUPLICADO
+            Possível duplicado
           </span>
         );
       case 'FAILED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/25">
             <AlertCircle className="w-3 h-3" />
-            ERRO
+            Erro
           </span>
         );
       default:
@@ -116,7 +116,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
   return (
     <div className="space-y-4 animate-fade-in pb-16">
       {/* ── Filtros e Busca de Captações ── */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 panel-surface p-3 sm:p-4 rounded-2xl border border-line-subtle">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 panel-surface p-3 sm:p-4 rounded-2xl border border-line-subtle min-w-0">
         {/* Barra de Busca */}
         <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-ink-secondary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -130,7 +130,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
         </div>
 
         {/* Abas de Status */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 text-xs max-w-full">
           {[
             { id: 'ALL', label: 'Todos' },
             { id: 'WAITING_RESPONSE', label: 'Aguardando' },
@@ -167,7 +167,8 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
         <>
           {/* VISUALIZAÇÃO DESKTOP: TABELA OPERACIONAL */}
           <div className="hidden md:block panel-surface rounded-2xl border border-line-subtle overflow-hidden">
-            <table className="w-full text-left text-xs">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[760px]">
               <thead className="bg-surface-1/70 border-b border-line-subtle text-[11px] font-bold text-ink-secondary uppercase tracking-wider">
                 <tr>
                   <th className="py-3 px-4">Imóvel</th>
@@ -278,6 +279,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* VISUALIZAÇÃO MOBILE: CARDS RESPONSIVOS (Otimizado para iPhone / PWA) */}
@@ -288,7 +290,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
                 className="panel-surface rounded-2xl p-4 border border-line-subtle space-y-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-accent">
                       {item.campaign_type} · {item.neighborhood || 'Bairro a confirmar'}
                     </span>

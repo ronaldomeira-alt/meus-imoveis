@@ -43,6 +43,7 @@ interface PostEditorModalProps {
   property: Property;
   existingPost?: MarketingPost | null;
   onSaved?: (post: MarketingPost) => void;
+  onPropertyUpdated?: (property: Property) => void;
 }
 
 const extractPhotoUrls = (photos?: any[]): string[] => {
@@ -62,6 +63,7 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
   property,
   existingPost,
   onSaved,
+  onPropertyUpdated,
 }) => {
   const normalizedPhotos = extractPhotoUrls(property.photos);
   const [caption, setCaption] = useState(existingPost?.caption || '');
@@ -324,12 +326,42 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
           type: 'success',
           text: `Publicado com sucesso no Instagram! ID: ${result.mediaId}`,
         });
-        onSaved?.({
+        const publishedAt = new Date().toISOString();
+        const updatedPost: MarketingPost = {
           ...saved,
           status: 'published',
-          published_at: new Date().toISOString(),
+          published_at: publishedAt,
           external_media_id: result.mediaId,
-        });
+        };
+
+        const updatedProp: Property = {
+          ...property,
+          social_publications: {
+            ...(property.social_publications || {}),
+            instagram: {
+              status: 'published' as const,
+              published_at: publishedAt,
+              external_media_id: result.mediaId,
+            },
+          },
+          updated_at: publishedAt,
+        };
+
+        onPropertyUpdated?.(updatedProp);
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('property-instagram-published', {
+              detail: {
+                propertyId: property.id,
+                mediaId: result.mediaId,
+                publishedAt,
+              },
+            })
+          );
+        }
+
+        onSaved?.(updatedPost);
         setTimeout(() => onClose(), 2000);
       } else {
         setStatusMessage({
@@ -753,21 +785,32 @@ export const PostEditorModal: React.FC<PostEditorModalProps> = ({
               disabled={isSaving || isPublishing || isLockedPublishing}
               className="flex-1 sm:flex-initial min-w-[145px] flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 text-white font-bold text-xs shadow-md hover:opacity-95 transition-all disabled:opacity-50 cursor-pointer touch-manipulation whitespace-nowrap"
             >
-              {isPublishing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                  <span>Publicando...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 shrink-0" />
-                  <span>Publicar Agora</span>
-                </>
-              )}
+              <Send className="w-4 h-4 shrink-0" />
+              <span>Publicar Agora</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Overlay centralizado de publicação no Instagram */}
+      {isPublishing && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in pointer-events-auto">
+          <div className="flex flex-col items-center p-6 sm:p-8 rounded-3xl bg-slate-900/95 border border-line-strong shadow-2xl text-center max-w-sm mx-4">
+            <div className="relative flex items-center justify-center mb-4">
+              <div className="absolute w-20 h-20 rounded-full bg-gradient-to-tr from-purple-600 via-pink-600 to-amber-500 blur-xl opacity-40 animate-pulse" />
+              <div className="relative p-4 rounded-2xl bg-surface-2 border border-line-subtle shadow-inner flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-pink-500 animate-spin" />
+              </div>
+            </div>
+            <h3 className="text-base font-bold text-white mb-1.5">
+              Publicando no Instagram...
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Processando imagens e enviando para o seu feed. Por favor, aguarde alguns instantes.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

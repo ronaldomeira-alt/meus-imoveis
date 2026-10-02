@@ -89,10 +89,10 @@ export const PainelTab: React.FC<PainelTabProps> = ({
   };
 
   return (
-    <div className="space-y-5 animate-fade-in pb-12">
+    <div className="space-y-5 animate-fade-in pb-12 w-full min-w-0">
       {/* ── Bloco Superior: Saúde do Bot & Botão Mestre ── */}
-      <div className="panel-surface rounded-2xl p-4 sm:p-5 border border-line-subtle flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-3.5">
+      <div className="panel-surface rounded-2xl p-4 sm:p-5 border border-line-subtle flex flex-col md:flex-row md:items-center justify-between gap-4 min-w-0">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
           <div
             className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 border ${
               healthStatus === 'active'
@@ -111,10 +111,10 @@ export const PainelTab: React.FC<PainelTabProps> = ({
             )}
           </div>
 
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h2 className="text-sm sm:text-base font-bold text-ink-primary">
-                BOT CAPTADOR
+                Bot Captador
               </h2>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${

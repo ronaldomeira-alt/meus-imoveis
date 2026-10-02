@@ -26,6 +26,21 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+// Lista permanente de anúncios já contatados previamente pelo corretor (Regra Absoluta de Bloqueio)
+export const MANUALLY_EXCLUDED_EXTERNAL_IDS = new Set([
+  // Venda (4 anúncios)
+  '1536488436',
+  '1523994645',
+  '1528897285',
+  '1539301848',
+  // Aluguel (5 anúncios)
+  '1538452756',
+  '1532219277',
+  '1530052068',
+  '1527797114',
+  '1540164844',
+]);
+
 /**
  * Lê o WebSocket endpoint ativo do Google Chrome do usuário
  */
@@ -113,15 +128,16 @@ async function runRealScan() {
     return;
   }
 
-  // Busca tombstones existentes para garantir não duplicação
+  // Busca tombstones existentes para garantir não duplicação perpétua
   const { data: tombstones } = await supabase
     .from('bot_capture_tombstones')
-    .select('fingerprint')
+    .select('fingerprint, external_id')
     .eq('account_id', accountId);
 
   const tombstoneSet = new Set((tombstones || []).map((t) => t.fingerprint));
+  const tombstoneExternalIdSet = new Set((tombstones || []).map((t) => t.external_id).filter(Boolean));
 
-  console.log(`🔒 ${tombstoneSet.size} tombstones perpétuos ativos no banco.`);
+  console.log(`🔒 ${tombstoneSet.size} tombstones perpétuos ativos no banco (${tombstoneExternalIdSet.size} IDs externos protegidos).`);
 
   await withChrome(async (browser) => {
     for (const campaign of campaigns) {
@@ -259,10 +275,16 @@ async function runRealScan() {
           }
 
           // 3. DEDUPLICAÇÃO EM MÚLTIPLAS CAMADAS
+          // Camada 0: Anúncios contatados previamente pelo usuário ou com Tombstone por ID externo (Regra Absoluta)
+          if (MANUALLY_EXCLUDED_EXTERNAL_IDS.has(ad.listId) || tombstoneExternalIdSet.has(ad.listId)) {
+            duplicateCount++;
+            continue;
+          }
+
           const normalizedUrl = ad.url.split('?')[0];
           const fingerprint = generateFingerprint({ ...ad, campaignType: campaign.type });
 
-          // Camada 3: Verificação contra Tombstones Perpétuos (NUNCA reabordar)
+          // Camada 3: Verificação contra Tombstones Perpétuos por Fingerprint (NUNCA reabordar)
           if (tombstoneSet.has(fingerprint)) {
             duplicateCount++;
             continue;
@@ -457,12 +479,18 @@ async function sendSingleApproach(targetCaptureId) {
     return;
   }
 
-  // Verifica se o anúncio já tem tombstone ativo (Proteção Absoluta)
+  // Verifica se o anúncio pertence à lista de contatados manualmente pelo corretor
+  if (capture.external_id && MANUALLY_EXCLUDED_EXTERNAL_IDS.has(capture.external_id)) {
+    console.error(`❌ REGRA ABSOLUTA: O anúncio ${capture.external_id} foi contatado manualmente pelo usuário. Envio estritamente proibido!`);
+    return;
+  }
+
+  // Verifica se o anúncio já tem tombstone ativo (Proteção Absoluta por fingerprint ou ID externo)
   const { data: tombstone } = await supabase
     .from('bot_capture_tombstones')
     .select('id')
     .eq('account_id', capture.account_id)
-    .eq('fingerprint', capture.fingerprint)
+    .or(`fingerprint.eq.${capture.fingerprint},external_id.eq.${capture.external_id}`)
     .maybeSingle();
 
   if (tombstone) {

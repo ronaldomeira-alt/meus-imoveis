@@ -91,12 +91,35 @@ export interface EvaluationResult {
   isPossibleDuplicate?: boolean;
 }
 
+// Lista permanente de anúncios já contatados previamente pelo corretor (Regra Absoluta)
+export const MANUALLY_EXCLUDED_EXTERNAL_IDS = new Set<string>([
+  // Venda (4 anúncios)
+  '1536488436',
+  '1523994645',
+  '1528897285',
+  '1539301848',
+  // Aluguel (5 anúncios)
+  '1538452756',
+  '1532219277',
+  '1530052068',
+  '1527797114',
+  '1540164844',
+]);
+
 export function evaluateAdEligibility(
   ad: DiscoveredAdCandidate,
   campaign: BotCampaign,
   existingCaptures: BotCapture[],
   tombstoneFingerprints: Set<string>
 ): EvaluationResult {
+  // 0. Verificação de Anúncios Contatados Manualmente pelo Corretor (Bloqueio Definitivo)
+  if (ad.externalId && MANUALLY_EXCLUDED_EXTERNAL_IDS.has(ad.externalId)) {
+    return {
+      isEligible: false,
+      rejectionReason: `Anúncio ID ${ad.externalId} já contatado manualmente pelo corretor (bloqueio definitivo de recontato)`,
+    };
+  }
+
   // 1. Verificação do filtro "Particular" (Requisito Central)
   if (campaign.only_private && !ad.isPrivate) {
     return {

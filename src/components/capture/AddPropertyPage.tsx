@@ -14,6 +14,7 @@ import {
   Layers,
   FileText,
   FileUp,
+  AlertTriangle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AudioRecorder } from '../../lib/audio-recorder';
@@ -113,6 +114,8 @@ interface AddPropertyPageProps {
   initialImportUrl?: string;
   sourceCaptureId?: string;
   onCaptureImported?: (captureId: string, propertyId: string) => void;
+  existingProperties?: Property[];
+  onOpenExistingProperty?: (property: Property) => void;
 }
 
 export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
@@ -124,6 +127,8 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   initialImportUrl,
   sourceCaptureId,
   onCaptureImported,
+  existingProperties,
+  onOpenExistingProperty,
 }) => {
   const [textInput, setTextInput] = useState('');
   const [instagramUrl, setInstagramUrl] = useState(initialImportUrl || '');
@@ -138,6 +143,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const saveLockRef = useRef(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
@@ -146,6 +152,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const [showClearModal, setShowClearModal] = useState(false);
   const [showSwitchModeModal, setShowSwitchModeModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
+  const [duplicateWarningProperty, setDuplicateWarningProperty] = useState<Property | null>(null);
 
   const isDevelopment = Boolean(reviewData.is_development);
 
@@ -716,8 +723,45 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   const pendingLabels = pendingKeys.map((k) => TRACKED_LABELS[k]);
   const progressPct = Math.round(((10 - pendingKeys.length) / 10) * 100);
 
-  const handleConfirmSave = () => {
-    if (isSaving) return;
+  const checkDuplicateCandidate = (): Property | undefined => {
+    if (!existingProperties || existingProperties.length === 0) return undefined;
+    const cNeigh = (reviewData.neighborhood || '').trim().toLowerCase();
+    const cType = (reviewData.type || '').trim().toLowerCase();
+    const cPrice = Number(reviewData.price) || Number(reviewData.price_from) || 0;
+    const cArea = Number(reviewData.area_m2) || 0;
+    const cBeds = Number(reviewData.bedrooms) || 0;
+
+    return existingProperties.find((p) => {
+      if (p.status === 'Vendido' || p.status === 'Arquivado') return false;
+      const pNeigh = (p.neighborhood || '').trim().toLowerCase();
+      const pType = (p.type || '').trim().toLowerCase();
+      const pPrice = Number(p.price) || Number(p.price_from) || 0;
+      const pArea = Number(p.area_m2) || 0;
+      const pBeds = Number(p.bedrooms) || 0;
+
+      if (cNeigh && pNeigh && cNeigh !== pNeigh) return false;
+      if (cType && pType && cType !== pType) return false;
+
+      const priceMatches = cPrice > 0 && pPrice > 0 && Math.abs(cPrice - pPrice) / Math.max(cPrice, pPrice) < 0.03;
+      const areaMatches = cArea > 0 && pArea > 0 && Math.abs(cArea - pArea) <= 3;
+      const bedsMatches = cBeds === pBeds;
+
+      if (priceMatches && areaMatches && bedsMatches) {
+        return true;
+      }
+
+      const cCondo = (reviewData.condominium_name || reviewData.internal_name || reviewData.title || '').trim().toLowerCase();
+      const pCondo = (p.condominium_name || p.internal_name || p.title || '').trim().toLowerCase();
+      if (cCondo && pCondo && cCondo.length > 3 && cCondo === pCondo && (priceMatches || areaMatches)) {
+        return true;
+      }
+
+      return false;
+    });
+  };
+
+  const handleConfirmSave = (bypassDuplicateCheck = false) => {
+    if (saveLockRef.current || isSaving) return;
 
     if (isImportingInstagram || isImportingDocument || isProcessingImages || isProcessingAI) {
       setErrorMessage('Aguarde a leitura e o processamento dos dados terminarem antes de salvar.');
@@ -736,6 +780,15 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       return;
     }
 
+    if (!bypassDuplicateCheck) {
+      const duplicateFound = checkDuplicateCandidate();
+      if (duplicateFound) {
+        setDuplicateWarningProperty(duplicateFound);
+        return;
+      }
+    }
+
+    saveLockRef.current = true;
     setIsSaving(true);
     setErrorMessage(null);
 
@@ -841,6 +894,13 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
         onCaptureImported?.(sourceCaptureId, newProp.id);
       }
 
+      // Limpa dados de entrada para evitar reenvio repetido caso usuário retorne
+      setReviewData(emptyReviewData);
+      setImages([]);
+      setTextInput('');
+      setInstagramUrl('');
+      propertyIdRef.current = `prop-${Date.now()}`;
+
       try {
         confetti({
           particleCount: 80,
@@ -852,6 +912,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
         console.warn('Efeito confetti ignorado:', confettiErr);
       }
     } catch (saveError: any) {
+      saveLockRef.current = false;
       console.error('Erro ao salvar imóvel:', saveError);
       setErrorMessage(saveError?.message || 'Ocorreu um erro ao salvar o imóvel. Tente novamente.');
     } finally {
@@ -993,6 +1054,66 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
                 className="px-4 py-1.5 rounded-xl text-xs font-bold bg-status-warning/20 hover:bg-status-warning/30 border border-status-warning/40 text-status-warning transition-colors cursor-pointer"
               >
                 Sim, limpar ficha
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de Alerta de Imóvel Duplicado no CRM ── */}
+      {duplicateWarningProperty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-surface-3 border border-amber-500/50 p-6 shadow-modal space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-extrabold text-ink-primary">
+                Atenção: Possível imóvel duplicado!
+              </h3>
+              <p className="text-xs text-ink-secondary mt-1">
+                Já existe um imóvel com características idênticas cadastrado no seu catálogo:
+              </p>
+              <div className="mt-3 p-3 rounded-xl bg-surface-1 border border-line-subtle text-left space-y-1">
+                <p className="text-xs font-bold text-ink-primary">
+                  {duplicateWarningProperty.type} · {duplicateWarningProperty.neighborhood}
+                </p>
+                <p className="text-[11px] text-accent font-semibold">
+                  R$ {(Number(duplicateWarningProperty.price) || 0).toLocaleString('pt-BR')} • {duplicateWarningProperty.area_m2 || 0} m² • {duplicateWarningProperty.bedrooms} qto(s)
+                </p>
+                {duplicateWarningProperty.condominium_name && (
+                  <p className="text-[10px] text-ink-secondary">
+                    Condomínio: {duplicateWarningProperty.condominium_name}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = duplicateWarningProperty;
+                  setDuplicateWarningProperty(null);
+                  if (onOpenExistingProperty && target) {
+                    onOpenExistingProperty(target);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-surface-1 border border-line-strong text-xs font-semibold text-ink-primary hover:bg-surface-2 transition-colors cursor-pointer"
+              >
+                Ver imóvel existente
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateWarningProperty(null);
+                  handleConfirmSave(true);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-600/20"
+              >
+                Cadastrar mesmo assim
               </button>
             </div>
           </div>

@@ -54,6 +54,7 @@ export interface SocialPublication {
   status: SocialPublishStatus;
   published_at?: string;
   url?: string;
+  external_media_id?: string;
 }
 
 export type SocialPublications = Partial<Record<SocialPlatform, SocialPublication>>;

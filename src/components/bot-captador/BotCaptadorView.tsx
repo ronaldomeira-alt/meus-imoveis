@@ -200,12 +200,12 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-5 min-w-0 overflow-x-hidden">
       {/* ── Topo do Módulo: Título e Subnavegação em Tabs ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line-subtle pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-line-subtle pb-4 min-w-0">
         <div>
           <h1 className="text-lg sm:text-xl font-extrabold text-ink-primary tracking-tight">
-            BOT CAPTADOR
+            Bot Captador
           </h1>
           <p className="text-xs text-ink-secondary mt-0.5">
             Prospecção autônoma de proprietários particulares com abordagem única e controle do corretor
@@ -213,31 +213,31 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
         </div>
 
         {/* 3 Tabs Principais do Módulo */}
-        <div className="flex items-center gap-1 p-1 rounded-2xl bg-surface-1 border border-line-subtle text-xs self-start sm:self-center">
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-surface-1 border border-line-subtle text-xs max-w-full overflow-x-auto self-start sm:self-center">
           <button
             type="button"
             onClick={() => setActiveTab('painel')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
               activeTab === 'painel'
                 ? 'bg-accent text-white shadow-sm'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5" />
-            PAINEL
+            <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+            <span>Painel</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('captacoes')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
               activeTab === 'captacoes'
                 ? 'bg-accent text-white shadow-sm'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <ListFilter className="w-3.5 h-3.5" />
-            CAPTAÇÕES
+            <ListFilter className="w-3.5 h-3.5 shrink-0" />
+            <span>Captações</span>
             {metrics.waitingCount > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400/20 text-amber-300 font-bold">
                 {metrics.waitingCount}
@@ -248,14 +248,14 @@ export const BotCaptadorView: React.FC<BotCaptadorViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('configuracoes')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
               activeTab === 'configuracoes'
                 ? 'bg-accent text-white shadow-sm'
                 : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
-            CONFIGURAR BOT CAPTADOR
+            <Sliders className="w-3.5 h-3.5 shrink-0" />
+            <span>Configurações</span>
           </button>
         </div>
       </div>

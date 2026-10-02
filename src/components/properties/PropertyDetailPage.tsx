@@ -1139,7 +1139,23 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           isOpen={isPostEditorOpen}
           onClose={() => setIsPostEditorOpen(false)}
           property={property}
-          onSaved={() => {
+          onPropertyUpdated={onUpdateProperty}
+          onSaved={(savedPost) => {
+            if (savedPost?.status === 'published') {
+              const updated: Property = {
+                ...property,
+                social_publications: {
+                  ...(property.social_publications || {}),
+                  instagram: {
+                    status: 'published',
+                    published_at: savedPost.published_at || new Date().toISOString(),
+                    external_media_id: savedPost.external_media_id || undefined,
+                  },
+                },
+                updated_at: new Date().toISOString(),
+              };
+              onUpdateProperty?.(updated);
+            }
             window.dispatchEvent(new CustomEvent('marketing-posts-updated'));
           }}
         />
