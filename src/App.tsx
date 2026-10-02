@@ -1164,6 +1164,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('meus_imoveis_theme', theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#F6F8F8' : theme === 'light-blue' ? '#F6F8FA' : '#020408');
   }, [theme]);

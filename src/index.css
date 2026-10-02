@@ -681,3 +681,13 @@ textarea::selection {
     flex: none;
   }
 }
+
+@layer utilities {
+  .bg-base {
+    background-color: var(--bg-base);
+  }
+  .bg-base-alt {
+    background-color: var(--bg-base-alt);
+  }
+}
+

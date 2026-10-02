@@ -99,7 +99,7 @@ export const PainelTab: React.FC<PainelTabProps> = ({
                 ? 'bg-status-success/15 border-status-success/30 text-status-success'
                 : healthStatus === 'attention' || healthStatus === 'error'
                 ? 'bg-status-warning/15 border-status-warning/30 text-status-warning'
-                : 'bg-white/[0.04] border-line-subtle text-ink-secondary'
+                : 'bg-surface-3 border-line-subtle text-ink-secondary'
             }`}
           >
             {healthStatus === 'active' ? (
@@ -120,7 +120,7 @@ export const PainelTab: React.FC<PainelTabProps> = ({
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
                   isActive
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                    : 'bg-surface-3 text-ink-secondary border-line-subtle'
                 }`}
               >
                 {isActive ? 'Ativo' : 'Pausado'}
@@ -128,9 +128,9 @@ export const PainelTab: React.FC<PainelTabProps> = ({
             </div>
 
             <p className="text-xs text-ink-secondary mt-0.5">
-              Última rodada: <span className="font-medium text-ink-primary">{formatDateTime(settings?.last_round_at)}</span>
+              Última rodada: <span className="font-semibold text-ink-primary">{formatDateTime(settings?.last_round_at)}</span>
               {isActive && settings?.next_round_at && (
-                <> · Próxima rodada: <span className="font-medium text-ink-primary">{formatDateTime(settings.next_round_at)}</span></>
+                <> · Próxima rodada: <span className="font-semibold text-ink-primary">{formatDateTime(settings.next_round_at)}</span></>
               )}
             </p>
 
@@ -147,7 +147,7 @@ export const PainelTab: React.FC<PainelTabProps> = ({
           <button
             type="button"
             onClick={onOpenSimulation}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-ink-secondary hover:text-ink-primary border border-line-subtle flex items-center gap-1.5 transition-all"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-surface-1 hover:bg-surface-2 text-ink-secondary hover:text-ink-primary border border-line-subtle flex items-center gap-1.5 transition-all"
             title="Valida os filtros comerciais cadastrados com dados simulados (Zero Mensagens)"
           >
             <Sparkles className="w-3.5 h-3.5 text-accent" />

@@ -8,10 +8,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        base: {
-          DEFAULT: 'rgb(var(--bg-base-rgb) / <alpha-value>)',
-          alt: 'rgb(var(--bg-base-alt-rgb) / <alpha-value>)',
-        },
+        // Removido 'base' para evitar colisão do Tailwind com a classe utilitária de tamanho de fonte text-base
         surface: {
           1: 'rgb(var(--surface-1-rgb) / <alpha-value>)',
           2: 'rgb(var(--surface-2-rgb) / <alpha-value>)',

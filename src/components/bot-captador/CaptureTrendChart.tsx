@@ -25,10 +25,10 @@ export const CaptureTrendChart: React.FC<CaptureTrendChartProps> = ({
   );
 
   const width = 600;
-  const height = 180;
-  const paddingX = 24;
-  const paddingTop = 20;
-  const paddingBottom = 28;
+  const height = 150;
+  const paddingX = 20;
+  const paddingTop = 16;
+  const paddingBottom = 16;
 
   const chartW = width - paddingX * 2;
   const chartH = height - paddingTop - paddingBottom;
@@ -110,89 +110,82 @@ export const CaptureTrendChart: React.FC<CaptureTrendChartProps> = ({
         </span>
       </div>
 
-      {/* SVG Canvas com viewBox responsivo */}
-      <div className="w-full overflow-hidden">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-44 overflow-visible select-none"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id={`contacted-grad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+      {/* Canvas SVG e eixo X com tipografia nítida sem distorções */}
+      <div className="w-full">
+        <div className="w-full overflow-hidden">
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            className="w-full h-36 overflow-visible select-none block"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient id={`contacted-grad-${chartId}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
 
-          {/* Linhas de grade suaves */}
-          {[0, 0.5, 1].map((ratio) => {
-            const y = paddingTop + chartH * (1 - ratio);
-            return (
-              <line
-                key={ratio}
-                x1={paddingX}
-                y1={y}
-                x2={width - paddingX}
-                y2={y}
-                stroke="currentColor"
-                className="text-line-subtle/40"
-                strokeDasharray="4 4"
-                strokeWidth="1"
-              />
-            );
-          })}
+            {/* Linhas de grade suaves */}
+            {[0, 0.5, 1].map((ratio) => {
+              const y = paddingTop + chartH * (1 - ratio);
+              return (
+                <line
+                  key={ratio}
+                  x1={paddingX}
+                  y1={y}
+                  x2={width - paddingX}
+                  y2={y}
+                  stroke="currentColor"
+                  className="text-line-subtle/40"
+                  strokeDasharray="4 4"
+                  strokeWidth="1"
+                />
+              );
+            })}
 
-          {/* Área sombreada suave das abordagens */}
-          <path d={makeArea(contactedPoints)} fill={`url(#contacted-grad-${chartId})`} />
+            {/* Área sombreada suave das abordagens */}
+            <path d={makeArea(contactedPoints)} fill={`url(#contacted-grad-${chartId})`} />
 
-          {/* Linhas principais */}
-          <path
-            d={makePath(contactedPoints)}
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={makePath(respondedPoints)}
-            fill="none"
-            stroke="#10b981"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d={makePath(importedPoints)}
-            fill="none"
-            stroke="#0284c7"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+            {/* Linhas principais */}
+            <path
+              d={makePath(contactedPoints)}
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={makePath(respondedPoints)}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={makePath(importedPoints)}
+              fill="none"
+              stroke="#0284c7"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
 
-          {/* Rótulos do eixo X (primeira e última data) */}
-          {data.length > 0 && (
-            <>
-              <text
-                x={paddingX}
-                y={height - 8}
-                className="text-[10px] fill-ink-secondary"
-                textAnchor="start"
-              >
-                {data[0]?.date.split('-').slice(1).reverse().join('/')}
-              </text>
-              <text
-                x={width - paddingX}
-                y={height - 8}
-                className="text-[10px] fill-ink-secondary"
-                textAnchor="end"
-              >
-                {data[data.length - 1]?.date.split('-').slice(1).reverse().join('/')}
-              </text>
-            </>
-          )}
-        </svg>
+        {/* Eixo de datas inferior: limpo, nítido e responsivo em qualquer largura de tela */}
+        {data.length > 0 && (
+          <div className="flex items-center justify-between pt-2 px-1 text-[11px] font-medium text-ink-secondary select-none tabular-nums border-t border-line-subtle/30 mt-1">
+            <span>{data[0]?.date.split('-').slice(1).reverse().join('/')}</span>
+            {data.length > 2 && (
+              <span className="hidden sm:inline text-ink-muted">
+                {data[Math.floor(data.length / 2)]?.date.split('-').slice(1).reverse().join('/')}
+              </span>
+            )}
+            <span>{data[data.length - 1]?.date.split('-').slice(1).reverse().join('/')}</span>
+          </div>
+        )}
       </div>
     </div>
   );

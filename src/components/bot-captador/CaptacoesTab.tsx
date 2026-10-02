@@ -70,7 +70,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
       case 'ARCHIVED':
       case 'EXPIRED':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-surface-3 text-ink-secondary border border-line-subtle">
             <Archive className="w-3 h-3" />
             ARQUIVADO
           </span>
@@ -91,7 +91,7 @@ export const CaptacoesTab: React.FC<CaptacoesTabProps> = ({
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 text-zinc-400">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-3 text-ink-secondary border border-line-subtle">
             {status}
           </span>
         );
