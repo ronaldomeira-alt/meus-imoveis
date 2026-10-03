@@ -33,6 +33,10 @@ import { syncPropertyToMatch, deletePropertyFromMatch } from './lib/match/servic
 import { isMatchRelevantPropertyChange } from './lib/match/property-adapter';
 import type { InventorySnapshot } from './lib/inventorySync';
 import { deleteInventoryProperty, fetchInventorySnapshot, mergeInventoryProperties, syncInventoryProperties } from './lib/inventorySync';
+import { CENTRAL_BOTS_ENABLED } from './lib/central-bots';
+import { CentralBotsBoundary } from './components/agents/CentralBotsBoundary';
+
+const CentralBotsView = React.lazy(() => import('./components/agents/CentralBotsView'));
 
 const DEFAULT_FILTERS: FilterState = {
   neighborhood: '',
@@ -52,6 +56,7 @@ const SECTION_TO_PATH: Record<NavSection, string> = {
   match: '/match',
   captar: '/adicionar-imovel',
   'bot-captador': '/bot-captador',
+  'central-bots': '/central-de-bots',
   piloto: '/piloto-automatico',
   calendario: '/calendario',
   parceiros: '/parceiros',
@@ -68,6 +73,7 @@ const PATH_TO_SECTION: Record<string, NavSection> = {
   '/adicionar-imovel': 'captar',
   '/captar': 'captar',
   '/bot-captador': 'bot-captador',
+  '/central-de-bots': CENTRAL_BOTS_ENABLED ? 'central-bots' : 'bot-captador',
   '/bot': 'bot-captador',
   '/captador': 'bot-captador',
   '/piloto': 'piloto',
@@ -761,7 +767,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       <main
         data-detail-view={Boolean(viewingProperty)}
         className={`app-main relative z-10 flex-1 flex flex-col h-full overflow-hidden min-w-0 ${
-          viewingProperty
+          viewingProperty || activeSection === 'central-bots'
             ? 'pt-0 pb-0 px-0 md:pl-[72px]'
             : 'py-3.5 sm:py-5 lg:py-6 pr-3.5 pl-3.5 sm:pr-5 sm:pl-5 md:pl-[92px] lg:pr-6 lg:pl-[96px]'
         }`}
@@ -800,6 +806,12 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
             groqApiKey={groqApiKey}
             preferredAIProvider={preferredAIProvider}
           />
+        ) : activeSection === 'central-bots' && CENTRAL_BOTS_ENABLED ? (
+          <CentralBotsBoundary onOpenCaptador={() => navigateToSection('bot-captador')}>
+            <React.Suspense fallback={<p className="p-6" role="status">Carregando Central...</p>}>
+              <CentralBotsView onOpenMenu={() => setIsMobileNavOpen(true)} onOpenCaptador={() => navigateToSection('bot-captador')} />
+            </React.Suspense>
+          </CentralBotsBoundary>
         ) : viewingProperty ? (
           <PropertyDetailPage
             property={viewingProperty}
