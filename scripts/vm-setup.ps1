@@ -54,12 +54,28 @@ if (-not $startupChrome.TargetPath) {
 $startupChrome.Arguments = "--remote-debugging-port=9222 --remote-allow-origins=*"
 $startupChrome.Save()
 
-# Inicia o Chrome com a porta de depuração se não estiver aberto
-$chromeRunning = Get-Process chrome -ErrorAction SilentlyContinue
-if (-not $chromeRunning) {
-  Write-Host "🌐 Iniciando Google Chrome na VM com porta 9222..." -ForegroundColor Yellow
-  Start-Process "chrome.exe" "--remote-debugging-port=9222 --remote-allow-origins=*"
-  Start-Sleep -Seconds 4
+# Reinicia o Chrome com a porta de depuração ativa
+Write-Host "🌐 Reiniciando Google Chrome na VM com porta de depuração 9222..." -ForegroundColor Yellow
+Get-Process chrome -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+
+$chromeExe = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+if (-not (Test-Path $chromeExe)) {
+  $chromeExe = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+}
+if (-not (Test-Path $chromeExe)) {
+  $chromeExe = "chrome.exe"
+}
+
+Start-Process $chromeExe -ArgumentList "--remote-debugging-port=9222", "--remote-allow-origins=*"
+Start-Sleep -Seconds 4
+
+# Testa se a porta 9222 respondeu
+try {
+  $testRes = Invoke-WebRequest -Uri "http://127.0.0.1:9222/json/version" -UseBasicParsing -TimeoutSec 3
+  Write-Host "✅ Porta 9222 ativa e respondendo com sucesso!" -ForegroundColor Green
+} catch {
+  Write-Host "⚠️ Aguardando inicialização do Chrome na porta 9222..." -ForegroundColor Yellow
 }
 
 # 3. Baixa o script executor atualizado do GitHub
