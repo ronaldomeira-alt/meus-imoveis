@@ -8,12 +8,11 @@ import { getCurrentAccountId } from './bot-captador/database';
 
 export type PushPermissionStatus = 'granted' | 'denied' | 'default' | 'unsupported';
 
-const RAW_VAPID_PUBLIC_KEY =
-  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  'BB_e6M8cQpybTAKp2E2AMye7t4gUC-Ycdts1g5r5RyDjMlPwMXNFz5E2ELB0_PApjxwN9jXbPtKDt2OoILS46qk';
-
 // Chave pública VAPID sanitizada (remove aspas, espaços e quebras de linha que a Vercel/Vite possam injetar)
-const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
+const CONFIGURED_VAPID_PUBLIC_KEY = String(import.meta.env.VITE_VAPID_PUBLIC_KEY || '').trim().replace(/['"\s\r\n]/g, '');
+const VAPID_PUBLIC_KEY = CONFIGURED_VAPID_PUBLIC_KEY && !/^(undefined|null)$/i.test(CONFIGURED_VAPID_PUBLIC_KEY)
+  ? CONFIGURED_VAPID_PUBLIC_KEY
+  : 'BB_e6M8cQpybTAKp2E2AMye7t4gUC-Ycdts1g5r5RyDjMlPwMXNFz5E2ELB0_PApjxwN9jXbPtKDt2OoILS46qk';
 const VAPID_PUBLIC_KEY_BYTES = 65;
 const VAPID_PUBLIC_KEY_PREFIX = 0x04;
 

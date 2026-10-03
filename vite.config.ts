@@ -71,10 +71,13 @@ export default defineConfig(({ mode }) => {
   process.env.SUPABASE_SERVICE_ROLE_KEY ||= env.SUPABASE_SERVICE_ROLE_KEY
   process.env.APIFY_API_TOKEN ||= env.APIFY_API_TOKEN
 
-  process.env.VAPID_PUBLIC_KEY ||= env.VAPID_PUBLIC_KEY || env.VITE_VAPID_PUBLIC_KEY
-  process.env.VAPID_PRIVATE_KEY ||= env.VAPID_PRIVATE_KEY
-  process.env.VAPID_SUBJECT ||= env.VAPID_SUBJECT
-  process.env.VITE_VAPID_PUBLIC_KEY ||= env.VITE_VAPID_PUBLIC_KEY || env.VAPID_PUBLIC_KEY
+  const vapidPublicKey = env.VAPID_PUBLIC_KEY || env.VITE_VAPID_PUBLIC_KEY
+  const clientVapidPublicKey = env.VITE_VAPID_PUBLIC_KEY || env.VAPID_PUBLIC_KEY
+  // process.env converts an assigned undefined value into the string "undefined".
+  if (vapidPublicKey) process.env.VAPID_PUBLIC_KEY ||= vapidPublicKey
+  if (env.VAPID_PRIVATE_KEY) process.env.VAPID_PRIVATE_KEY ||= env.VAPID_PRIVATE_KEY
+  if (env.VAPID_SUBJECT) process.env.VAPID_SUBJECT ||= env.VAPID_SUBJECT
+  if (clientVapidPublicKey) process.env.VITE_VAPID_PUBLIC_KEY ||= clientVapidPublicKey
 
   process.env.PUBLIC_PROPERTIES_ADMIN_TOKEN ||= env.PUBLIC_PROPERTIES_ADMIN_TOKEN
   process.env.PUBLIC_CONTACT_WHATSAPP ||= env.PUBLIC_CONTACT_WHATSAPP
