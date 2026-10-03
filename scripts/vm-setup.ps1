@@ -54,6 +54,14 @@ if (-not $startupChrome.TargetPath) {
 $startupChrome.Arguments = "--remote-debugging-port=9222 --remote-allow-origins=*"
 $startupChrome.Save()
 
+# Inicia o Chrome com a porta de depuração se não estiver aberto
+$chromeRunning = Get-Process chrome -ErrorAction SilentlyContinue
+if (-not $chromeRunning) {
+  Write-Host "🌐 Iniciando Google Chrome na VM com porta 9222..." -ForegroundColor Yellow
+  Start-Process "chrome.exe" "--remote-debugging-port=9222 --remote-allow-origins=*"
+  Start-Sleep -Seconds 4
+}
+
 # 3. Baixa o script executor atualizado do GitHub
 Write-Host "📥 Baixando scripts mais recentes do Bot Captador..." -ForegroundColor Yellow
 $executorUrl = "https://raw.githubusercontent.com/ronaldomeira-alt/meus-imoveis/master/scripts/olx-executor.mjs"

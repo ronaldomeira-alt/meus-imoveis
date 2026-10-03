@@ -137,10 +137,56 @@ function getChromeWsEndpoint() {
   return `ws://127.0.0.1:${port}${path}`;
 }
 
+import { spawn } from 'node:child_process';
+
+/**
+ * Garante que o Google Chrome esteja em execução na porta 9222.
+ * Se não estiver aberto, inicializa o processo automaticamente em segundo plano.
+ */
+async function ensureChromeRunning() {
+  try {
+    const res = await fetch('http://127.0.0.1:9222/json/version');
+    if (res.ok) return;
+  } catch {}
+
+  console.log('🌐 Google Chrome não detectado na porta 9222. Iniciando processo automaticamente...');
+  const chromePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    `${process.env.LOCALAPPDATA || ''}\\Google\\Chrome\\Application\\chrome.exe`,
+    'chrome.exe',
+  ];
+  for (const cp of chromePaths) {
+    if (existsSync(cp) || cp === 'chrome.exe') {
+      try {
+        const subprocess = spawn(cp, ['--remote-debugging-port=9222', '--remote-allow-origins=*'], {
+          detached: true,
+          stdio: 'ignore',
+        });
+        subprocess.unref();
+        break;
+      } catch {}
+    }
+  }
+
+  // Aguarda até 10 segundos para a porta 9222 responder
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const res = await fetch('http://127.0.0.1:9222/json/version');
+      if (res.ok) {
+        console.log('✅ Google Chrome iniciado e pronto na porta 9222!');
+        return;
+      }
+    } catch {}
+  }
+}
+
 /**
  * Função utilitária para conectar ao Chrome com desconexão segura
  */
 async function withChrome(action) {
+  await ensureChromeRunning();
   let browser;
   try {
     const wsUrl = getChromeWsEndpoint();
