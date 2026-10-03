@@ -14,10 +14,25 @@ const RAW_VAPID_PUBLIC_KEY =
 
 // Chave pública VAPID sanitizada (remove aspas, espaços e quebras de linha que a Vercel/Vite possam injetar)
 const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
+const VAPID_PUBLIC_KEY_BYTES = 65;
+const VAPID_PUBLIC_KEY_PREFIX = 0x04;
+
+let serviceWorkerReadyPromise: Promise<ServiceWorkerRegistration | null> | null = null;
+let readyServiceWorkerRegistration: ServiceWorkerRegistration | null = null;
+let cachedVapidApplicationServerKey: Uint8Array | null = null;
+
+function decodeBase64UrlChar(charCode: number): number {
+  if (charCode >= 65 && charCode <= 90) return charCode - 65; // A-Z
+  if (charCode >= 97 && charCode <= 122) return charCode - 71; // a-z
+  if (charCode >= 48 && charCode <= 57) return charCode + 4; // 0-9
+  if (charCode === 43 || charCode === 45) return 62; // + or -
+  if (charCode === 47 || charCode === 95) return 63; // / or _
+  throw new Error('Chave pública VAPID contém caracteres inválidos.');
+}
 
 /**
  * Converte chave pública VAPID base64/base64url para Uint8Array puro.
- * Implementação direta via tabela de lookup sem atob() para imunidade total contra
+ * Implementação direta sem atob() para imunidade total contra
  * 'DOMException: The string contains invalid characters' do Safari / iOS WebKit.
  */
 export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
@@ -26,28 +41,25 @@ export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
     throw new Error('Chave pública VAPID não informada ou vazia.');
   }
 
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  const lookup = new Uint8Array(256);
-  for (let i = 0; i < chars.length; i++) {
-    lookup[chars.charCodeAt(i)] = i;
-  }
-  lookup['-'.charCodeAt(0)] = 62;
-  lookup['_'.charCodeAt(0)] = 63;
-
-  let len = clean.length;
-  while (len > 0 && clean[len - 1] === '=') {
-    len--;
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(clean)) {
+    throw new Error('Chave pública VAPID contém caracteres inválidos.');
   }
 
+  const unpadded = clean.replace(/=+$/, '');
+  if (unpadded.length % 4 === 1) {
+    throw new Error('Chave pública VAPID tem tamanho Base64URL inválido.');
+  }
+
+  const len = unpadded.length;
   const byteLength = Math.floor((len * 3) / 4);
   const bytes = new Uint8Array(byteLength);
 
   let byteIdx = 0;
   for (let i = 0; i < len; i += 4) {
-    const c1 = lookup[clean.charCodeAt(i)];
-    const c2 = i + 1 < len ? lookup[clean.charCodeAt(i + 1)] : 0;
-    const c3 = i + 2 < len ? lookup[clean.charCodeAt(i + 2)] : 64;
-    const c4 = i + 3 < len ? lookup[clean.charCodeAt(i + 3)] : 64;
+    const c1 = decodeBase64UrlChar(unpadded.charCodeAt(i));
+    const c2 = i + 1 < len ? decodeBase64UrlChar(unpadded.charCodeAt(i + 1)) : 0;
+    const c3 = i + 2 < len ? decodeBase64UrlChar(unpadded.charCodeAt(i + 2)) : 64;
+    const c4 = i + 3 < len ? decodeBase64UrlChar(unpadded.charCodeAt(i + 3)) : 64;
 
     bytes[byteIdx++] = (c1 << 2) | (c2 >> 4);
     if (byteIdx < byteLength && c3 !== 64) {
@@ -58,7 +70,39 @@ export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
     }
   }
 
+  if (bytes.length !== VAPID_PUBLIC_KEY_BYTES || bytes[0] !== VAPID_PUBLIC_KEY_PREFIX) {
+    throw new Error('Chave pública VAPID inválida: esperado ponto P-256 não compactado de 65 bytes.');
+  }
+
   return bytes;
+}
+
+function getVapidApplicationServerKey(): Uint8Array {
+  if (!cachedVapidApplicationServerKey) {
+    cachedVapidApplicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+  }
+  return cachedVapidApplicationServerKey.slice();
+}
+
+async function getReadyServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (!isPushSupported()) return null;
+  if (readyServiceWorkerRegistration) return readyServiceWorkerRegistration;
+
+  if (!serviceWorkerReadyPromise) {
+    serviceWorkerReadyPromise = (async () => {
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const reg = await navigator.serviceWorker.ready;
+      readyServiceWorkerRegistration = reg;
+      return reg;
+    })().catch((err) => {
+      serviceWorkerReadyPromise = null;
+      readyServiceWorkerRegistration = null;
+      console.error('Falha ao preparar Service Worker:', err);
+      return null;
+    });
+  }
+
+  return serviceWorkerReadyPromise;
 }
 
 /**
@@ -151,14 +195,18 @@ export function getPushPermissionStatus(): PushPermissionStatus {
  * Registra o Service Worker do PWA se ainda não estiver registrado
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!isPushSupported()) return null;
+  return getReadyServiceWorkerRegistration();
+}
 
+/**
+ * Prepara as dependências que não devem competir com o gesto do toque no Safari/iOS.
+ */
+export async function preparePushNotificationsForActivation(): Promise<ServiceWorkerRegistration | null> {
   try {
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
-    return reg;
+    getVapidApplicationServerKey();
+    return await getReadyServiceWorkerRegistration();
   } catch (err) {
-    console.error('Falha ao registrar Service Worker:', err);
+    console.error('Falha ao preparar Web Push:', err);
     return null;
   }
 }
@@ -170,12 +218,14 @@ export async function getActiveSubscription(): Promise<PushSubscription | null> 
   if (!isPushSupported()) return null;
 
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await getReadyServiceWorkerRegistration();
+    if (!reg) return null;
+
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return null;
 
     // Se houver subscrição com chave antiga diferente da VAPID atual, limpa para evitar falha no envio
-    const currentKeyUint8 = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+    const currentKeyUint8 = getVapidApplicationServerKey();
     if (sub.options?.applicationServerKey && !isSubscriptionKeyMatching(sub, currentKeyUint8)) {
       console.warn('Subscription existente usa chave VAPID diferente. Desinscrevendo para renovação limpa...');
       try {
@@ -193,6 +243,16 @@ export async function getActiveSubscription(): Promise<PushSubscription | null> 
   }
 }
 
+function formatSubscribeError(err: any): string {
+  let msg = err?.message || 'Erro inesperado ao ativar notificações push.';
+  if (isIosDevice() && !isStandalonePwa()) {
+    msg = 'No iPhone, o Web Push requer que o Meus Imóveis esteja adicionado à Tela de Início. Toque no botão Compartilhar do Safari e selecione "Adicionar à Tela de Início".';
+  } else if (isIosDevice() && isStandalonePwa()) {
+    msg = `Não foi possível ativar notificações no iPhone (${msg}). Dica: feche o aplicativo da Tela de Início e abra-o novamente para restabelecer a conexão push do sistema iOS.`;
+  }
+  return msg;
+}
+
 /**
  * Inscreve o aparelho atual no Web Push e salva os dados no Supabase vinculados à account_id
  */
@@ -204,8 +264,32 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     };
   }
 
+  let applicationServerKey: Uint8Array;
+  try {
+    applicationServerKey = getVapidApplicationServerKey();
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Chave pública VAPID inválida.' };
+  }
+
+  const reg = readyServiceWorkerRegistration;
+  if (!reg) {
+    return {
+      success: false,
+      error: isIosDevice()
+        ? 'A conexão push do iPhone ainda está iniciando. Feche e abra novamente o app pela Tela de Início e tente ativar as notificações mais uma vez.'
+        : 'O Service Worker ainda não está pronto para criar a assinatura push. Recarregue a página e tente novamente.',
+    };
+  }
+
   // 1. Solicita permissão explícita (ação de gesto direto do usuário)
-  const permission = await Notification.requestPermission();
+  let permission: NotificationPermission;
+  try {
+    permission = await Notification.requestPermission();
+  } catch (err: any) {
+    console.error('Erro ao solicitar permissão de notificações:', err);
+    return { success: false, error: formatSubscribeError(err) };
+  }
+
   if (permission !== 'granted') {
     return {
       success: false,
@@ -216,15 +300,6 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
   }
 
   try {
-    // 2. Garante o Service Worker pronto
-    const reg = await navigator.serviceWorker.ready;
-    if (!reg) {
-      return { success: false, error: 'Não foi possível inicializar o Service Worker.' };
-    }
-
-    // 3. Converte chave pública VAPID para Uint8Array
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-
     let subscription = await reg.pushManager.getSubscription();
 
     // Se houver assinatura pré-existente com chave desatualizada, desinscreve primeiro
@@ -290,13 +365,7 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     return { success: true };
   } catch (err: any) {
     console.error('Erro ao assinar notificações push:', err);
-    let msg = err?.message || 'Erro inesperado ao ativar notificações push.';
-    if (isIosDevice() && !isStandalonePwa()) {
-      msg = 'No iPhone, o Web Push requer que o Meus Imóveis esteja adicionado à Tela de Início. Toque no botão Compartilhar do Safari e selecione "Adicionar à Tela de Início".';
-    } else if (isIosDevice() && isStandalonePwa()) {
-      msg = `Não foi possível ativar notificações no iPhone (${msg}). Dica: feche o aplicativo da Tela de Início e abra-o novamente para restabelecer a conexão push do sistema iOS.`;
-    }
-    return { success: false, error: msg };
+    return { success: false, error: formatSubscribeError(err) };
   }
 }
 

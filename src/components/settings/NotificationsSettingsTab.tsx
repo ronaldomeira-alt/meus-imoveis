@@ -18,6 +18,7 @@ import {
   isPushSupported,
   getPushPermissionStatus,
   getActiveSubscription,
+  preparePushNotificationsForActivation,
   subscribeDeviceToPush,
   unsubscribeDeviceFromPush,
   sendTestPushNotification,
@@ -46,12 +47,17 @@ export const NotificationsSettingsTab: React.FC = () => {
       return;
     }
 
-    const perm = getPushPermissionStatus();
-    setPermission(perm);
+    try {
+      await preparePushNotificationsForActivation();
 
-    const sub = await getActiveSubscription();
-    setIsSubscribed(Boolean(sub));
-    setLoading(false);
+      const perm = getPushPermissionStatus();
+      setPermission(perm);
+
+      const sub = await getActiveSubscription();
+      setIsSubscribed(Boolean(sub));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -62,22 +68,24 @@ export const NotificationsSettingsTab: React.FC = () => {
     setActionLoading(true);
     setStatusMessage(null);
 
-    const result = await subscribeDeviceToPush();
-    if (result.success) {
-      setStatusMessage({
-        type: 'success',
-        text: 'Notificações ativadas com sucesso neste aparelho! Você já pode enviar um teste abaixo.',
-      });
-      await checkStatus();
-    } else {
-      setStatusMessage({
-        type: 'error',
-        text: result.error || 'Não foi possível ativar as notificações.',
-      });
-      setPermission(getPushPermissionStatus());
+    try {
+      const result = await subscribeDeviceToPush();
+      if (result.success) {
+        setStatusMessage({
+          type: 'success',
+          text: 'Notificações ativadas com sucesso neste aparelho! Você já pode enviar um teste abaixo.',
+        });
+        await checkStatus();
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: result.error || 'Não foi possível ativar as notificações.',
+        });
+        setPermission(getPushPermissionStatus());
+      }
+    } finally {
+      setActionLoading(false);
     }
-
-    setActionLoading(false);
   };
 
   const handleUnsubscribe = async () => {
@@ -297,10 +305,10 @@ export const NotificationsSettingsTab: React.FC = () => {
             <button
               type="button"
               onClick={handleSubscribe}
-              disabled={actionLoading || permission === 'denied' || !supported}
+              disabled={loading || actionLoading || permission === 'denied' || !supported}
               className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {actionLoading ? (
+              {loading || actionLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <BellRing className="w-4 h-4" />

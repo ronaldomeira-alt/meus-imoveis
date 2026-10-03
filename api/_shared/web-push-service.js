@@ -23,6 +23,44 @@ const VAPID_SUBJECT =
 // Configuração única do web-push
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+function stringifyPushErrorPart(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Buffer.isBuffer(value)) return value.toString('utf8');
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function getPushErrorStatusCode(err) {
+  return Number(err?.statusCode || err?.status || err?.response?.statusCode || err?.response?.status || 0);
+}
+
+function getPushErrorText(err) {
+  return [
+    err?.message,
+    err?.body,
+    err?.response?.body,
+    err?.responseBody,
+  ]
+    .map(stringifyPushErrorPart)
+    .filter(Boolean)
+    .join(' ');
+}
+
+export function shouldPurgePushSubscriptionError(err) {
+  const statusCode = getPushErrorStatusCode(err);
+  const errorText = getPushErrorText(err).toLowerCase();
+
+  return (
+    statusCode === 404 ||
+    statusCode === 410 ||
+    (statusCode === 400 && errorText.includes('vapidpkhashmismatch'))
+  );
+}
+
 function getSupabaseClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://qedptmrcvcbzhucoeznd.supabase.co';
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZHB0bXJjdmNiemh1Y29lem5kIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTc5NTAzOCwiZXhwIjoyMTAxMzcxMDM4fQ.-zYj_z6kiaJpH43mOqV_OKlXf6Q6zUJhEJfBa5KKu0Q';
@@ -76,14 +114,8 @@ export async function sendPushToAccount(accountId, payload, options = {}) {
         sentCount++;
       } catch (err) {
         failedCount++;
-        const statusCode = err?.statusCode;
-        const errBody = typeof err?.body === 'string' ? err.body : JSON.stringify(err?.body || '');
         // 404 (Not Found), 410 (Gone) ou 400 VapidPkHashMismatch: dispositivo desinstalou, revogou ou chave VAPID antiga
-        if (
-          statusCode === 404 ||
-          statusCode === 410 ||
-          (statusCode === 400 && errBody.includes('VapidPkHashMismatch'))
-        ) {
+        if (shouldPurgePushSubscriptionError(err)) {
           expiredEndpoints.push(sub.endpoint);
         } else {
           console.error(`Falha no envio push para dispositivo ${sub.device_name || sub.endpoint}:`, err?.message || err);
@@ -95,13 +127,14 @@ export async function sendPushToAccount(accountId, payload, options = {}) {
   // 3. Purge automático de subscriptions inválidas/expiradas
   let removedCount = 0;
   if (expiredEndpoints.length > 0) {
+    const uniqueExpiredEndpoints = [...new Set(expiredEndpoints)];
     const { error: delError, count } = await db
       .from('push_subscriptions')
       .delete()
-      .in('endpoint', expiredEndpoints);
+      .in('endpoint', uniqueExpiredEndpoints);
 
     if (!delError) {
-      removedCount = expiredEndpoints.length;
+      removedCount = count || uniqueExpiredEndpoints.length;
       console.log(`🧹 ${removedCount} subscription(s) expirada(s) removida(s) automaticamente do Supabase.`);
     }
   }
