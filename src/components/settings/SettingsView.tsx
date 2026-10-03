@@ -16,10 +16,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Bell,
 } from 'lucide-react';
 import { testGroqConnection, GROQ_MODELS } from '../../lib/groq';
 import type { PreferredAIProvider } from '../../lib/ai-provider';
 import { MarketingSettingsTab } from './MarketingSettingsTab';
+import { NotificationsSettingsTab } from './NotificationsSettingsTab';
 import { useAuth } from '../../lib/auth';
 
 interface SettingsViewProps {
@@ -43,7 +45,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onExportJSON,
   onExportCSV,
 }) => {
-  const [activeTab, setActiveTab] = useState<'gemini' | 'usuarios' | 'conta' | 'marketing'>('gemini');
+  const [activeTab, setActiveTab] = useState<'gemini' | 'usuarios' | 'conta' | 'marketing' | 'notificacoes'>('gemini');
   const [showKey, setShowKey] = useState(false);
   const [keyInput, setKeyInput] = useState(geminiApiKey);
   const [selectedModel, setSelectedModel] = useState('gemini-3.6-flash');
@@ -199,6 +201,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <Zap className="w-3.5 h-3.5 text-accent" />
             Inteligência de Marketing
+          </button>
+
+          <button
+            onClick={() => setActiveTab('notificacoes')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'notificacoes'
+                ? 'bg-accent-soft text-accent border border-accent/40'
+                : 'text-ink-secondary hover:text-ink-primary'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5 text-accent" />
+            Notificações
           </button>
         </div>
       </div>
@@ -806,6 +820,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* 4. ABA INTELIGÊNCIA DE MARKETING */}
         {activeTab === 'marketing' && <MarketingSettingsTab />}
+
+        {/* 5. ABA NOTIFICAÇÕES WEB PUSH */}
+        {activeTab === 'notificacoes' && <NotificationsSettingsTab />}
       </div>
     </div>
   );

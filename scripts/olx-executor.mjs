@@ -7,6 +7,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { createClient } from '@supabase/supabase-js';
+import {
+  sendPushToAccount,
+  buildRoundSummaryPush,
+  buildOwnerRespondedPush,
+  buildBotFailurePush,
+} from '../api/_shared/web-push-service.js';
 // Funções de template e agendamento inlinadas para independência total de runtime JS
 export function renderMessageTemplate(templateContent, variables) {
   let text = templateContent || '';
@@ -273,6 +279,11 @@ async function runRealScan() {
 
   console.log(`🔒 ${tombstoneSet.size} tombstones perpétuos ativos no banco (${tombstoneExternalIdSet.size} IDs externos protegidos).`);
 
+  let grandTotalAnalyzed = 0;
+  let grandTotalEligible = 0;
+  let grandTotalNew = 0;
+  let grandTotalDuplicates = 0;
+
   await withChrome(async (browser) => {
     for (const campaign of campaigns) {
       console.log(`\n🔍 Executando descoberta real para campanha: ${campaign.type.toUpperCase()}`);
@@ -510,11 +521,23 @@ async function runRealScan() {
         console.log(`   - Efetivamente Elegíveis: ${eligibleCount}`);
         console.log(`   - Novos em QUEUED: ${newEnqueued}`);
         console.log(`   - Mensagens enviadas: 0 (SOMENTE LEITURA — ZERO DISPAROS)\n`);
+
+        grandTotalAnalyzed += rawAds.length;
+        grandTotalEligible += eligibleCount;
+        grandTotalNew += newEnqueued;
+        grandTotalDuplicates += duplicateCount + possibleDuplicateCount;
       } finally {
         await page.close();
       }
     }
   });
+
+  return {
+    analyzedCount: grandTotalAnalyzed,
+    eligibleCount: grandTotalEligible,
+    newCount: grandTotalNew,
+    duplicateCount: grandTotalDuplicates,
+  };
 }
 
 /**
@@ -522,9 +545,10 @@ async function runRealScan() {
  */
 async function checkChatResponses() {
   console.log('📡 Buscando captações com status WAITING_RESPONSE no Supabase...');
+  const accountId = await getActiveAccountId();
   const { data: waiting } = await supabase
     .from('bot_captures')
-    .select('id, external_id, title')
+    .select('id, external_id, title, neighborhood, owner_name')
     .eq('status', 'WAITING_RESPONSE')
     .not('external_id', 'is', null);
 
@@ -534,7 +558,7 @@ async function checkChatResponses() {
   }
 
   const waitingMap = new Map();
-  waiting.forEach((w) => waitingMap.set(w.external_id, w.id));
+  waiting.forEach((w) => waitingMap.set(w.external_id, w));
 
   console.log(`🔎 Verificando respostas para ${waiting.length} captação(ões) ativa(s)...`);
 
@@ -566,7 +590,7 @@ async function checkChatResponses() {
       let updatedCount = 0;
       for (const chat of chats) {
         if (waitingMap.has(chat.listId)) {
-          const captureId = waitingMap.get(chat.listId);
+          const captureItem = waitingMap.get(chat.listId);
           console.log(`  🎉 Resposta identificada para o anúncio ${chat.listId}!`);
           await supabase
             .from('bot_captures')
@@ -575,8 +599,19 @@ async function checkChatResponses() {
               responded_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
-            .eq('id', captureId);
+            .eq('id', captureItem.id);
           updatedCount++;
+
+          // Disparo automático de Web Push: Proprietário respondeu
+          if (accountId) {
+            try {
+              const pushPayload = buildOwnerRespondedPush(captureItem);
+              await sendPushToAccount(accountId, pushPayload, { db: supabase });
+              console.log(`  📱 Push enviado: proprietário do anúncio ${chat.listId} respondeu!`);
+            } catch (pushErr) {
+              console.warn('⚠️ Falha ao disparar push de resposta:', pushErr?.message || pushErr);
+            }
+          }
         }
       }
 
@@ -786,7 +821,13 @@ async function executeFullRound() {
 
   // 4. Executa a varredura real na OLX
   console.log('\n🔍 [2/3] Executando varredura de anúncios particulares...');
-  await runRealScan();
+  const roundStartTime = new Date().toISOString();
+  let scanStats = { analyzedCount: 0, eligibleCount: 0, newCount: 0, duplicateCount: 0 };
+  try {
+    scanStats = await runRealScan();
+  } catch (scanErr) {
+    console.error('⚠️ Erro no scan da rodada:', scanErr?.message || scanErr);
+  }
 
   // 5. Processa os envios reais para a fila (QUEUED)
   console.log('\n💬 [3/3] Processando fila de abordagens...');
@@ -835,6 +876,32 @@ async function executeFullRound() {
     })
     .eq('account_id', accountId);
 
+  // 7. Registra formalmente a rodada em bot_execution_rounds
+  const roundPayload = {
+    account_id: accountId,
+    campaign_type: 'both',
+    trigger_type: 'SCHEDULED',
+    status: 'COMPLETED',
+    started_at: roundStartTime,
+    finished_at: now.toISOString(),
+    analyzed_count: scanStats?.analyzedCount || 0,
+    new_count: scanStats?.newCount || 0,
+    eligible_count: scanStats?.eligibleCount || 0,
+    contacted_count: sentCount,
+    duplicate_count: scanStats?.duplicateCount || 0,
+    error_count: 0,
+  };
+  await supabase.from('bot_execution_rounds').insert(roundPayload);
+
+  // 8. Disparo automático de Web Push: Resumo da Rodada
+  try {
+    const pushPayload = buildRoundSummaryPush(roundPayload);
+    await sendPushToAccount(accountId, pushPayload, { db: supabase });
+    console.log('📱 Notificação push de resumo de rodada enviada com sucesso para os aparelhos!');
+  } catch (pushErr) {
+    console.warn('⚠️ Falha ao disparar push de resumo:', pushErr?.message || pushErr);
+  }
+
   console.log(`\n✅ Rodada concluída com sucesso! ${summary}`);
   console.log(`📅 Próxima rodada agendada para: ${new Date(nextRoundIso).toLocaleString('pt-BR')}`);
 }
@@ -845,8 +912,18 @@ async function executeFullRound() {
 const arg = process.argv[2];
 
 if (arg === '--run-round') {
-  executeFullRound().catch((err) => {
+  executeFullRound().catch(async (err) => {
     console.error('❌ Falha na execução da rodada completa:', err);
+    try {
+      const accountId = await getActiveAccountId();
+      if (accountId) {
+        const failurePayload = buildBotFailurePush({
+          error_summary: err?.message || 'Falha ao acessar o Chrome ou chat da OLX.',
+        });
+        await sendPushToAccount(accountId, failurePayload, { db: supabase });
+        console.log('📱 Notificação de falha importante enviada com sucesso aos aparelhos.');
+      }
+    } catch {}
     process.exit(1);
   });
 } else if (arg === '--scan') {

@@ -274,6 +274,19 @@ export async function runBotRound(options: {
         health_reason: null,
       })
       .eq('account_id', accountId);
+
+    // Dispara Web Push de Resumo de Rodada com contadores reais
+    try {
+      fetch('/api/web-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'round-summary',
+          accountId,
+          roundData: roundPayload,
+        }),
+      }).catch((err) => console.warn('Erro assíncrono ao enviar push de resumo:', err));
+    } catch {}
   }
 
   const summary = isSimulation
