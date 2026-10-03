@@ -108,6 +108,7 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($trigger1,
 Write-Host "✅ Tarefa '$taskName' agendada para 09:00 e 19:00 todos os dias!" -ForegroundColor Green
 
 # 7. Executa teste de rodada imediatamente para validar
+Set-Location $baseDir
 Write-Host "`n🧪 Testando execução do Bot agora..." -ForegroundColor Cyan
 & $nodeCmd scripts/olx-executor.mjs --run-round
 

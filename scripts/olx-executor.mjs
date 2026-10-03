@@ -63,18 +63,28 @@ export function calculateNextRoundAt(campaigns, options) {
   return nextTarget.toISOString();
 }
 
-// Carrega variáveis do .env usando o método nativo do Node.js
-if (existsSync('.env')) {
-  process.loadEnvFile('.env');
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Carrega variáveis do .env de forma resiliente em qualquer diretório de execução
+const __scriptDir = dirname(fileURLToPath(import.meta.url));
+const potentialEnvPaths = [
+  '.env',
+  join(__scriptDir, '../.env'),
+  join(__scriptDir, '.env'),
+  'C:\\Projetos\\meus-imoveis\\.env'
+];
+for (const envPath of potentialEnvPaths) {
+  if (existsSync(envPath)) {
+    try {
+      process.loadEnvFile(envPath);
+      break;
+    } catch {}
+  }
 }
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Variáveis de ambiente do Supabase não configuradas.');
-  process.exit(1);
-}
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://qedptmrcvcbzhucoeznd.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFlZHB0bXJjdmNiemh1Y29lem5kIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTc5NTAzOCwiZXhwIjoyMTAxMzcxMDM4fQ.-zYj_z6kiaJpH43mOqV_OKlXf6Q6zUJhEJfBa5KKu0Q';
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
