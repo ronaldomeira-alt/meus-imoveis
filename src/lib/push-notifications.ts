@@ -8,22 +8,57 @@ import { getCurrentAccountId } from './bot-captador/database';
 
 export type PushPermissionStatus = 'granted' | 'denied' | 'default' | 'unsupported';
 
-const VAPID_PUBLIC_KEY =
+const RAW_VAPID_PUBLIC_KEY =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
   'BB_e6M8cQpybTAKp2E2AMye7t4gUC-Ycdts1g5r5RyDjMlPwMXNFz5E2ELB0_PApjxwN9jXbPtKDt2OoILS46qk';
 
+// Chave pública VAPID sanitizada (remove aspas, espaços e quebras de linha que a Vercel/Vite possam injetar)
+const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
+
 /**
- * Converte chave pública VAPID base64url para Uint8Array exigido pelo PushManager
+ * Converte chave pública VAPID base64/base64url para Uint8Array exigido pelo PushManager.
+ * Implementação pura em TypeScript imune a limitações e erros de atob no Safari / iOS WebKit.
  */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+function urlBase64ToUint8Array(base64Url: string): Uint8Array {
+  const clean = String(base64Url || '').trim().replace(/['"\s\r\n]/g, '');
+  if (!clean) {
+    throw new Error('Chave pública VAPID não informada ou vazia.');
   }
-  return outputArray;
+
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) {
+    lookup[chars.charCodeAt(i)] = i;
+  }
+  // Mapeamentos URL-safe
+  lookup['-'.charCodeAt(0)] = 62;
+  lookup['_'.charCodeAt(0)] = 63;
+
+  let len = clean.length;
+  while (len > 0 && clean[len - 1] === '=') {
+    len--;
+  }
+
+  const byteLength = Math.floor((len * 3) / 4);
+  const bytes = new Uint8Array(byteLength);
+
+  let byteIdx = 0;
+  for (let i = 0; i < len; i += 4) {
+    const c1 = lookup[clean.charCodeAt(i)];
+    const c2 = i + 1 < len ? lookup[clean.charCodeAt(i + 1)] : 0;
+    const c3 = i + 2 < len ? lookup[clean.charCodeAt(i + 2)] : 64;
+    const c4 = i + 3 < len ? lookup[clean.charCodeAt(i + 3)] : 64;
+
+    bytes[byteIdx++] = (c1 << 2) | (c2 >> 4);
+    if (byteIdx < byteLength && c3 !== 64) {
+      bytes[byteIdx++] = ((c2 & 15) << 4) | (c3 >> 2);
+    }
+    if (byteIdx < byteLength && c4 !== 64) {
+      bytes[byteIdx++] = ((c3 & 3) << 6) | c4;
+    }
+  }
+
+  return bytes;
 }
 
 /**
@@ -129,10 +164,22 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     let subscription = await reg.pushManager.getSubscription();
 
     if (!subscription) {
-      subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: applicationServerKey as unknown as BufferSource,
-      });
+      try {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as unknown as BufferSource,
+        });
+      } catch (subErr: any) {
+        console.warn('Primeira tentativa de subscribe falhou, verificando renovação de chave:', subErr);
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          await existing.unsubscribe();
+        }
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey as unknown as BufferSource,
+        });
+      }
     }
 
     const subJson = subscription.toJSON();
@@ -180,7 +227,11 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     return { success: true };
   } catch (err: any) {
     console.error('Erro ao assinar notificações push:', err);
-    return { success: false, error: err?.message || 'Erro inesperado ao ativar notificações push.' };
+    let msg = err?.message || 'Erro inesperado ao ativar notificações push.';
+    if (msg.includes('invalid characters') || msg.includes('InvalidCharacterError')) {
+      msg = 'Formato de chave não aceito pelo navegador. Certifique-se de que o app está instalado na Tela de Início do iPhone.';
+    }
+    return { success: false, error: msg };
   }
 }
 
