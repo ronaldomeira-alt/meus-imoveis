@@ -154,65 +154,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Abas */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl pill-surface">
+        <div className="w-full sm:w-auto max-w-full flex items-center gap-1.5 p-1 rounded-xl bg-surface-1 border border-line-subtle overflow-x-auto no-scrollbar scroll-smooth flex-nowrap shrink-0 shadow-xs">
           <button
+            type="button"
             onClick={() => setActiveTab('gemini')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
               activeTab === 'gemini'
-                ? 'bg-accent-soft text-accent border border-accent/40'
-                : 'text-ink-secondary hover:text-ink-primary'
+                ? 'bg-accent text-white shadow-sm font-bold'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            Modelos & IA
+            <Sparkles className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'gemini' ? 'text-white' : 'text-accent'}`} />
+            <span>Modelos & IA</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('usuarios')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
               activeTab === 'usuarios'
-                ? 'bg-accent-soft text-accent border border-accent/40'
-                : 'text-ink-secondary hover:text-ink-primary'
+                ? 'bg-accent text-white shadow-sm font-bold'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            Usuários
+            <Users className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'usuarios' ? 'text-white' : 'text-ink-secondary'}`} />
+            <span>Usuários</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('conta')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
               activeTab === 'conta'
-                ? 'bg-accent-soft text-accent border border-accent/40'
-                : 'text-ink-secondary hover:text-ink-primary'
+                ? 'bg-accent text-white shadow-sm font-bold'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Conta & Dados
+            <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'conta' ? 'text-white' : 'text-emerald-400'}`} />
+            <span>Conta & Dados</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('marketing')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
               activeTab === 'marketing'
-                ? 'bg-accent-soft text-accent border border-accent/40'
-                : 'text-ink-secondary hover:text-ink-primary'
+                ? 'bg-accent text-white shadow-sm font-bold'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-accent" />
-            Inteligência de Marketing
+            <Zap className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'marketing' ? 'text-white' : 'text-accent'}`} />
+            <span>Inteligência de Marketing</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('notificacoes')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all duration-150 cursor-pointer ${
               activeTab === 'notificacoes'
-                ? 'bg-accent-soft text-accent border border-accent/40'
-                : 'text-ink-secondary hover:text-ink-primary'
+                ? 'bg-accent text-white shadow-sm font-bold'
+                : 'text-ink-secondary hover:text-ink-primary hover:bg-white/[0.04]'
             }`}
           >
-            <Bell className="w-3.5 h-3.5 text-accent" />
-            Notificações
+            <Bell className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'notificacoes' ? 'text-white' : 'text-amber-400'}`} />
+            <span>Notificações</span>
           </button>
         </div>
       </div>

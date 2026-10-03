@@ -22,6 +22,8 @@ import {
   unsubscribeDeviceFromPush,
   sendTestPushNotification,
   getDeviceDescription,
+  isIosDevice,
+  isStandalonePwa,
   type PushPermissionStatus,
 } from '../../lib/push-notifications';
 
@@ -200,13 +202,31 @@ export const NotificationsSettingsTab: React.FC = () => {
           </div>
         )}
 
+        {/* Guia para iPhone / iPad quando aberto fora do modo PWA Instalado */}
+        {isIosDevice() && !isStandalonePwa() && !isSubscribed && (
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-xs text-amber-200">
+            <Smartphone className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1.5">
+              <p className="font-bold text-amber-300">Como ativar notificações no iPhone (iOS 16.4+)</p>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                A Apple só permite notificações push em segundo plano (com o app fechado ou tela bloqueada) quando o Meus Imóveis está instalado na <strong>Tela de Início</strong>.
+              </p>
+              <ol className="text-[11px] text-amber-200/90 list-decimal list-inside space-y-1 pt-0.5">
+                <li>Toque no ícone de <strong>Compartilhar</strong> do Safari (quadrado com seta para cima no rodapé).</li>
+                <li>Role a lista e toque em <strong>"Adicionar à Tela de Início"</strong>.</li>
+                <li>Abra o Meus Imóveis direto do ícone novo na tela inicial e toque em <strong>Ativar notificações</strong>.</li>
+              </ol>
+            </div>
+          </div>
+        )}
+
         {!supported && (
           <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3 text-xs text-amber-300">
             <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-amber-200">Dica para iPhone (iOS 16.4+)</p>
+              <p className="font-semibold text-amber-200">Navegador não suporta Web Push</p>
               <p className="text-[11px] text-amber-300/80 mt-0.5">
-                No iOS, o Web Push funciona quando o app é adicionado à tela inicial. Toque no botão de <strong>Compartilhar</strong> do Safari e selecione <strong>Adicionar à Tela de Início</strong>.
+                Este navegador não implementa as APIs de Push Service Worker nativas. Utilize o Chrome, Edge ou Safari (adicionado à Tela de Início no iOS 16.4+).
               </p>
             </div>
           </div>

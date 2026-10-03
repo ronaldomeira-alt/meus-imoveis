@@ -16,49 +16,51 @@ const RAW_VAPID_PUBLIC_KEY =
 const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
 
 /**
- * Converte chave pública VAPID base64/base64url para Uint8Array exigido pelo PushManager.
- * Implementação pura em TypeScript imune a limitações e erros de atob no Safari / iOS WebKit.
+ * Converte chave pública VAPID base64/base64url para ArrayBuffer puro exigido pelo Safari / WebKit.
  */
-function urlBase64ToUint8Array(base64Url: string): Uint8Array {
+export function urlBase64ToArrayBuffer(base64Url: string): ArrayBuffer {
   const clean = String(base64Url || '').trim().replace(/['"\s\r\n]/g, '');
   if (!clean) {
     throw new Error('Chave pública VAPID não informada ou vazia.');
   }
 
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  const lookup = new Uint8Array(256);
-  for (let i = 0; i < chars.length; i++) {
-    lookup[chars.charCodeAt(i)] = i;
+  const padding = '='.repeat((4 - (clean.length % 4)) % 4);
+  const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const buffer = new ArrayBuffer(rawData.length);
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; i++) {
+    bytes[i] = rawData.charCodeAt(i);
   }
-  // Mapeamentos URL-safe
-  lookup['-'.charCodeAt(0)] = 62;
-  lookup['_'.charCodeAt(0)] = 63;
+  return buffer;
+}
 
-  let len = clean.length;
-  while (len > 0 && clean[len - 1] === '=') {
-    len--;
-  }
+/**
+ * Converte chave pública VAPID base64/base64url para Uint8Array
+ */
+export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
+  const buffer = urlBase64ToArrayBuffer(base64Url);
+  return new Uint8Array(buffer);
+}
 
-  const byteLength = Math.floor((len * 3) / 4);
-  const bytes = new Uint8Array(byteLength);
+/**
+ * Detecta se o dispositivo atual é iOS (iPhone / iPad / iPod)
+ */
+export function isIosDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
 
-  let byteIdx = 0;
-  for (let i = 0; i < len; i += 4) {
-    const c1 = lookup[clean.charCodeAt(i)];
-    const c2 = i + 1 < len ? lookup[clean.charCodeAt(i + 1)] : 0;
-    const c3 = i + 2 < len ? lookup[clean.charCodeAt(i + 2)] : 64;
-    const c4 = i + 3 < len ? lookup[clean.charCodeAt(i + 3)] : 64;
-
-    bytes[byteIdx++] = (c1 << 2) | (c2 >> 4);
-    if (byteIdx < byteLength && c3 !== 64) {
-      bytes[byteIdx++] = ((c2 & 15) << 4) | (c3 >> 2);
-    }
-    if (byteIdx < byteLength && c4 !== 64) {
-      bytes[byteIdx++] = ((c3 & 3) << 6) | c4;
-    }
-  }
-
-  return bytes;
+/**
+ * Detecta se o aplicativo está rodando como PWA instalado (standalone na Tela de Início)
+ */
+export function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    (window.navigator as any).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches
+  );
 }
 
 /**
@@ -75,12 +77,17 @@ export function getDeviceDescription(): string {
   else if (/Windows/i.test(ua)) platform = 'Windows PC';
   else if (/Android/i.test(ua)) platform = 'Android';
 
+  const standalone = isStandalonePwa();
+  if (standalone) {
+    return `${platform} (PWA na Tela de Início)`;
+  }
+
   let browser = '';
   if (/CriOS|Chrome/i.test(ua)) browser = 'Chrome';
   else if (/FxiOS|Firefox/i.test(ua)) browser = 'Firefox';
   else if (/Safari/i.test(ua)) browser = 'Safari';
 
-  return `${platform} (${browser || 'PWA'})`;
+  return `${platform} (${browser || 'Navegador Web'})`;
 }
 
 /**
@@ -160,25 +167,40 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     }
 
     // 3. Cria a subscription com a chave pública VAPID
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+    // 3. Cria a subscription com a chave pública VAPID (ArrayBuffer para WebKit/Safari e Uint8Array para Chrome/Firefox)
+    const keyBuffer = urlBase64ToArrayBuffer(VAPID_PUBLIC_KEY);
+    const keyUint8 = new Uint8Array(keyBuffer);
+
     let subscription = await reg.pushManager.getSubscription();
 
     if (!subscription) {
       try {
+        // Tentativa 1: ArrayBuffer (exigência estrita do WebKit / Safari no iOS 16.4+)
         subscription = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: applicationServerKey as unknown as BufferSource,
+          applicationServerKey: keyBuffer,
         });
-      } catch (subErr: any) {
-        console.warn('Primeira tentativa de subscribe falhou, verificando renovação de chave:', subErr);
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) {
-          await existing.unsubscribe();
+      } catch (firstErr: any) {
+        console.warn('Tentativa com ArrayBuffer falhou, tentando fallback com Uint8Array:', firstErr);
+        try {
+          const existing = await reg.pushManager.getSubscription();
+          if (existing) {
+            await existing.unsubscribe();
+          }
+          subscription = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: keyUint8,
+          });
+        } catch (secondErr: any) {
+          console.error('Falha em ambas as tentativas de subscrição:', secondErr);
+          if (isIosDevice() && !isStandalonePwa()) {
+            return {
+              success: false,
+              error: 'No iPhone, o Web Push só funciona quando o app está adicionado à Tela de Início. Toque no botão de Compartilhar do Safari e escolha "Adicionar à Tela de Início".',
+            };
+          }
+          throw secondErr;
         }
-        subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: applicationServerKey as unknown as BufferSource,
-        });
       }
     }
 
@@ -228,8 +250,17 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
   } catch (err: any) {
     console.error('Erro ao assinar notificações push:', err);
     let msg = err?.message || 'Erro inesperado ao ativar notificações push.';
-    if (msg.includes('invalid characters') || msg.includes('InvalidCharacterError')) {
-      msg = 'Formato de chave não aceito pelo navegador. Certifique-se de que o app está instalado na Tela de Início do iPhone.';
+    if (
+      msg.includes('invalid characters') ||
+      msg.includes('InvalidCharacterError') ||
+      msg.includes('valid P-256 public key') ||
+      msg.includes('not supported')
+    ) {
+      if (isIosDevice() && !isStandalonePwa()) {
+        msg = 'No iPhone, o Web Push requer que o Meus Imóveis esteja adicionado à Tela de Início. Toque no botão Compartilhar do Safari e selecione "Adicionar à Tela de Início".';
+      } else {
+        msg = 'Não foi possível registrar a chave push no navegador. Certifique-se de que o aplicativo está instalado na Tela de Início ou tente recarregar a página.';
+      }
     }
     return { success: false, error: msg };
   }
