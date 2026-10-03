@@ -87,7 +87,7 @@ $nodeCmd = if (Test-Path "$nodeDir\node.exe") { "$nodeDir\node.exe" } elseif (Ge
 $npmCmd = if (Test-Path "$nodeDir\npm.cmd") { "$nodeDir\npm.cmd" } elseif (Get-Command npm -ErrorAction SilentlyContinue) { "npm" } else { "C:\Program Files\nodejs\npm.cmd" }
 
 Set-Location $baseDir
-if (-not (Test-Path "$baseDir\node_modules")) {
+if (-not (Test-Path "$baseDir\node_modules\@supabase")) {
   Write-Host "Instalando dependências via npm..." -ForegroundColor Cyan
   & $npmCmd install --silent
 }
@@ -95,7 +95,7 @@ if (-not (Test-Path "$baseDir\node_modules")) {
 # 6. Registra o Agendador de Tarefas do Windows (09:00 e 19:00)
 Write-Host "⏰ Registrando Agendador de Tarefas do Windows..." -ForegroundColor Yellow
 $taskName = "MeusImoveis-BotCaptador"
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -Command ""Set-Location '$baseDir'; & '$nodeCmd' --use-system-ca scripts/olx-executor.mjs --run-round >> '$logsDir\bot-scheduler.log' 2>&1"""
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -Command ""Set-Location '$baseDir'; & '$nodeCmd' scripts/olx-executor.mjs --run-round >> '$logsDir\bot-scheduler.log' 2>&1"""
 
 $trigger1 = New-ScheduledTaskTrigger -Daily -At "09:00"
 $trigger2 = New-ScheduledTaskTrigger -Daily -At "19:00"
@@ -109,6 +109,6 @@ Write-Host "✅ Tarefa '$taskName' agendada para 09:00 e 19:00 todos os dias!" -
 
 # 7. Executa teste de rodada imediatamente para validar
 Write-Host "`n🧪 Testando execução do Bot agora..." -ForegroundColor Cyan
-& $nodeCmd --use-system-ca scripts/olx-executor.mjs --run-round
+& $nodeCmd scripts/olx-executor.mjs --run-round
 
 Write-Host "`n🎉 TUDO PRONTO! O Bot está 100% autônomo e configurado na VM." -ForegroundColor Green
