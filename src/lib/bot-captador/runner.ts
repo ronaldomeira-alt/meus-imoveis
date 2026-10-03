@@ -37,9 +37,8 @@ export interface RoundExecutionReport {
   discoveredCandidates?: DiscoveredAdCandidate[];
 }
 
-// ── TRAVA DE SEGURANÇA ABSOLUTA DE ENVIO REAL ─────────────────────────────────
-// Garante que NENHUM envio real automático ou manual dispare mensagens nesta versão.
-export const REAL_SENDING_ENABLED = false;
+// ── TRAVA DE SEGURANÇA DE ENVIO REAL (LIBERADA PELO USUÁRIO) ──────────────────
+export const REAL_SENDING_ENABLED = true;
 
 export async function runBotRound(options: {
   triggerType: TriggerType;

@@ -7,7 +7,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { createClient } from '@supabase/supabase-js';
-import { renderMessageTemplate } from '../src/lib/bot-captador/engine.ts';
+import { renderMessageTemplate, calculateNextRoundAt } from '../src/lib/bot-captador/engine.ts';
 
 // Carrega variáveis do .env usando o método nativo do Node.js
 if (existsSync('.env')) {
@@ -61,12 +61,21 @@ function getChromeWsEndpoint() {
  * Função utilitária para conectar ao Chrome com desconexão segura
  */
 async function withChrome(action) {
-  const wsUrl = getChromeWsEndpoint();
-  console.log(`🔌 Conectando ao Chrome via WebSocket (${wsUrl})...`);
-  const browser = await puppeteer.connect({
-    browserWSEndpoint: wsUrl,
-    defaultViewport: null,
-  });
+  let browser;
+  try {
+    const wsUrl = getChromeWsEndpoint();
+    console.log(`🔌 Conectando ao Chrome via WebSocket (${wsUrl})...`);
+    browser = await puppeteer.connect({
+      browserWSEndpoint: wsUrl,
+      defaultViewport: null,
+    });
+  } catch (err) {
+    console.log(`⚠️ Tentando conexão direta via http://127.0.0.1:9222...`);
+    browser = await puppeteer.connect({
+      browserURL: 'http://127.0.0.1:9222',
+      defaultViewport: null,
+    });
+  }
   console.log('✅ Conectado ao Google Chrome com sucesso.');
 
   try {
@@ -604,11 +613,119 @@ async function sendSingleApproach(targetCaptureId) {
 }
 
 /**
+ * MODO 4: RODADA AUTOMATIZADA COMPLETA (Varredura + Abordagens Reais + Sincronização)
+ * Executado pontualmente ou via agendador do Windows às 09:00 e 19:00.
+ */
+async function executeFullRound() {
+  console.log(`\n======================================================`);
+  console.log(`🚀 INICIANDO RODADA OFICIAL DO BOT CAPTADOR (${new Date().toLocaleString('pt-BR')})`);
+  console.log(`======================================================`);
+
+  // 1. Verifica se o Bot está ativo no banco
+  const { data: accounts } = await supabase.from('accounts').select('id').limit(1);
+  if (!accounts || accounts.length === 0) {
+    console.error('❌ Nenhuma conta identificada no banco.');
+    return;
+  }
+  const accountId = accounts[0].id;
+
+  const { data: settings } = await supabase
+    .from('bot_settings')
+    .select('*')
+    .eq('account_id', accountId)
+    .single();
+
+  if (!settings || !settings.is_active) {
+    console.log('⏸️ Bot Captador está PAUSADO no painel. Nenhuma ação será realizada.');
+    return;
+  }
+
+  // 2. Busca campanhas ativas
+  const { data: campaigns } = await supabase
+    .from('bot_campaigns')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('is_active', true);
+
+  if (!campaigns || campaigns.length === 0) {
+    console.log('ℹ️ Nenhuma campanha ativa configurada.');
+    return;
+  }
+
+  // 3. Verifica novas respostas no chat
+  console.log('\n📬 [1/3] Verificando respostas pendentes no chat...');
+  try {
+    await checkChatResponses();
+  } catch (err) {
+    console.warn('⚠️ Aviso ao checar respostas:', err?.message || err);
+  }
+
+  // 4. Executa a varredura real na OLX
+  console.log('\n🔍 [2/3] Executando varredura de anúncios particulares...');
+  await runRealScan();
+
+  // 5. Processa os envios reais para a fila (QUEUED)
+  console.log('\n💬 [3/3] Processando fila de abordagens...');
+  const { data: queuedList } = await supabase
+    .from('bot_captures')
+    .select('id, external_id, title, campaign_type')
+    .eq('account_id', accountId)
+    .eq('status', 'QUEUED')
+    .order('created_at', { ascending: true });
+
+  const maxTotalLimit = campaigns.reduce((acc, c) => acc + (c.max_contacts_per_round || 10), 0);
+  const toProcess = (queuedList || []).slice(0, maxTotalLimit);
+
+  console.log(`📋 Total na fila: ${queuedList?.length || 0} | Selecionados para esta rodada (limite ${maxTotalLimit}): ${toProcess.length}`);
+
+  let sentCount = 0;
+  for (const item of toProcess) {
+    console.log(`\n➡️ Processando [${sentCount + 1}/${toProcess.length}]: ${item.title} (ID: ${item.external_id})`);
+    try {
+      await sendSingleApproach(item.id);
+      sentCount++;
+      // Intervalo humanizado de 7 a 12 segundos entre disparos para segurança antiban
+      if (sentCount < toProcess.length) {
+        const delay = Math.floor(Math.random() * 5000) + 7000;
+        console.log(`⏳ Aguardando ${Math.round(delay / 1000)}s antes do próximo envio (simulação de comportamento humano)...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    } catch (err) {
+      console.error(`❌ Erro no envio para ${item.external_id}:`, err?.message || err);
+    }
+  }
+
+  // 6. Atualiza horários e resumo em bot_settings
+  const now = new Date();
+  const nextRoundIso = calculateNextRoundAt(campaigns, { referenceDate: now });
+  const summary = `${sentCount} abordagem(ns) realizada(s) na rodada.`;
+
+  await supabase
+    .from('bot_settings')
+    .update({
+      last_round_at: now.toISOString(),
+      last_round_summary: summary,
+      next_round_at: nextRoundIso,
+      health_status: 'active',
+      health_reason: null,
+    })
+    .eq('account_id', accountId);
+
+  console.log(`\n✅ Rodada concluída com sucesso! ${summary}`);
+  console.log(`📅 Próxima rodada agendada para: ${new Date(nextRoundIso).toLocaleString('pt-BR')}`);
+}
+
+/**
  * CLI DISPATCHER
  */
 const arg = process.argv[2];
 
-if (arg === '--scan') {
+if (arg === '--run-round') {
+  executeFullRound().catch((err) => {
+    console.error('❌ Falha na execução da rodada completa:', err);
+    process.exit(1);
+  });
+} else if (arg === '--scan') {
   runRealScan().catch((err) => {
     console.error('❌ Falha na execução do scan:', err);
     process.exit(1);
@@ -626,6 +743,9 @@ if (arg === '--scan') {
 } else {
   console.log(`
 Uso do Executor Real:
+  node --use-system-ca scripts/olx-executor.mjs --run-round
+    -> Executa rodada completa (Verifica respostas + Varredura real + Disparo humanizado com pausas e Tombstones).
+
   node --use-system-ca scripts/olx-executor.mjs --scan
     -> Executa busca real de anúncios na OLX usando os filtros da campanha e enfileira (ZERO mensagens).
 

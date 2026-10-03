@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "bot:round": "node --use-system-ca scripts/olx-executor.mjs --run-round",
     "bot:scan": "node --use-system-ca scripts/olx-executor.mjs --scan",
     "bot:responses": "node --use-system-ca scripts/olx-executor.mjs --check-responses"
   },
