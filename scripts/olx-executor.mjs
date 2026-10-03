@@ -90,6 +90,22 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function getActiveAccountId() {
+  if (process.env.MEUS_IMOVEIS_ACCOUNT_ID) {
+    return process.env.MEUS_IMOVEIS_ACCOUNT_ID;
+  }
+  const { data: activeSettings } = await supabase
+    .from('bot_settings')
+    .select('account_id')
+    .eq('is_active', true)
+    .limit(1);
+  if (activeSettings && activeSettings.length > 0) {
+    return activeSettings[0].account_id;
+  }
+  const { data: accounts } = await supabase.from('accounts').select('id').limit(1);
+  return accounts?.[0]?.id || null;
+}
+
 // Lista permanente de anúncios já contatados previamente pelo corretor (Regra Absoluta de Bloqueio)
 export const MANUALLY_EXCLUDED_EXTERNAL_IDS = new Set([
   // Venda (4 anúncios)
@@ -183,12 +199,11 @@ function generateFingerprint(ad) {
  */
 async function runRealScan() {
   console.log('📡 Buscando conta e campanhas ativas no Supabase...');
-  const { data: accounts } = await supabase.from('accounts').select('id').limit(1);
-  if (!accounts || accounts.length === 0) {
-    console.error('❌ Nenhuma conta encontrada no Supabase.');
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
+    console.error('❌ Nenhuma conta ativa encontrada no Supabase.');
     return;
   }
-  const accountId = accounts[0].id;
 
   const { data: campaigns } = await supabase
     .from('bot_campaigns')
@@ -686,12 +701,11 @@ async function executeFullRound() {
   console.log(`======================================================`);
 
   // 1. Verifica se o Bot está ativo no banco
-  const { data: accounts } = await supabase.from('accounts').select('id').limit(1);
-  if (!accounts || accounts.length === 0) {
+  const accountId = await getActiveAccountId();
+  if (!accountId) {
     console.error('❌ Nenhuma conta identificada no banco.');
     return;
   }
-  const accountId = accounts[0].id;
 
   const { data: settings } = await supabase
     .from('bot_settings')
