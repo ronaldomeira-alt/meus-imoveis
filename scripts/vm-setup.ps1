@@ -18,6 +18,21 @@ if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Fo
 
 Write-Host "📁 Diretório base configurado em: $baseDir" -ForegroundColor Green
 
+# 1.1 Garante que o Node.js esteja instalado no sistema
+$nodePath = "C:\Program Files\nodejs\node.exe"
+if (-not (Test-Path $nodePath) -and -not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host "⚙️ Node.js não detectado. Baixando instalador oficial Node.js v22 LTS..." -ForegroundColor Yellow
+  $nodeMsi = "$env:TEMP\node-v22.msi"
+  Invoke-WebRequest -Uri "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi" -OutFile $nodeMsi -UseBasicParsing
+  Write-Host "📦 Instalando Node.js silenciosamente na máquina virtual..." -ForegroundColor Yellow
+  Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn /norestart" -Wait
+  Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
+  Write-Host "✅ Node.js instalado com sucesso!" -ForegroundColor Green
+}
+
+# Atualiza PATH na sessão atual
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\nodejs"
+
 # 2. Configura atalho do Chrome com porta de depuração remota e auto-start
 Write-Host "🌐 Configurando atalhos do Google Chrome..." -ForegroundColor Yellow
 $wsh = New-Object -ComObject WScript.Shell
@@ -62,16 +77,19 @@ Write-Host "📦 Verificando dependências do Node.js..." -ForegroundColor Yello
 }
 '@ | Set-Content -Path "$baseDir\package.json" -Encoding utf8
 
+$nodeCmd = if (Get-Command node -ErrorAction SilentlyContinue) { "node" } else { "C:\Program Files\nodejs\node.exe" }
+$npmCmd = if (Get-Command npm -ErrorAction SilentlyContinue) { "npm" } else { "C:\Program Files\nodejs\npm.cmd" }
+
 Set-Location $baseDir
 if (-not (Test-Path "$baseDir\node_modules")) {
   Write-Host "Instalando dependências via npm..." -ForegroundColor Cyan
-  npm install --silent
+  & $npmCmd install --silent
 }
 
 # 6. Registra o Agendador de Tarefas do Windows (09:00 e 19:00)
 Write-Host "⏰ Registrando Agendador de Tarefas do Windows..." -ForegroundColor Yellow
 $taskName = "MeusImoveis-BotCaptador"
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -Command ""Set-Location '$baseDir'; node --use-system-ca scripts/olx-executor.mjs --run-round >> '$logsDir\bot-scheduler.log' 2>&1"""
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -Command ""Set-Location '$baseDir'; & '$nodeCmd' --use-system-ca scripts/olx-executor.mjs --run-round >> '$logsDir\bot-scheduler.log' 2>&1"""
 
 $trigger1 = New-ScheduledTaskTrigger -Daily -At "09:00"
 $trigger2 = New-ScheduledTaskTrigger -Daily -At "19:00"
@@ -85,6 +103,6 @@ Write-Host "✅ Tarefa '$taskName' agendada para 09:00 e 19:00 todos os dias!" -
 
 # 7. Executa teste de rodada imediatamente para validar
 Write-Host "`n🧪 Testando execução do Bot agora..." -ForegroundColor Cyan
-node --use-system-ca scripts/olx-executor.mjs --run-round
+& $nodeCmd --use-system-ca scripts/olx-executor.mjs --run-round
 
 Write-Host "`n🎉 TUDO PRONTO! O Bot está 100% autônomo e configurado na VM." -ForegroundColor Green
