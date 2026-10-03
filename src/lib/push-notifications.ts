@@ -16,7 +16,9 @@ const RAW_VAPID_PUBLIC_KEY =
 const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
 
 /**
- * Converte chave pública VAPID base64/base64url para Uint8Array puro (BufferSource exigido pelo PushManager e WebKit).
+ * Converte chave pública VAPID base64/base64url para Uint8Array puro.
+ * Implementação direta via tabela de lookup sem atob() para imunidade total contra
+ * 'DOMException: The string contains invalid characters' do Safari / iOS WebKit.
  */
 export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
   const clean = String(base64Url || '').trim().replace(/['"\s\r\n]/g, '');
@@ -24,14 +26,39 @@ export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
     throw new Error('Chave pública VAPID não informada ou vazia.');
   }
 
-  const padding = '='.repeat((4 - (clean.length % 4)) % 4);
-  const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) {
-    outputArray[i] = rawData.charCodeAt(i);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) {
+    lookup[chars.charCodeAt(i)] = i;
   }
-  return outputArray;
+  lookup['-'.charCodeAt(0)] = 62;
+  lookup['_'.charCodeAt(0)] = 63;
+
+  let len = clean.length;
+  while (len > 0 && clean[len - 1] === '=') {
+    len--;
+  }
+
+  const byteLength = Math.floor((len * 3) / 4);
+  const bytes = new Uint8Array(byteLength);
+
+  let byteIdx = 0;
+  for (let i = 0; i < len; i += 4) {
+    const c1 = lookup[clean.charCodeAt(i)];
+    const c2 = i + 1 < len ? lookup[clean.charCodeAt(i + 1)] : 0;
+    const c3 = i + 2 < len ? lookup[clean.charCodeAt(i + 2)] : 64;
+    const c4 = i + 3 < len ? lookup[clean.charCodeAt(i + 3)] : 64;
+
+    bytes[byteIdx++] = (c1 << 2) | (c2 >> 4);
+    if (byteIdx < byteLength && c3 !== 64) {
+      bytes[byteIdx++] = ((c2 & 15) << 4) | (c3 >> 2);
+    }
+    if (byteIdx < byteLength && c4 !== 64) {
+      bytes[byteIdx++] = ((c3 & 3) << 6) | c4;
+    }
+  }
+
+  return bytes;
 }
 
 /**
