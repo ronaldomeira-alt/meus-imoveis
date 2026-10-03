@@ -16,9 +16,9 @@ const RAW_VAPID_PUBLIC_KEY =
 const VAPID_PUBLIC_KEY = String(RAW_VAPID_PUBLIC_KEY).trim().replace(/['"\s\r\n]/g, '');
 
 /**
- * Converte chave pública VAPID base64/base64url para ArrayBuffer puro exigido pelo Safari / WebKit.
+ * Converte chave pública VAPID base64/base64url para Uint8Array puro (BufferSource exigido pelo PushManager e WebKit).
  */
-export function urlBase64ToArrayBuffer(base64Url: string): ArrayBuffer {
+export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
   const clean = String(base64Url || '').trim().replace(/['"\s\r\n]/g, '');
   if (!clean) {
     throw new Error('Chave pública VAPID não informada ou vazia.');
@@ -26,21 +26,35 @@ export function urlBase64ToArrayBuffer(base64Url: string): ArrayBuffer {
 
   const padding = '='.repeat((4 - (clean.length % 4)) % 4);
   const base64 = (clean + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  const buffer = new ArrayBuffer(rawData.length);
-  const bytes = new Uint8Array(buffer);
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; i++) {
-    bytes[i] = rawData.charCodeAt(i);
+    outputArray[i] = rawData.charCodeAt(i);
   }
-  return buffer;
+  return outputArray;
 }
 
 /**
- * Converte chave pública VAPID base64/base64url para Uint8Array
+ * Converte chave pública VAPID base64/base64url para ArrayBuffer
  */
-export function urlBase64ToUint8Array(base64Url: string): Uint8Array {
-  const buffer = urlBase64ToArrayBuffer(base64Url);
-  return new Uint8Array(buffer);
+export function urlBase64ToArrayBuffer(base64Url: string): ArrayBuffer {
+  return urlBase64ToUint8Array(base64Url).buffer as ArrayBuffer;
+}
+
+/**
+ * Verifica se a chave pública de uma subscription corresponde à chave pública VAPID atual
+ */
+export function isSubscriptionKeyMatching(
+  sub: PushSubscription | null | undefined,
+  targetUint8: Uint8Array
+): boolean {
+  if (!sub || !sub.options || !sub.options.applicationServerKey) return true;
+  const existingKeyBytes = new Uint8Array(sub.options.applicationServerKey);
+  if (existingKeyBytes.length !== targetUint8.length) return false;
+  for (let i = 0; i < existingKeyBytes.length; i++) {
+    if (existingKeyBytes[i] !== targetUint8[i]) return false;
+  }
+  return true;
 }
 
 /**
@@ -123,14 +137,29 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 }
 
 /**
- * Verifica se este dispositivo já possui uma subscription push ativa
+ * Verifica se este dispositivo já possui uma subscription push ativa e válida
  */
 export async function getActiveSubscription(): Promise<PushSubscription | null> {
   if (!isPushSupported()) return null;
 
   try {
     const reg = await navigator.serviceWorker.ready;
-    return await reg.pushManager.getSubscription();
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return null;
+
+    // Se houver subscrição com chave antiga diferente da VAPID atual, limpa para evitar falha no envio
+    const currentKeyUint8 = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+    if (sub.options?.applicationServerKey && !isSubscriptionKeyMatching(sub, currentKeyUint8)) {
+      console.warn('Subscription existente usa chave VAPID diferente. Desinscrevendo para renovação limpa...');
+      try {
+        await sub.unsubscribe();
+      } catch {
+        // silencioso
+      }
+      return null;
+    }
+
+    return sub;
   } catch (err) {
     console.error('Erro ao buscar subscription ativa:', err);
     return null;
@@ -148,7 +177,7 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
     };
   }
 
-  // 1. Solicita permissão explícita
+  // 1. Solicita permissão explícita (ação de gesto direto do usuário)
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     return {
@@ -160,48 +189,33 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
   }
 
   try {
-    // 2. Garante o Service Worker
-    const reg = await registerServiceWorker();
+    // 2. Garante o Service Worker pronto
+    const reg = await navigator.serviceWorker.ready;
     if (!reg) {
       return { success: false, error: 'Não foi possível inicializar o Service Worker.' };
     }
 
-    // 3. Cria a subscription com a chave pública VAPID
-    // 3. Cria a subscription com a chave pública VAPID (ArrayBuffer para WebKit/Safari e Uint8Array para Chrome/Firefox)
-    const keyBuffer = urlBase64ToArrayBuffer(VAPID_PUBLIC_KEY);
-    const keyUint8 = new Uint8Array(keyBuffer);
+    // 3. Converte chave pública VAPID para Uint8Array
+    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
 
     let subscription = await reg.pushManager.getSubscription();
 
-    if (!subscription) {
+    // Se houver assinatura pré-existente com chave desatualizada, desinscreve primeiro
+    if (subscription && subscription.options?.applicationServerKey && !isSubscriptionKeyMatching(subscription, applicationServerKey)) {
+      console.warn('Subscription com chave desatualizada detectada. Desinscrevendo antes de criar nova...');
       try {
-        // Tentativa 1: ArrayBuffer (exigência estrita do WebKit / Safari no iOS 16.4+)
-        subscription = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: keyBuffer,
-        });
-      } catch (firstErr: any) {
-        console.warn('Tentativa com ArrayBuffer falhou, tentando fallback com Uint8Array:', firstErr);
-        try {
-          const existing = await reg.pushManager.getSubscription();
-          if (existing) {
-            await existing.unsubscribe();
-          }
-          subscription = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: keyUint8,
-          });
-        } catch (secondErr: any) {
-          console.error('Falha em ambas as tentativas de subscrição:', secondErr);
-          if (isIosDevice() && !isStandalonePwa()) {
-            return {
-              success: false,
-              error: 'No iPhone, o Web Push só funciona quando o app está adicionado à Tela de Início. Toque no botão de Compartilhar do Safari e escolha "Adicionar à Tela de Início".',
-            };
-          }
-          throw secondErr;
-        }
+        await subscription.unsubscribe();
+      } catch {
+        // segue para tentar nova subscrição
       }
+      subscription = null;
+    }
+
+    if (!subscription) {
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as unknown as BufferSource,
+      });
     }
 
     const subJson = subscription.toJSON();
@@ -250,17 +264,10 @@ export async function subscribeDeviceToPush(): Promise<{ success: boolean; error
   } catch (err: any) {
     console.error('Erro ao assinar notificações push:', err);
     let msg = err?.message || 'Erro inesperado ao ativar notificações push.';
-    if (
-      msg.includes('invalid characters') ||
-      msg.includes('InvalidCharacterError') ||
-      msg.includes('valid P-256 public key') ||
-      msg.includes('not supported')
-    ) {
-      if (isIosDevice() && !isStandalonePwa()) {
-        msg = 'No iPhone, o Web Push requer que o Meus Imóveis esteja adicionado à Tela de Início. Toque no botão Compartilhar do Safari e selecione "Adicionar à Tela de Início".';
-      } else {
-        msg = 'Não foi possível registrar a chave push no navegador. Certifique-se de que o aplicativo está instalado na Tela de Início ou tente recarregar a página.';
-      }
+    if (isIosDevice() && !isStandalonePwa()) {
+      msg = 'No iPhone, o Web Push requer que o Meus Imóveis esteja adicionado à Tela de Início. Toque no botão Compartilhar do Safari e selecione "Adicionar à Tela de Início".';
+    } else if (isIosDevice() && isStandalonePwa()) {
+      msg = `Não foi possível ativar notificações no iPhone (${msg}). Dica: feche o aplicativo da Tela de Início e abra-o novamente para restabelecer a conexão push do sistema iOS.`;
     }
     return { success: false, error: msg };
   }

@@ -177,15 +177,55 @@ export const NotificationsSettingsTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Informação do Dispositivo */}
-        <div className="p-3.5 rounded-xl bg-surface-1 border border-line-subtle flex items-center justify-between text-xs text-ink-secondary">
-          <div className="flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-accent" />
-            <span>Dispositivo detectado: <strong className="text-ink-primary">{deviceName}</strong></span>
+        {/* Informações do Dispositivo & Criptografia (Layout Responsivo e Alinhado ao Design System) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Card 1: Dispositivo Detectado */}
+          <div className="p-3.5 rounded-xl bg-surface-1 border border-line-subtle flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-accent-soft text-accent border border-accent/20 flex items-center justify-center shrink-0">
+                <Smartphone className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider block">
+                  Dispositivo Detectado
+                </span>
+                <span className="text-xs font-bold text-ink-primary truncate block mt-0.5">
+                  {deviceName.replace(/\s*\(PWA na Tela de Início\)/, '').replace(/\s*\(Navegador Web\)/, '')}
+                </span>
+              </div>
+            </div>
+
+            {isStandalonePwa() ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                PWA Instalado
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium bg-surface-2 text-ink-secondary border border-line-subtle shrink-0">
+                Navegador Web
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-ink-muted">
-            <ShieldCheck className="w-3.5 h-3.5 text-accent" />
-            <span>Web Push VAPID Seguro</span>
+
+          {/* Card 2: Segurança & Criptografia VAPID */}
+          <div className="p-3.5 rounded-xl bg-surface-1 border border-line-subtle flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider block">
+                  Segurança & Criptografia
+                </span>
+                <span className="text-xs font-bold text-ink-primary truncate block mt-0.5">
+                  Web Push VAPID Seguro
+                </span>
+              </div>
+            </div>
+
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/25 shrink-0">
+              P-256 Nativo
+            </span>
           </div>
         </div>
 
@@ -233,7 +273,7 @@ export const NotificationsSettingsTab: React.FC = () => {
         )}
 
         {statusMessage && (
-          <div className={`p-3.5 rounded-xl text-xs flex items-center gap-2 border ${
+          <div className={`p-3.5 rounded-xl text-xs flex items-start sm:items-center gap-3 border ${
             statusMessage.type === 'success'
               ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
               : statusMessage.type === 'error'
@@ -241,24 +281,24 @@ export const NotificationsSettingsTab: React.FC = () => {
               : 'bg-surface-2 text-ink-secondary border-line-subtle'
           }`}>
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5 sm:mt-0" />
             ) : statusMessage.type === 'error' ? (
-              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5 sm:mt-0" />
             ) : (
-              <Info className="w-4 h-4 text-ink-secondary flex-shrink-0" />
+              <Info className="w-4 h-4 text-ink-secondary flex-shrink-0 mt-0.5 sm:mt-0" />
             )}
-            <span>{statusMessage.text}</span>
+            <span className="leading-relaxed">{statusMessage.text}</span>
           </div>
         )}
 
         {/* ── BOTÕES DE AÇÃO ── */}
-        <div className="flex flex-wrap items-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
           {!isSubscribed ? (
             <button
               type="button"
               onClick={handleSubscribe}
               disabled={actionLoading || permission === 'denied' || !supported}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white flex items-center gap-2 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {actionLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -273,7 +313,7 @@ export const NotificationsSettingsTab: React.FC = () => {
                 type="button"
                 onClick={handleSendTest}
                 disabled={actionLoading}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
+                className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 rounded-xl text-xs font-bold bg-accent hover:bg-accent-hover text-white flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99] disabled:opacity-50 cursor-pointer"
               >
                 {actionLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -287,7 +327,7 @@ export const NotificationsSettingsTab: React.FC = () => {
                 type="button"
                 onClick={handleUnsubscribe}
                 disabled={actionLoading}
-                className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-surface-1 hover:bg-surface-2 text-ink-secondary hover:text-rose-400 border border-line-subtle hover:border-rose-500/30 flex items-center gap-2 transition-all disabled:opacity-50"
+                className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-semibold bg-surface-1 hover:bg-surface-2 text-ink-secondary hover:text-rose-400 border border-line-subtle hover:border-rose-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
               >
                 <BellOff className="w-4 h-4" />
                 <span>Desativar notificações deste aparelho</span>

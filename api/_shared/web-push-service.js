@@ -77,8 +77,13 @@ export async function sendPushToAccount(accountId, payload, options = {}) {
       } catch (err) {
         failedCount++;
         const statusCode = err?.statusCode;
-        // 404 (Not Found) ou 410 (Gone): dispositivo desinstalou ou revogou a permissão
-        if (statusCode === 404 || statusCode === 410) {
+        const errBody = typeof err?.body === 'string' ? err.body : JSON.stringify(err?.body || '');
+        // 404 (Not Found), 410 (Gone) ou 400 VapidPkHashMismatch: dispositivo desinstalou, revogou ou chave VAPID antiga
+        if (
+          statusCode === 404 ||
+          statusCode === 410 ||
+          (statusCode === 400 && errBody.includes('VapidPkHashMismatch'))
+        ) {
           expiredEndpoints.push(sub.endpoint);
         } else {
           console.error(`Falha no envio push para dispositivo ${sub.device_name || sub.endpoint}:`, err?.message || err);
