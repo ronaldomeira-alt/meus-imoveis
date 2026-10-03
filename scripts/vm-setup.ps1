@@ -18,20 +18,26 @@ if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Path $logsDir -Fo
 
 Write-Host "📁 Diretório base configurado em: $baseDir" -ForegroundColor Green
 
-# 1.1 Garante que o Node.js esteja instalado no sistema
-$nodePath = "C:\Program Files\nodejs\node.exe"
-if (-not (Test-Path $nodePath) -and -not (Get-Command node -ErrorAction SilentlyContinue)) {
-  Write-Host "⚙️ Node.js não detectado. Baixando instalador oficial Node.js v22 LTS..." -ForegroundColor Yellow
-  $nodeMsi = "$env:TEMP\node-v22.msi"
-  Invoke-WebRequest -Uri "https://nodejs.org/dist/v22.14.0/node-v22.14.0-x64.msi" -OutFile $nodeMsi -UseBasicParsing
-  Write-Host "📦 Instalando Node.js silenciosamente na máquina virtual..." -ForegroundColor Yellow
-  Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn /norestart" -Wait
-  Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
-  Write-Host "✅ Node.js instalado com sucesso!" -ForegroundColor Green
-}
+# 1.1 Garante que o Node.js portátil esteja instalado no diretório do projeto
+$nodeDir = "$baseDir\node"
+$nodeCmd = "$nodeDir\node.exe"
+$npmCmd = "$nodeDir\npm.cmd"
 
-# Atualiza PATH na sessão atual
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") + ";C:\Program Files\nodejs"
+if (-not (Test-Path $nodeCmd)) {
+  Write-Host "⚙️ Baixando Node.js v22 LTS portátil (não requer administrador)..." -ForegroundColor Yellow
+  $nodeZip = "$baseDir\node.zip"
+  Invoke-WebRequest -Uri "https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-x64.zip" -OutFile $nodeZip -UseBasicParsing
+  Write-Host "📦 Extraindo Node.js..." -ForegroundColor Yellow
+  $tempExtract = "$baseDir\node_temp"
+  if (Test-Path $tempExtract) { Remove-Item $tempExtract -Recurse -Force }
+  Expand-Archive -Path $nodeZip -DestinationPath $tempExtract -Force
+  if (-not (Test-Path $nodeDir)) { New-Item -ItemType Directory -Path $nodeDir -Force | Out-Null }
+  $inner = Get-ChildItem $tempExtract | Select-Object -First 1
+  Copy-Item "$($inner.FullName)\*" -Destination $nodeDir -Recurse -Force
+  Remove-Item $tempExtract -Recurse -Force
+  Remove-Item $nodeZip -Force
+  Write-Host "✅ Node.js v22 LTS configurado com sucesso em: $nodeDir" -ForegroundColor Green
+}
 
 # 2. Configura atalho do Chrome com porta de depuração remota e auto-start
 Write-Host "🌐 Configurando atalhos do Google Chrome..." -ForegroundColor Yellow
@@ -77,8 +83,8 @@ Write-Host "📦 Verificando dependências do Node.js..." -ForegroundColor Yello
 }
 '@ | Set-Content -Path "$baseDir\package.json" -Encoding utf8
 
-$nodeCmd = if (Get-Command node -ErrorAction SilentlyContinue) { "node" } else { "C:\Program Files\nodejs\node.exe" }
-$npmCmd = if (Get-Command npm -ErrorAction SilentlyContinue) { "npm" } else { "C:\Program Files\nodejs\npm.cmd" }
+$nodeCmd = if (Test-Path "$nodeDir\node.exe") { "$nodeDir\node.exe" } elseif (Get-Command node -ErrorAction SilentlyContinue) { "node" } else { "C:\Program Files\nodejs\node.exe" }
+$npmCmd = if (Test-Path "$nodeDir\npm.cmd") { "$nodeDir\npm.cmd" } elseif (Get-Command npm -ErrorAction SilentlyContinue) { "npm" } else { "C:\Program Files\nodejs\npm.cmd" }
 
 Set-Location $baseDir
 if (-not (Test-Path "$baseDir\node_modules")) {
