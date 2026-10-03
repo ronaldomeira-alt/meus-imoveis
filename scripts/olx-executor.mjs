@@ -7,7 +7,61 @@
 import { readFileSync, existsSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { createClient } from '@supabase/supabase-js';
-import { renderMessageTemplate, calculateNextRoundAt } from '../src/lib/bot-captador/engine.ts';
+// Funções de template e agendamento inlinadas para independência total de runtime JS
+export function renderMessageTemplate(templateContent, variables) {
+  let text = templateContent || '';
+  if (variables?.primeiro_nome) {
+    text = text.replace(/\{primeiro_nome\}/gi, variables.primeiro_nome.trim());
+  }
+  if (variables?.bairro) {
+    text = text.replace(/\{bairro\}/gi, variables.bairro.trim());
+  }
+  return text;
+}
+
+export function calculateNextRoundAt(campaigns, options) {
+  const referenceDate = options?.referenceDate || new Date();
+  const fallbackTimes = options?.fallbackTimes || ['09:00', '19:00'];
+  const activeCampaigns = (campaigns || []).filter((c) => c.is_active !== false);
+  const targetCampaigns = activeCampaigns.length > 0 ? activeCampaigns : campaigns || [];
+  const rawTimes = targetCampaigns.flatMap((c) => {
+    const times = c.schedule_times || [];
+    const count = c.rounds_per_day === 1 ? 1 : 2;
+    return times.slice(0, count);
+  });
+  const validTimes = Array.from(
+    new Set(
+      rawTimes
+        .map((t) => (typeof t === 'string' ? t.trim() : ''))
+        .filter((t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t))
+    )
+  ).sort();
+  const timesToUse = validTimes.length > 0 ? validTimes : fallbackTimes;
+  const brasiliaDateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const todayStr = brasiliaDateFormatter.format(referenceDate);
+  const candidates = [];
+  for (const time of timesToUse) {
+    const todayCandidate = new Date(`${todayStr}T${time}:00-03:00`);
+    if (todayCandidate.getTime() > referenceDate.getTime() + 60 * 1000) {
+      candidates.push(todayCandidate);
+    }
+  }
+  if (candidates.length === 0) {
+    const tomorrowRef = new Date(referenceDate.getTime() + 24 * 60 * 60 * 1000);
+    const tomorrowStr = brasiliaDateFormatter.format(tomorrowRef);
+    for (const time of timesToUse) {
+      candidates.push(new Date(`${tomorrowStr}T${time}:00-03:00`));
+    }
+  }
+  candidates.sort((a, b) => a.getTime() - b.getTime());
+  const nextTarget = candidates[0] || new Date(referenceDate.getTime() + 12 * 60 * 60 * 1000);
+  return nextTarget.toISOString();
+}
 
 // Carrega variáveis do .env usando o método nativo do Node.js
 if (existsSync('.env')) {
