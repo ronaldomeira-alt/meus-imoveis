@@ -148,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* ── Rodapé: Perfil do Usuário ── */}
-        <div className="p-2.5 border-t border-line-subtle overflow-hidden">
+        <div className="app-sidebar-footer p-2.5 border-t border-line-subtle overflow-hidden">
           <button
             type="button"
             onClick={onToggleTheme}

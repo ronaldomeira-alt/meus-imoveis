@@ -201,8 +201,23 @@ export function createAgentHandler(
           return json(await listCentral(ctx, body.include_previews === true));
         case 'conversation':
           return json(await getConversation(ctx, body.bot_id));
-        case 'chat':
-          return json(await chat(ctx, body));
+        case 'chat': {
+          if(body.stream !== true)return json(await chat(ctx,body));
+          const encoder=new TextEncoder();let closed=false;
+          const stream=new ReadableStream({
+            async start(controller) {
+              const send=value=>{if(!closed)controller.enqueue(encoder.encode(JSON.stringify(value)+'\n'));};
+              const heartbeat=setInterval(()=>send({type:'ping'}),10000);
+              try {
+                const result=await chat({...ctx,onText:text=>send({type:'text',text})},body);
+                send({type:'done',...result});
+              }catch(error){send({type:'error',error:publicError(error)});}
+              finally{clearInterval(heartbeat);if(!closed){closed=true;controller.close();}}
+            },
+            cancel(){closed=true;},
+          });
+          return new Response(stream,{headers:{...headers,'Content-Type':'application/x-ndjson; charset=utf-8','X-Content-Type-Options':'nosniff'}});
+        }
         case 'create_bot':
           return json(await createBot(ctx, body.bot || {}));
         case 'approval':

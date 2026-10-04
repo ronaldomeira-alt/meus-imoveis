@@ -1,4 +1,5 @@
 import { AgentError } from './core.js';
+import { readCompletionStream } from './completion-stream.js';
 
 const CONFIG = {
   deepinfra: {
@@ -27,7 +28,7 @@ const CONFIG = {
   },
 };
 
-async function request(url, options) {
+async function request(url, options, consume) {
   const response = await fetch(url, {
     ...options,
     signal: AbortSignal.timeout(30000),
@@ -43,7 +44,7 @@ async function request(url, options) {
         : 'O provedor de IA está indisponível.',
       503,
     );
-  return response.json();
+  return consume ? consume(response) : response.json();
 }
 
 /** Provider contract: complete({messages, tools = [], requireTool}) and transcribe(bytes, mime). */
@@ -68,7 +69,7 @@ export function createAIProvider(env, preference = 'auto') {
   return {
     name,
     model,
-    async complete({ messages, tools, requireTool = false, json = false, maxOutputTokens = 1600, reasoningEffort }) {
+    async complete({ messages, tools, requireTool = false, json = false, maxOutputTokens = 1600, reasoningEffort, onText }) {
       if (name === 'gemini') {
         const system = messages
           .filter((m) => m.role === 'system')
@@ -164,6 +165,7 @@ export function createAIProvider(env, preference = 'auto') {
         body: JSON.stringify({
           model,
           messages,
+          ...(onText ? {stream:true,stream_options:{include_usage:true}} : {}),
           temperature: 0.1,
           max_tokens: maxOutputTokens,
           ...(json ? { response_format: { type: 'json_object' } } : {}),
@@ -176,7 +178,7 @@ export function createAIProvider(env, preference = 'auto') {
               }
             : {}),
         }),
-      });
+      }, onText ? response => readCompletionStream(response, onText) : undefined);
       const message = result.choices?.[0]?.message;
       if (!message)
         throw new AgentError('A IA não retornou uma resposta válida.', 503);

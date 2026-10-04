@@ -691,3 +691,5 @@ textarea::selection {
   }
 }
 
+
+.app-sidebar-footer {height:var(--app-sidebar-footer-height,112px);flex-shrink:0;}

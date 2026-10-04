@@ -261,6 +261,7 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
       const reply = await provider.complete({
         messages,
         tools: [], maxOutputTokens: 512, reasoningEffort: 'low',
+        onText: ctx.onText ? text => ctx.onText(redactOperationalData(text,ctx.env).replace(/\*\*/g,'')) : undefined,
       });
       const content = reply.content?.trim().replace(/\*\*([^*\n]+)\*\*/g,'$1');
       if (!content) throw new AgentError('A IA não retornou uma resposta válida.',503);
@@ -296,6 +297,15 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
         tools: step === 2 ? [] : tools,
         requireTool: step === 0,
         reasoningEffort: 'low',
+        onText: ctx.onText && step > 0 ? text => {
+          // Hold the unfinished word, including split numeric tokens, until it
+          // can be checked against this request's evidence. Final text is
+          // validated again before persistence and the authoritative done event.
+          const boundary=text.search(/\S+$/u);
+          const prefix=boundary<0?text:text.slice(0,boundary);
+          const safe=redactOperationalData(prefix,ctx.env).replace(/\*\*/g,'');
+          if(safe.trim() && groundedReply(safe,sources)===safe.trim()) ctx.onText(safe);
+        } : undefined,
       });
       if (!reply.tool_calls?.length) break;
       if (reply.tool_calls.length > 3)
@@ -303,6 +313,7 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
           'A consulta excedeu o limite de ferramentas. Faça uma pergunta mais específica.',
           422,
         );
+      ctx.onText?.('');
       messages.push(reply);
       for (const call of reply.tool_calls.slice(0, 3)) {
         let result;

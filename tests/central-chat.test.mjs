@@ -22,6 +22,13 @@ for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greeting
       assert.match(body.messages[0].content,/coloquial, amigável, simples e leve/);
       assert.match(body.messages[0].content,/sem tabelas/);
       assert.match(body.messages[0].content,/não prova que a automação está funcionando/);
+      if(body.stream){
+        const encoder=new TextEncoder();
+        return new Response(new ReadableStream({start(controller){
+          for(const content of ['Há ','123456789123 ','bots. '])controller.enqueue(encoder.encode('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\n'));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));controller.close();
+        }}),{headers:{'Content-Type':'text/event-stream'}});
+      }
       return Response.json({choices:[{message:body.tool_choice==='required'?{role:'assistant',content:null,tool_calls:[{id:'call-fixture',type:'function',function:{name:'getBotsStatus',arguments:'{}'}}]}:{role:'assistant',content:'**Olá!** Como posso ajudar?'}}]});
     };
     const ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',GROQ_API_KEY:'test-key',DEEPINFRA_API_KEY:'test-deepinfra-key',SYSTEM_AI_PROVIDER:provider,SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.15,"output":0.60}}'}};
@@ -42,5 +49,11 @@ for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greeting
     const before=calls.length;
     await assert.rejects(chat(ctx,{bot_id:marketing.id,content:'Oi',request_id:crypto.randomUUID()}),/orçamento/);
     assert.equal(calls.length,before,'Budget rejection occurs before calling AI');
+    const streamed=[];
+    const guarded=await chat({...ctx,onText:text=>streamed.push(text)},{bot_id:gestor.id,content:'Consulte quais bots existem.',request_id:crypto.randomUUID()});
+    assert.ok(streamed.some(text=>text.includes('Há')),'A safe prefix arrives incrementally');
+    assert.ok(streamed.every(text=>!text.includes('123456789123')),'Unsupported numeric tokens never reach the UI');
+    assert.match(guarded.message.content,/números ainda não ficaram claros/);
+    assert.ok(calls.at(-1).stream,'Operational final response uses provider streaming');
   }finally{globalThis.fetch=nativeFetch;await pg.close();}
 });

@@ -110,10 +110,12 @@
   background: #db9e39;
 }
 .agent-sidebar-bottom {
+  height: var(--app-sidebar-footer-height, 112px);
+  flex-shrink: 0;
   border-top: 1px solid var(--border-subtle, #ffffff15);
-  padding: 16px 12px;
+  padding: 12px;
   display: grid;
-  gap: 16px;
+  gap: 10px;
 }
 .agent-sidebar-bottom small {
   padding: 0 8px;
@@ -220,9 +222,14 @@
   min-width: 0;
 }
 .agent-message-user {
-  padding: 16px 18px;
-  background: #8888880b;
-  border-left: 2px solid #88888840;
+  padding: 12px 18px;
+  background: #173e74;
+  color: #fff;
+  border: 0;
+  border-radius: 22px;
+  width: fit-content;
+  max-width: 85%;
+  margin-left: auto;
 }
 .agent-message-meta {
   display: flex;
@@ -285,11 +292,11 @@
 }
 .agent-composer-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
   border: 1px solid var(--border-strong, #88888850);
   background: var(--bg-base-alt);
-  border-radius: 8px;
+  border-radius: 22px;
   padding: 9px;
 }
 .agent-composer textarea {
@@ -725,3 +732,12 @@
 .marketing-toggle input { width: 18px; }
 .marketing-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; max-height: 360px; overflow: auto; }
 @media (max-width: 640px) { .marketing-panel { padding: 16px; } .marketing-card { padding: 14px; } }
+
+.agent-thinking {display:flex;align-items:center;gap:5px;height:24px;}
+.agent-thinking i {width:5px;height:5px;border-radius:50%;background:var(--text-secondary);animation:agent-think 1.2s infinite ease-in-out;}
+.agent-thinking i:nth-child(2) {animation-delay:.15s;}
+.agent-thinking i:nth-child(3) {animation-delay:.3s;}
+.agent-reply-reveal {animation:agent-reply-in .18s ease-out;}
+@keyframes agent-think {50% {opacity:.35;transform:translateY(-2px);}}
+@keyframes agent-reply-in {from {opacity:.5;} to {opacity:1;}}
+@media(prefers-reduced-motion:reduce) {.agent-thinking i,.agent-reply-reveal {animation:none;}}

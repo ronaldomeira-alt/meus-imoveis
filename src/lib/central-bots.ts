@@ -89,6 +89,7 @@ export interface ConversationData {
 export async function centralRequest<T>(
   body: Record<string, unknown>,
   signal?: AbortSignal,
+  onText?: (text: string) => void,
 ): Promise<T> {
   if (!supabase) throw new Error('Conexão indisponível.');
   const { data, error } = await supabase.auth.getSession();
@@ -110,9 +111,26 @@ export async function centralRequest<T>(
           Authorization: `Bearer ${data.session.access_token}`,
           apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({...body,...(onText && body.action==='chat'?{stream:true}:{})}),
       },
     );
+    if(response.ok && onText && response.headers.get('content-type')?.includes('application/x-ndjson')) {
+      const reader=response.body?.getReader();if(!reader)throw new Error('Resposta interrompida.');
+      const decoder=new TextDecoder();let pending='',result:T|undefined;
+      const consume=(line:string)=>{
+        if(!line.trim())return;
+        const event=JSON.parse(line);
+        if(event.type==='error')throw new Error(event.error||'A consulta foi interrompida.');
+        if(event.type==='text' && typeof event.text==='string')onText(event.text);
+        if(event.type==='done')result=event as T;
+      };
+      try {
+        for(;;){const chunk=await reader.read();if(chunk.done)break;pending+=decoder.decode(chunk.value,{stream:true});let boundary;while((boundary=pending.indexOf('\n'))>=0){consume(pending.slice(0,boundary));pending=pending.slice(boundary+1);}if(pending.length>200000)throw new Error('Resposta inválida.');}
+        pending+=decoder.decode();consume(pending);
+        if(!result)throw new Error('A resposta foi interrompida. Tente novamente.');
+        return result;
+      }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+    }
     const result = await response.json().catch(() => ({}));
     if (!response.ok)
       throw new Error(

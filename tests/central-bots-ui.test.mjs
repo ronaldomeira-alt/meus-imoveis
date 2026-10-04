@@ -59,7 +59,7 @@ const messages = {};
 window.__agentActions = [];
 export const CENTRAL_BOTS_ENABLED = true;
 export async function audioBase64() { return 'test-audio'; }
-export async function centralRequest(body) {
+export async function centralRequest(body,signal,onText) {
   window.__agentActions.push(body);
   if (window.__failCentral) throw new Error('Falha simulada de conexão');
   if (body.action === 'list') return structuredClone(data);
@@ -75,6 +75,7 @@ export async function centralRequest(body) {
   }
   if (body.action === 'conversation') return { conversation_id: body.bot_id, messages: messages[body.bot_id] || [], runs: [], events: [] };
   if (body.action === 'chat') {
+    onText?.('Consulta ');await new Promise(resolve=>setTimeout(resolve,300));onText?.('Consulta de teste ');await new Promise(resolve=>setTimeout(resolve,300));
     (messages[body.bot_id] ||= []).push({id: crypto.randomUUID(), role:'user', content:body.content, created_at:'${now}', sources:[]}, {id:crypto.randomUUID(), role:'assistant', content:'Consulta de teste concluída: 3 contatos.', created_at:'${now}', sources:[{tool:'getCaptureSummary', observed_at:'${now}', data:{count:3, fixture:true}}]});
     return {message:messages[body.bot_id].at(-1)};
   }
@@ -161,7 +162,14 @@ test(
       );
       await page.type('.agent-composer textarea', 'Quantos contatos existem?');
       await page.click('[aria-label="Enviar mensagem"]');
-      await page.waitForSelector('.agent-message-assistant');
+      await page.waitForFunction(()=>{const reply=document.querySelector('[aria-label="Resposta em andamento"] p');return reply&&reply.textContent.length>0&&reply.textContent.length<38;});
+      assert.equal(await page.$('.agent-message-meta'),null);
+      assert.equal(await page.$eval('.agent-composer textarea',el=>el.hasAttribute('placeholder')),false);
+      const appearance=await page.$eval('.agent-message-user',el=>({background:getComputedStyle(el).backgroundColor,radius:parseFloat(getComputedStyle(el).borderRadius)}));
+      assert.equal(appearance.background,'rgb(23, 62, 116)');assert.ok(appearance.radius>=20);
+      const centered=await page.$eval('.agent-composer-row',el=>{const row=el.getBoundingClientRect();return [...el.querySelectorAll('button')].every(button=>{const rect=button.getBoundingClientRect();return Math.abs((rect.top+rect.bottom-row.top-row.bottom)/2)<2;});});assert.equal(centered,true);
+      await page.waitForFunction(()=>[...document.querySelectorAll('.agent-message-assistant')].some(el=>el.textContent.includes('Consulta de teste concluída')));
+      await page.waitForFunction(()=>!document.querySelector('[aria-label="Resposta em andamento"]'));
       assert.match(
         await page.$eval('.agent-message-assistant', (e) => e.textContent),
         /3 contatos/,

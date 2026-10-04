@@ -21,10 +21,12 @@ import {
   centralRequest,
   audioBase64,
   type AgentBot,
+  type AgentMessage,
   type CentralData,
   type ConversationData,
 } from '../../lib/central-bots';
 import { AudioRecorder } from '../../lib/audio-recorder';
+import { ProgressiveReply } from './ProgressiveReply';
 import { BotAvatar } from './BotAvatar';
 import { CreateBotModal } from './CreateBotModal';
 import { MarketingPanel } from './MarketingPanel';
@@ -99,6 +101,10 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   const [drawer, setDrawer] = useState(false),
     [create, setCreate] = useState(false),
     [pendingText, setPendingText] = useState('');
+  const [liveReply,setLiveReply]=useState<{content:string;message?:AgentMessage;finished?:boolean}|null>(null);
+  const following=useRef(true);
+  const grow=useCallback(()=>{const scroll=root.current?.querySelector('.agent-scroll');if(scroll&&following.current)scroll.scrollTop=scroll.scrollHeight;},[]);
+  const finishReply=useCallback(()=>{setLiveReply(null);busyRef.current=false;setBusy(false);},[]);
   const bot = data?.bots.find((b) => b.id === selected);
   const approvals =
       data?.approvals.filter(
@@ -191,11 +197,8 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }, [iphonePWA]);
   useEffect(() => {
     if (tab !== 'chat') return;
-    if (iphonePWA) {
-      const scroll = root.current?.querySelector('.agent-scroll');
-      if (scroll) scroll.scrollTop = scroll.scrollHeight;
-    } else end.current?.scrollIntoView({ block: 'end' });
-  }, [conversation?.messages.length, pendingText, tab, iphonePWA]);
+    grow();
+  }, [conversation?.messages.length, pendingText, tab, iphonePWA, grow]);
   useEffect(() => {
     const pop = () => {
       const match = data?.bots.find(
@@ -280,17 +283,27 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     const content = draft.trim();
     setDraft('');
     setPendingText(content);
-    const sent = await action({
-      action: 'chat',
-      bot_id: bot.id,
-      content,
-      request_id: crypto.randomUUID(),
-    });
-    if (mounted.current) {
+    following.current=true;
+    busyRef.current=true;setBusy(true);setError('');setLiveReply({content:''});
+    try {
+      const result=await centralRequest<{message?:AgentMessage}>({action:'chat',bot_id:bot.id,content,request_id:crypto.randomUUID()},undefined,text=>{
+        if(mounted.current)setLiveReply({content:text});
+      });
+      if(!mounted.current)return;
+      // Load persisted history once, keeping the progressive reply visible until
+      // its final characters are displayed; never show two copies of the reply.
+      if(result.message)setLiveReply({content:result.message.content,message:result.message});
+      await loadConversation(bot.id);
+      if(!mounted.current)return;
       setPendingText('');
-      if (!sent) setDraft(content);
+      if(result.message)setLiveReply({content:result.message.content,message:result.message,finished:true});
+      else finishReply();
+      void refresh().catch(()=>{});
+    }catch(e){
+      if(mounted.current){setError(errorText(e));setPendingText('');setDraft(content);finishReply();void loadConversation(bot.id).catch(()=>{});}
     }
   }
+
   async function stopRecording() {
     if (!recorder.current) return;
     if (recordingTimer.current) clearTimeout(recordingTimer.current);
@@ -553,7 +566,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
             indisponíveis.
           </div>
         )}
-        <div className="agent-scroll" aria-busy={loading || busy}>
+        <div className="agent-scroll" aria-busy={loading || busy} onScroll={e=>{const el=e.currentTarget;following.current=el.scrollHeight-el.scrollTop-el.clientHeight<120;}}>
           {iphonePWA && data && !bot && !loading && (
             <div className="agent-picker">
               {searchOpen && <input className="agent-inbox-search" aria-label="Buscar bot pelo nome" placeholder="Buscar bot" value={search} onChange={event=>setSearch(event.target.value)} autoFocus />}
@@ -605,20 +618,11 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                   <p>{bot.mission}</p>
                 </div>
               )}
-              {conversation?.messages.map((message) => (
+              {conversation?.messages.filter(message=>message.id!==liveReply?.message?.id).map((message) => (
                 <article
                   key={message.id}
                   className={`agent-message agent-message-${message.role}`}
                 >
-                  <div className="agent-message-meta">
-                    {message.role === 'assistant' && (
-                      <BotAvatar name={bot.avatar} size={24} />
-                    )}
-                    <strong>
-                      {message.role === 'user' ? 'Você' : bot.name}
-                    </strong>
-                    <time>{date(message.created_at)}</time>
-                  </div>
                   <p>{message.content}</p>
                   {message.sources?.length > 0 && (
                     <details>
@@ -641,13 +645,12 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               ))}
               {pendingText && (
                 <article className="agent-message agent-message-user">
-                  <div className="agent-message-meta">
-                    <strong>Você</strong>
-                  </div>
                   <p>{pendingText}</p>
-                  <small role="status">Consultando fontes...</small>
                 </article>
               )}
+              {liveReply && <article className="agent-message agent-message-assistant" aria-label="Resposta em andamento">
+                <ProgressiveReply content={liveReply.content} finished={liveReply.finished===true} onFinished={finishReply} onGrow={grow}/>
+              </article>}
               <div ref={end} />
             </div>
           )}
@@ -861,7 +864,6 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
             <div className="agent-composer-row">
               <textarea
                 aria-label={`Mensagem para ${bot.name}`}
-                placeholder="Mensagem"
                 rows={2}
                 maxLength={4000}
                 value={draft}
@@ -905,7 +907,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
             </div>
             <div className="agent-composer-meta">
               <span>
-                {busy ? 'Processando...' : 'Histórico: últimos 30 dias'}
+                Histórico: últimos 30 dias
               </span>
               <span>{draft.length}/4000</span>
             </div>
