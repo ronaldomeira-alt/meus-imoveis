@@ -175,6 +175,9 @@ test(
         /3 contatos/,
       );
       await page.click('.agent-message details summary');
+      assert.equal(await page.$eval('.agent-source details', e=>e.open),false);
+      assert.equal(await page.$eval('.agent-source pre', e=>e.checkVisibility()),false);
+      await page.click('.agent-source details summary');
       assert.match(
         await page.$eval('.agent-source', (e) => e.textContent),
         /fixture/,

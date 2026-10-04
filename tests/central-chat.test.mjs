@@ -16,6 +16,7 @@ for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greeting
       return query;
     };
     const calls=[];
+    let toolName='getBotsStatus', toolArgs={}, answer=null;
     globalThis.fetch=async(url,options)=>{
       assert.equal(url,provider==='deepinfra'?'https://api.deepinfra.com/v1/openai/chat/completions':'https://api.groq.com/openai/v1/chat/completions');
       const body=JSON.parse(options.body);calls.push(body);
@@ -25,11 +26,11 @@ for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greeting
       if(body.stream){
         const encoder=new TextEncoder();
         return new Response(new ReadableStream({start(controller){
-          for(const content of ['Há ','123456789123 ','bots. '])controller.enqueue(encoder.encode('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\n'));
+          for(const content of (answer ? [answer] : ['Há ','123456789123 ','bots. ']))controller.enqueue(encoder.encode('data: '+JSON.stringify({choices:[{delta:{content}}]})+'\n\n'));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));controller.close();
         }}),{headers:{'Content-Type':'text/event-stream'}});
       }
-      return Response.json({choices:[{message:body.tool_choice==='required'?{role:'assistant',content:null,tool_calls:[{id:'call-fixture',type:'function',function:{name:'getBotsStatus',arguments:'{}'}}]}:{role:'assistant',content:'**Olá!** Como posso ajudar?'}}]});
+      return Response.json({choices:[{message:body.tool_choice==='required'?{role:'assistant',content:null,tool_calls:[{id:'call-fixture',type:'function',function:{name:toolName,arguments:JSON.stringify(toolArgs)}}]}:{role:'assistant',content:answer || '**Olá!** Como posso ajudar?'}}]});
     };
     const ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',GROQ_API_KEY:'test-key',DEEPINFRA_API_KEY:'test-deepinfra-key',SYSTEM_AI_PROVIDER:provider,SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.15,"output":0.60}}'}};
     const listed=await listCentral(ctx);
@@ -55,5 +56,27 @@ for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greeting
     assert.ok(streamed.every(text=>!text.includes('123456789123')),'Unsupported numeric tokens never reach the UI');
     assert.match(guarded.message.content,/números ainda não ficaram claros/);
     assert.ok(calls.at(-1).stream,'Operational final response uses provider streaming');
+    const customId=crypto.randomUUID();
+    await pg.query("insert into agent_bots(id,account_id,slug,name,mission,kind,tools) values($1,$2,'amigo','Bot Amigo','Ajudar com consultas seguras.','custom',array['getBotsStatus'])",[customId,account]);
+    const custom=await chat(ctx,{bot_id:customId,content:'Oi',request_id:crypto.randomUUID()});
+    assert.equal(custom.message.content,'Olá! Como posso ajudar?');
+    assert.match(calls.at(-1).messages[0].content,/personalizados e futuros/);
+    const sentinel=listed.bots.find(b=>b.kind==='sentinela'), incidentId=crypto.randomUUID();
+    await pg.query("insert into agent_incidents(id,account_id,bot_id,fingerprint,component,expected,observed,impact,confidence) values($1,$2,$3,'test:missing','captador_telemetry','Busca concluída.','Nenhuma rodada concluída após o horário esperado.','medium',0.9)",[incidentId,account,sentinel.id]);
+    toolName='getIncidentDetails';toolArgs={incident_id:incidentId};
+    answer='O captador_telemetry ficou travado porque a CPU falhou. ';
+    const technicalStream=[];
+    const explained=await chat({...ctx,onText:text=>technicalStream.push(text)},{bot_id:sentinel.id,content:'Explique a ocorrência para mim.',request_id:crypto.randomUUID()});
+    assert.match(explained.message.content,/Bot Captador/);
+    assert.match(explained.message.content,/não confirma que ele travou/);
+    assert.match(explained.message.content,/não consegui confirmar a causa/);
+    assert.ok(technicalStream.every(text=>!text.includes('captador_telemetry')&&!text.includes('CPU')),'Rejected jargon cannot leak through streaming');
+    assert.equal(explained.message.sources[0].data.incident.component,'captador_telemetry','Raw evidence remains available');
+    assert.match(calls.at(-1).messages.find(m=>m.role==='tool').content,/human_explanation/);
+    answer='Componente: captador_telemetry. ';
+    const technical=await chat(ctx,{bot_id:sentinel.id,content:'me mostre os detalhes técnicos',request_id:crypto.randomUUID()});
+    assert.match(technical.message.content,/captador_telemetry/);
+    assert.match(calls.at(-1).messages[0].content,/pediu detalhes técnicos explicitamente/);
+
   }finally{globalThis.fetch=nativeFetch;await pg.close();}
 });

@@ -1,4 +1,5 @@
 import { AgentError } from './core.js';
+import { humanFallback, incidentRecords, humanSourceSummary } from './communication.js';
 import { readCompletionStream } from './completion-stream.js';
 
 const CONFIG = {
@@ -253,10 +254,13 @@ export function groundedReply(content, sources) {
     typeof content === 'string' ? content.trim().slice(0, 12000) : '';
   if (!sources.length || !text)
     return 'Ainda não consegui confirmar os dados pra te responder com segurança. Podemos tentar de novo.';
-  const evidenceNumbers = new Set(JSON.stringify(sources).match(/\d+/g) || []);
+  // Include deterministic presentation conversions (e.g. Brasília times), so
+  // valid human explanations are not rejected merely for using local time.
+  const evidenceNumbers = new Set(JSON.stringify([sources, sources.map(source => humanSourceSummary(source.data))]).match(/\d+/g) || []);
   const unsupported = (text.match(/\d+/g) || []).some(
     (n) => !evidenceNumbers.has(n),
   );
+  if (unsupported && sources.some(source => incidentRecords(source.data).length)) return humanFallback(sources);
   return unsupported
     ? 'Consegui consultar os dados, mas alguns números ainda não ficaram claros. Prefiro não te passar um resultado incerto. As fontes estão aqui embaixo pra você conferir.'
     : text;

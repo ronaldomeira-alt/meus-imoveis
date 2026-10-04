@@ -31,6 +31,7 @@ import { BotAvatar } from './BotAvatar';
 import { CreateBotModal } from './CreateBotModal';
 import { MarketingPanel } from './MarketingPanel';
 import { isIPhonePWA } from '../../lib/ios-pwa';
+import { friendlyComponent, humanIncident, humanSourceSummary, hasTechnicalLanguage, technicalDetailsRequested, communicationSafe, humanFallback } from '../../../supabase/functions/_shared/central-bots/communication.js';
 import './central-bots.css';
 
 const date = (value?: string | null) =>
@@ -73,6 +74,14 @@ const labels: Record<string, string> = {
   push_attempted: 'Tentativa de notificação',
   push_failed: 'Notificação não enviada',
 };
+const conversationText = (message: AgentMessage, messages: AgentMessage[]) => {
+  if (message.role !== 'assistant') return message.content;
+  const index = messages.indexOf(message);
+  const prompt = messages.slice(0,index).findLast(item=>item.role==='user')?.content || '';
+  return communicationSafe(message.content,message.sources || [],technicalDetailsRequested(prompt))
+    ? message.content : humanFallback(message.sources || []);
+};
+
 type Props = { onOpenMenu: () => void; onOpenCaptador: () => void };
 
 export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
@@ -660,7 +669,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                 <div className="agent-empty">
                   <BotAvatar name={bot.avatar} size={80} />
                   <h3>{bot.name}</h3>
-                  <p>{bot.mission}</p>
+                  <p>Como posso ajudar você hoje?</p>
                 </div>
               )}
               {conversation?.messages.filter(message=>message.id!==liveReply?.message?.id).map((message) => (
@@ -668,7 +677,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                   key={message.id}
                   className={`agent-message agent-message-${message.role}`}
                 >
-                  <p>{message.content}</p>
+                  <p>{conversationText(message,conversation?.messages || [])}</p>
                   {message.sources?.length > 0 && (
                     <details>
                       <summary>
@@ -678,10 +687,14 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                         <div className="agent-source" key={i}>
                           <strong>
                             {data?.tools.find((t) => t.name === source.tool)
-                              ?.description || source.tool}
+                              ?.description || 'Dados consultados'}
                           </strong>
                           <small>{date(source.observed_at)}</small>
-                          <pre>{JSON.stringify(source.data, null, 2)}</pre>
+                          <p>{humanSourceSummary(source.data)}</p>
+                          <details>
+                            <summary>Detalhes técnicos</summary>
+                            <pre>{JSON.stringify(source.data, null, 2)}</pre>
+                          </details>
                         </div>
                       ))}
                     </details>
@@ -752,8 +765,8 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               {conversation?.events.map((event) => (
                 <div className="agent-event" key={event.id}>
                   <span>
-                    {labels[event.type] || event.type}
-                    {event.tool ? `: ${event.tool}` : ''}
+                    {labels[event.type] || 'Evento registrado'}
+                    {event.tool ? `: ${data?.tools.find(tool=>tool.name===event.tool)?.description || 'Consulta de dados'}` : ''}
                   </span>
                   <time>{date(event.created_at)}</time>
                 </div>
@@ -770,11 +783,12 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               {incidents.map((incident) => (
                 <article className="agent-incident" key={incident.id}>
                   <header>
-                    <h3>{incident.component}</h3>
+                    <h3>{friendlyComponent(incident.component)}</h3>
                     <span data-status={incident.impact}>
                       {
                         (
                           {
+                            critical: 'Urgência máxima',
                             high: 'Alta',
                             medium: 'Média',
                             low: 'Baixa',
@@ -784,18 +798,11 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                       prioridade
                     </span>
                   </header>
-                  <p>{incident.observed}</p>
-                  <dl>
-                    <dt>Esperado</dt>
-                    <dd>{incident.expected}</dd>
-                    <dt>Confiança</dt>
-                    <dd>{Math.round(incident.confidence * 100)}%</dd>
-                    <dt>Última observação</dt>
-                    <dd>{date(incident.last_seen_at)}</dd>
-                  </dl>
+                  <p style={{whiteSpace:'pre-line'}}>{humanIncident(incident)}</p>
+                  <small>Última observação: {date(incident.last_seen_at)}</small>
                   <details>
-                    <summary>Evidências e hipóteses</summary>
-                    <pre>{JSON.stringify(incident.dossier, null, 2)}</pre>
+                    <summary>Detalhes técnicos</summary>
+                    <pre>{JSON.stringify(incident, null, 2)}</pre>
                   </details>
                   <button
                     className="agent-command"
@@ -820,7 +827,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                       ? 'Investigação de ocorrência'
                       : 'Relatório agendado'}
                   </h3>
-                  <p>{approval.reason}</p>
+                  <p>{hasTechnicalLanguage(approval.reason) ? 'Investigar a ocorrência para entender o que aconteceu, sem alterar a operação.' : approval.reason}</p>
                   <small>{date(approval.created_at)}</small>
                   <details>
                     <summary>Escopo da autorização</summary>
@@ -828,7 +835,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                       Consulta de dados e elaboração de relatório. Nenhuma
                       alteração na operação.
                     </p>
-                    <pre>{JSON.stringify(approval.context, null, 2)}</pre>
+                    <details><summary>Detalhes técnicos</summary><pre>{JSON.stringify(approval.context, null, 2)}</pre></details>
                   </details>
                   <div className="agent-actions">
                     <button
@@ -872,7 +879,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               {approvalHistory.map((approval) => (
                 <details key={approval.id} className="agent-record">
                   <summary>
-                    {approval.reason} ·{' '}
+                    {hasTechnicalLanguage(approval.reason) ? 'Investigação de ocorrência' : approval.reason} ·{' '}
                     {(
                       {
                         approved: 'Autorizada',

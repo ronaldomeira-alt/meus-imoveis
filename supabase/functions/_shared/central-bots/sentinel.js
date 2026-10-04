@@ -1,5 +1,6 @@
 import { rows, event, maintenanceDossier, AgentError } from './core.js';
 import { marketingStatus } from '../bot-marketing/store.js';
+import { humanIncident } from './communication.js';
 
 export function isDailyInspectionDue(lastStartedAt, now = new Date()) {
   if (!lastStartedAt) return true;
@@ -437,7 +438,7 @@ export async function inspectSystem(
         });
         await ctx.notify(bot, 'incident', {
           title: 'Bot Sentinela: atenção necessária',
-          body: check.observed,
+          body: humanIncident(incident),
           url: `/central-de-bots?bot=sentinela&incident=${incident.id}`,
           tag: `agent-incident-${incident.id}`,
         });
