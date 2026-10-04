@@ -10,8 +10,6 @@ interface VoiceNotesInputProps {
   placeholder?: string;
   rows?: number;
   label?: string;
-  groqApiKey?: string;
-  geminiApiKey?: string;
   className?: string;
 }
 
@@ -21,8 +19,6 @@ export const VoiceNotesInput: React.FC<VoiceNotesInputProps> = ({
   placeholder = 'Observações subjetivas, vizinhança, proximidade do mar, rotina local, comércio, sensação do imóvel...',
   rows = 3,
   label = 'Observações & Percepções do Imóvel',
-  groqApiKey = (import.meta.env.VITE_GROQ_API_KEY as string) || localStorage.getItem('meus_imoveis_groq_key') || '',
-  geminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || localStorage.getItem('meus_imoveis_gemini_key') || '',
   className = '',
 }) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -49,8 +45,6 @@ export const VoiceNotesInput: React.FC<VoiceNotesInputProps> = ({
       const audioBlob = await recorderRef.current.stop();
       const result = await transcribeAudioMultiProvider({
         audioBlob,
-        groqApiKey,
-        geminiApiKey,
       });
 
       if (result.text && result.text.trim()) {

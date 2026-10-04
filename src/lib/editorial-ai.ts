@@ -1,9 +1,9 @@
+import { requestSystemAI } from './system-ai';
 import type { Property } from '../types/property';
 import type {
   MarketingEditorialSettings,
   RegenerationOption,
 } from '../types/marketing';
-import type { PreferredAIProvider } from './ai-provider';
 
 import { getEditorialSettings } from './marketing-db';
 
@@ -14,9 +14,6 @@ interface GenerateCaptionOptions {
   refinement?: RegenerationOption;
   customInstruction?: string;
   previousCaption?: string;
-  groqApiKey?: string;
-  geminiApiKey?: string;
-  preferredProvider?: PreferredAIProvider;
 }
 
 export const REGENERATION_OPTIONS: { id: RegenerationOption; label: string; desc: string }[] = [
@@ -117,89 +114,11 @@ function buildPropertyContext(property: Property): string {
 }
 
 /**
- * Chamada à API da Groq (Llama 3.3 70B Versatile)
- */
-async function callGroqCaption(
-  apiKey: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<string> {
-  const modelsToTry = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
-  let lastErr: any = null;
-
-  for (const model of modelsToTry) {
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.72,
-          max_tokens: 1200,
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.choices?.[0]?.message?.content) {
-        return data.choices[0].message.content.trim();
-      }
-      lastErr = new Error(data.error?.message || `Erro Groq HTTP ${response.status}`);
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error('Falha ao gerar legenda com modelos Groq disponíveis.');
-}
-
-/**
- * Chamada à API do Google Gemini
- */
-async function callGeminiCaption(
-  apiKey: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey.trim()}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${systemPrompt}\n\n=== TAREFA ===\n${userPrompt}` }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1200,
-      },
-    }),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || `Erro Gemini HTTP ${response.status}`);
-  }
-
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-}
-
-/**
  * Função principal para gerar ou regenerar a legenda
  */
 export async function generatePropertyCaption(
   options: GenerateCaptionOptions
-): Promise<{ caption: string; providerUsed: 'groq' | 'gemini' }> {
+): Promise<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' }> {
   const {
     property,
     editorialSettings: providedSettings,
@@ -207,9 +126,6 @@ export async function generatePropertyCaption(
     refinement = option || 'default',
     customInstruction,
     previousCaption,
-    groqApiKey = (import.meta.env.VITE_GROQ_API_KEY as string) || localStorage.getItem('meus_imoveis_groq_key') || '',
-    geminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY as string) || localStorage.getItem('meus_imoveis_gemini_key') || '',
-    preferredProvider = 'auto',
   } = options;
 
   const editorialSettings = providedSettings || (await getEditorialSettings());
@@ -239,39 +155,7 @@ export async function generatePropertyCaption(
 
   const userPrompt = userPromptLines.join('\n');
 
-  const hasGroq = Boolean(groqApiKey && groqApiKey.trim().length > 10);
-  const hasGemini = Boolean(geminiApiKey && geminiApiKey.trim().length > 10);
-
-  let providers: ('groq' | 'gemini')[] = [];
-  if (preferredProvider === 'gemini') {
-    if (hasGemini) providers.push('gemini');
-    if (hasGroq) providers.push('groq');
-  } else {
-    if (hasGroq) providers.push('groq');
-    if (hasGemini) providers.push('gemini');
-  }
-
-  if (providers.length === 0) {
-    throw new Error('Nenhuma chave de IA configurada. Configure sua chave da Groq ou Google Gemini em Configurações.');
-  }
-
-  let lastError: any = null;
-  for (const provider of providers) {
-    try {
-      if (provider === 'groq') {
-        const caption = await callGroqCaption(groqApiKey, systemPrompt, userPrompt);
-        if (caption) return { caption, providerUsed: 'groq' };
-      } else if (provider === 'gemini') {
-        const caption = await callGeminiCaption(geminiApiKey, systemPrompt, userPrompt);
-        if (caption) return { caption, providerUsed: 'gemini' };
-      }
-    } catch (err) {
-      console.warn(`Tentativa de gerar legenda com ${provider} falhou:`, err);
-      lastError = err;
-    }
-  }
-
-  throw lastError || new Error('Não foi possível gerar a legenda com os provedores disponíveis.');
+  return requestSystemAI<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' }>({action:'caption',system_prompt:systemPrompt,prompt:userPrompt});
 }
 
 /**

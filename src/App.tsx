@@ -22,7 +22,6 @@ import { calculateDashboardStats, supabase } from './lib/supabase';
 import { useCurrentUser } from './lib/currentUser';
 import type { Property, NotificationItem } from './types/property';
 import type { SummaryFilterType } from './components/dashboard/SummaryCards';
-import type { PreferredAIProvider } from './lib/ai-provider';
 import { Building2, Sparkles } from 'lucide-react';
 import { InstagramIcon } from './components/ui/InstagramIcon';
 import { getSavedPublicAdminToken, setPublicPage } from './lib/publicProperties';
@@ -302,34 +301,6 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       window.removeEventListener('property-instagram-published', handleInstaPublished as EventListener);
     };
   }, []);
-
-  // ── Configurações de IA (Groq & Gemini) ──
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    return localStorage.getItem('meus_imoveis_gemini_key') || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
-  });
-
-  const [groqApiKey, setGroqApiKey] = useState<string>(() => {
-    return localStorage.getItem('meus_imoveis_groq_key') || (import.meta.env.VITE_GROQ_API_KEY as string) || '';
-  });
-
-  const [preferredAIProvider, setPreferredAIProvider] = useState<PreferredAIProvider>(() => {
-    return (localStorage.getItem('meus_imoveis_ai_provider') as PreferredAIProvider) || 'auto';
-  });
-
-  const handleUpdateGeminiKey = (key: string) => {
-    setGeminiApiKey(key);
-    localStorage.setItem('meus_imoveis_gemini_key', key);
-  };
-
-  const handleUpdateGroqKey = (key: string) => {
-    setGroqApiKey(key);
-    localStorage.setItem('meus_imoveis_groq_key', key);
-  };
-
-  const handleUpdateAIProvider = (provider: PreferredAIProvider) => {
-    setPreferredAIProvider(provider);
-    localStorage.setItem('meus_imoveis_ai_provider', provider);
-  };
 
   // ── Notificações ──
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
@@ -802,9 +773,6 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
               setPendingCaptureId(undefined);
               navigateToSection('dashboard');
             }}
-            geminiApiKey={geminiApiKey}
-            groqApiKey={groqApiKey}
-            preferredAIProvider={preferredAIProvider}
           />
         ) : activeSection === 'central-bots' && CENTRAL_BOTS_ENABLED ? (
           <CentralBotsBoundary onOpenCaptador={() => navigateToSection('bot-captador')}>
@@ -1064,12 +1032,6 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         {activeSection === 'configuracoes' && (
           <div className="flex-1 min-h-0 overflow-hidden">
             <SettingsView
-              geminiApiKey={geminiApiKey}
-              onUpdateGeminiKey={handleUpdateGeminiKey}
-              groqApiKey={groqApiKey}
-              onUpdateGroqKey={handleUpdateGroqKey}
-              preferredAIProvider={preferredAIProvider}
-              onUpdateAIProvider={handleUpdateAIProvider}
               onExportJSON={handleExportJSON}
               onExportCSV={handleExportCSV}
             />

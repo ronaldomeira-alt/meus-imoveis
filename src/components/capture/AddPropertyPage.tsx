@@ -24,7 +24,6 @@ import { validateRequiredPropertyFields } from '../../lib/property-validation';
 import {
   transcribeAudioMultiProvider,
   extractPropertyMultiProvider,
-  PreferredAIProvider,
 } from '../../lib/ai-provider';
 import { extractTextFromDocument } from '../../lib/pdf-parser';
 import type { Property, PropertyPhoto } from '../../types/property';
@@ -108,9 +107,6 @@ const getTrackedResolution = (data: ExtractedPropertyData): Record<string, boole
 interface AddPropertyPageProps {
   onSaveProperty: (property: Property) => void;
   onBack: () => void;
-  geminiApiKey?: string;
-  groqApiKey?: string;
-  preferredAIProvider?: PreferredAIProvider;
   initialImportUrl?: string;
   sourceCaptureId?: string;
   onCaptureImported?: (captureId: string, propertyId: string) => void;
@@ -121,9 +117,6 @@ interface AddPropertyPageProps {
 export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
   onSaveProperty,
   onBack,
-  geminiApiKey,
-  groqApiKey,
-  preferredAIProvider,
   initialImportUrl,
   sourceCaptureId,
   onCaptureImported,
@@ -296,13 +289,8 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
 
     try {
       const audioBlob = await recorder.stop();
-      const spokenText = recorder.getSpokenText();
       const result = await transcribeAudioMultiProvider({
         audioBlob,
-        groqApiKey,
-        geminiApiKey,
-        preferredProvider: preferredAIProvider,
-        spokenTextFallback: spokenText,
       });
       setTextInput((prev) => {
         const trimmed = prev.trim();
@@ -438,7 +426,7 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
 
       setImportProgress('Organizando os dados do imóvel...');
       const extraction = post.caption.trim()
-        ? await extractPropertyMultiProvider({ text: post.caption, groqApiKey, geminiApiKey, preferredProvider: preferredAIProvider })
+        ? await extractPropertyMultiProvider({ text: post.caption })
         : { data: { ...emptyReviewData } };
       setReviewData(prepareInstagramProperty(post, extraction.data));
       setInstagramUrl(post.url);
@@ -523,9 +511,6 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
       setDocumentProgress('Interpretando informações com IA...');
       const extraction = await extractPropertyMultiProvider({
         text: result.text,
-        groqApiKey,
-        geminiApiKey,
-        preferredProvider: preferredAIProvider,
       });
 
       const shouldBeDev = isDevelopment || Boolean(extraction.data.is_development);
@@ -625,9 +610,6 @@ export const AddPropertyPage: React.FC<AddPropertyPageProps> = ({
     try {
       const result = await extractPropertyMultiProvider({
         text: textInput,
-        groqApiKey,
-        geminiApiKey,
-        preferredProvider: preferredAIProvider,
       });
 
       setReviewData((prev) => {

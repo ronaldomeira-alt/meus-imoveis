@@ -21,6 +21,7 @@ import {
 import { inspectSystem } from './sentinel.js';
 import { createAIProvider } from './ai-provider.js';
 import { marketingAction } from '../bot-marketing/store.js';
+import { globalAIContext } from '../system-ai/config.js';
 
 function secretsEqual(a, b) {
   const left = Buffer.from(a || ''),
@@ -163,7 +164,7 @@ export function createAgentHandler(
       const body = await boundedBody(req);
       if (!body || typeof body !== 'object' || Array.isArray(body))
         throw new AgentError('Requisição inválida.');
-      const ctx = await authorize(req, body, env, factory);
+      const ctx = await globalAIContext(await authorize(req, body, env, factory));
       ctx.marketingSendPush = sendPush;
       ctx.crmAccountId =
         ctx.accountId === env.MEUS_IMOVEIS_ACCOUNT_ID
@@ -269,7 +270,7 @@ export function createAgentHandler(
           await event(ctx, bot.id, null, 'voice_requested', {
             bytes: bytes.length,
           });
-          const text = await createAIProvider(env, bot.provider).transcribe(
+          const text = await createAIProvider(ctx.env, bot.provider).transcribe(
             bytes,
             mime,
           );

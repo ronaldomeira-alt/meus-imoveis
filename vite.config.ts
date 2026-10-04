@@ -90,6 +90,7 @@ export default defineConfig(({ mode }) => {
   process.env.MEUS_IMOVEIS_ACCOUNT_ID ||= env.MEUS_IMOVEIS_ACCOUNT_ID
   process.env.MATCH_CANONICAL_ACCOUNT_ID ||= env.MATCH_CANONICAL_ACCOUNT_ID
   return {
+    envPrefix: ['VITE_SUPABASE_', 'VITE_R2_PUBLIC_', 'VITE_INSTAGRAM_CLIENT_', 'VITE_VAPID_PUBLIC_', 'VITE_CENTRAL_', 'VITE_WACRM_'],
     plugins: [react(), publicPagesPlugin],
     server: {
       port: 3001,

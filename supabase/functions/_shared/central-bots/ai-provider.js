@@ -36,26 +36,28 @@ async function request(url, options) {
   return response.json();
 }
 
-/** Provider contract: complete({messages, tools, requireTool}) and transcribe(bytes, mime). */
+/** Provider contract: complete({messages, tools = [], requireTool}) and transcribe(bytes, mime). */
 export function createAIProvider(env, preference = 'auto') {
-  const name =
+  const name = env.SYSTEM_AI_PROVIDER || (
     preference === 'auto'
       ? env.AGENT_AI_PROVIDER ||
         Object.keys(CONFIG).find((n) => env[CONFIG[n].key])
-      : preference;
+      : preference);
   const config = CONFIG[name];
-  if (!config || !env[config.key])
+  if (env.SYSTEM_AI_ENABLED === 'false' || !config || !env[config.key])
     throw new AgentError(
-      'IA da Central ainda não configurada no servidor.',
+      'IA do sistema desativada ou ainda não configurada no servidor.',
       503,
     );
   const key = env[config.key];
-  const model = env[config.model] || config.defaultModel;
-  if (!/^[a-zA-Z0-9._/-]+$/.test(model))
+  const model = env.SYSTEM_AI_MODEL || env[config.model] || config.defaultModel;
+  const audioModel = env.SYSTEM_AI_TRANSCRIPTION_MODEL || (name === 'groq' ? 'whisper-large-v3-turbo' : name === 'openai' ? 'whisper-1' : model);
+  if (![model,audioModel].every(value=>/^[a-zA-Z0-9._/-]+$/.test(value)))
     throw new AgentError('Modelo de IA inválido.', 503);
 
   return {
     name,
+    model,
     async complete({ messages, tools, requireTool = false, json = false, maxOutputTokens = 1600, reasoningEffort }) {
       if (name === 'gemini') {
         const system = messages
@@ -174,7 +176,7 @@ export function createAIProvider(env, preference = 'auto') {
     async transcribe(bytes, mime) {
       if (name === 'gemini') {
         const result = await request(
-          `${config.url}/models/${model}:generateContent`,
+          `${config.url}/models/${audioModel}:generateContent`,
           {
             method: 'POST',
             headers: {
@@ -223,7 +225,7 @@ export function createAIProvider(env, preference = 'auto') {
       );
       form.append(
         'model',
-        name === 'groq' ? 'whisper-large-v3-turbo' : 'whisper-1',
+        audioModel,
       );
       form.append('language', 'pt');
       const result = await request(`${config.url}/audio/transcriptions`, {

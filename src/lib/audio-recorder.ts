@@ -8,8 +8,6 @@ export class AudioRecorder {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
   private stream: MediaStream | null = null;
-  private recognition: any = null;
-  private spokenText: string = '';
   private selectedMimeType: string = '';
 
   /**
@@ -45,7 +43,6 @@ export class AudioRecorder {
 
   async start(): Promise<void> {
     this.audioChunks = [];
-    this.spokenText = '';
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('Seu navegador não suporta captura de áudio.');
@@ -107,36 +104,7 @@ export class AudioRecorder {
     // Coleta chunks a cada 100ms
     this.mediaRecorder.start(100);
 
-    // Inicializa Web Speech API em paralelo para transcrição nativa em tempo real (pt-BR)
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'pt-BR';
-        recognition.continuous = true;
-        recognition.interimResults = true;
 
-        recognition.onresult = (event: any) => {
-          let full = '';
-          for (let i = 0; i < event.results.length; i++) {
-            full += event.results[i][0].transcript;
-          }
-          if (full.trim()) {
-            this.spokenText = full.trim();
-          }
-        };
-
-        recognition.onerror = (e: any) => {
-          console.warn('Aviso Web Speech:', e.error);
-        };
-
-        recognition.start();
-        this.recognition = recognition;
-      } catch (recErr) {
-        console.warn('SpeechRecognition não pôde ser ativado:', recErr);
-      }
-    }
   }
 
   async stop(): Promise<Blob> {
@@ -146,13 +114,6 @@ export class AudioRecorder {
         return reject(new Error('Gravador não inicializado'));
       }
 
-      // Encerra Web Speech API
-      if (this.recognition) {
-        try {
-          this.recognition.stop();
-        } catch {}
-        this.recognition = null;
-      }
 
       this.mediaRecorder.onstop = () => {
         const mime = this.mediaRecorder?.mimeType || this.selectedMimeType || 'audio/webm';
@@ -179,17 +140,7 @@ export class AudioRecorder {
     });
   }
 
-  getSpokenText(): string {
-    return this.spokenText;
-  }
-
   cancel(): void {
-    if (this.recognition) {
-      try {
-        this.recognition.stop();
-      } catch {}
-      this.recognition = null;
-    }
 
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try {
@@ -199,7 +150,6 @@ export class AudioRecorder {
 
     this.stopTracks();
     this.audioChunks = [];
-    this.spokenText = '';
   }
 
   private stopTracks(): void {

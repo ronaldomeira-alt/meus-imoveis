@@ -1,4 +1,5 @@
-// Real public news + real provider + isolated local PostgreSQL. No production reads/writes,
+// Real public news + configured system provider + isolated local PostgreSQL.
+// Production reads are limited to AI configuration; there are no production writes,
 // push dispatch, publishing, CRM Leads or Captador/Match operations.
 // Run: node --use-system-ca --env-file=.env scripts/marketing-real-cycle.mjs
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
@@ -6,16 +7,17 @@ import { database, client } from '../tests/helpers/marketing-db.mjs';
 import { BUILTINS } from '../supabase/functions/_shared/central-bots/core.js';
 import { setupMarketing, marketingAction } from '../supabase/functions/_shared/bot-marketing/store.js';
 import { marketingTick } from '../supabase/functions/_shared/bot-marketing/worker.js';
+import { createClient } from '@supabase/supabase-js';
+import { resolveSystemAI } from '../supabase/functions/_shared/system-ai/config.js';
 
 const outputDir = new URL('../.marketing-validation.local/', import.meta.url);
 mkdirSync(outputDir, { recursive: true });
-const env = {
-  // Local validation may reuse the existing credential, never a client runtime.
-  GROQ_API_KEY: process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY,
-  AGENT_AI_PROVIDER: 'groq', MARKETING_BOT_ENABLED: 'true',
-  MARKETING_MODEL_PRICES: process.env.MARKETING_MODEL_PRICES || '{"openai/gpt-oss-20b":{"input":0.075,"output":0.30}}',
-};
-if (!env.GROQ_API_KEY) throw Error('Credencial local de IA não disponível.');
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.MEUS_IMOVEIS_ACCOUNT_ID)
+  throw Error('A validação exige acesso administrativo à configuração de IA existente.');
+const configDb = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession:false, autoRefreshToken:false } });
+const systemAI = await resolveSystemAI({ db:configDb, accountId:process.env.MEUS_IMOVEIS_ACCOUNT_ID, env:{...process.env,GROQ_API_KEY:process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY} });
+if (!systemAI.config.configured || !systemAI.config.enabled) throw Error('A IA do sistema está indisponível para validação.');
+const env = { ...systemAI.env, MARKETING_BOT_ENABLED:'true' };
 const resume = process.argv.includes('--resume');
 const snapshotFile = new URL('postgres.tar.gz', outputDir);
 const pg = await database(undefined, resume && existsSync(snapshotFile) ? new Blob([readFileSync(snapshotFile)]) : undefined);

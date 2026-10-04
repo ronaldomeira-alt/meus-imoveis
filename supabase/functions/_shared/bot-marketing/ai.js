@@ -22,6 +22,7 @@ export function costEnvelope(env, messages, model) {
   return { estimate_usd: (input * rates.input + 3000 * rates.output) / 1000000, input_upper_bound: input, output_max: 3000, rates };
 }
 export function marketingModel(env, preference = 'auto') {
+  if (env.SYSTEM_AI_MODEL) return env.SYSTEM_AI_MODEL;
   const provider = preference === 'auto' ? env.AGENT_AI_PROVIDER || (env.GROQ_API_KEY ? 'groq' : env.OPENAI_API_KEY ? 'openai' : env.GEMINI_API_KEY ? 'gemini' : '') : preference;
   return { groq: env.AGENT_GROQ_MODEL || 'openai/gpt-oss-20b', openai: env.AGENT_OPENAI_MODEL || 'gpt-4.1-mini', gemini: env.AGENT_GEMINI_MODEL || 'gemini-2.5-flash' }[provider];
 }

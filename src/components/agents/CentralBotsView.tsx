@@ -256,11 +256,9 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     setBusy(true);
     try {
       const blob = await recorder.current.stop();
-      const spoken = recorder.current.getSpokenText();
       if (blob.size > 2500000)
         throw new Error('Áudio acima de 2,5 MB. Grave uma mensagem menor.');
       const text =
-        spoken ||
         (
           await centralRequest<{ text: string }>({
             action: 'transcribe',
