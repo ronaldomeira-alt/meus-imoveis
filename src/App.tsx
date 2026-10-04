@@ -726,6 +726,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         activeSection={activeSection}
         onSelectSection={(section) => {
           navigateToSection(section);
+          if (section === 'central-bots') window.dispatchEvent(new Event('central-bots-enter'));
         }}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}

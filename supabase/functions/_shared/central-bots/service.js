@@ -232,6 +232,30 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
   const run = inserted.data;
   const sources = [];
   try {
+    // Greetings do not assert operational facts and must not force an unrelated
+    // tool call. Keep the normal grounded path for every other user request.
+    const greeting = /^(?:ol[aá]|oi|oie|bom dia|boa tarde|boa noite|obrigad[oa]|valeu)[\s!?.]*$/iu.test(prompt.trim());
+    if (greeting) {
+      const messages = [{ role: 'system', content: `Você é ${bot.name}. Responda brevemente em português a esta saudação e convide a pessoa a fazer uma pergunta. Não afirme dados, status, números ou ações operacionais. Não consulte ferramentas.` }, { role: 'user', content: prompt }];
+      if (bot.kind === 'marketing') {
+        const cost = costEnvelope(ctx.env,messages,marketingModel(ctx.env,bot.provider));
+        if (!await rows(ctx.db.rpc('agent_marketing_reserve_chat',{p_account_id:ctx.accountId,p_run_id:run.id,p_cost:cost.estimate_usd}))) throw new AgentError('Limite de orçamento do Marketing atingido.',429);
+      }
+      const reply = await provider.complete({
+        messages,
+        tools: [], maxOutputTokens: 512, reasoningEffort: 'low',
+      });
+      const content = reply.content?.trim();
+      if (!content) throw new AgentError('A IA não retornou uma resposta válida.',503);
+      const auditResult={provider:provider.name,model:provider.model,tool_count:0};
+      if (bot.kind === 'marketing') {
+        const budget=await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());
+        Object.assign(auditResult,budget.result);
+      }
+      await rows(ctx.db.from('agent_runs').update({status:'completed',finished_at:new Date().toISOString(),result:auditResult}).eq('account_id',ctx.accountId).eq('id',run.id));
+      await event(ctx,bot.id,run.id,'analysis_completed',{provider:provider.name,tool_count:0});
+      return {content,sources:[],run_id:run.id};
+    }
     const messages = [
       {
         role: 'system',
@@ -254,6 +278,7 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
         messages,
         tools: step === 2 ? [] : tools,
         requireTool: step === 0,
+        reasoningEffort: 'low',
       });
       if (!reply.tool_calls?.length) break;
       if (reply.tool_calls.length > 3)
@@ -301,7 +326,7 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
     const content = groundedReply(reply?.content, sources);
     const auditResult =
       trigger === 'chat'
-        ? { provider: provider.name, tool_count: sources.length }
+        ? { provider: provider.name, model: provider.model, tool_count: sources.length }
         : { content, sources, provider: provider.name };
     if (bot.kind === 'marketing') {
       const budget = await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());

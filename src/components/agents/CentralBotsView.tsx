@@ -27,6 +27,7 @@ import { AudioRecorder } from '../../lib/audio-recorder';
 import { BotAvatar } from './BotAvatar';
 import { CreateBotModal } from './CreateBotModal';
 import { MarketingPanel } from './MarketingPanel';
+import { isIPhonePWA } from '../../lib/ios-pwa';
 import './central-bots.css';
 
 const date = (value?: string | null) =>
@@ -65,6 +66,7 @@ const labels: Record<string, string> = {
 type Props = { onOpenMenu: () => void; onOpenCaptador: () => void };
 
 export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
+  const [iphonePWA] = useState(isIPhonePWA);
   const root = useRef<HTMLDivElement>(null),
     end = useRef<HTMLDivElement>(null),
     recorder = useRef<AudioRecorder | null>(null);
@@ -109,10 +111,10 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
         : (
             result.bots.find(
               (b) => b.slug === new URLSearchParams(location.search).get('bot'),
-            ) || result.bots[0]
+            ) || (iphonePWA ? undefined : result.bots[0])
           )?.id || '',
     );
-  }, []);
+  }, [iphonePWA]);
   const loadConversation = useCallback(
     async (id: string, signal?: AbortSignal) => {
       const result = await centralRequest<ConversationData>(
@@ -161,27 +163,40 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }, [selected, loadConversation]);
   useEffect(() => {
     const viewport = window.visualViewport;
-    const resize = () =>
+    const resize = () => {
       root.current?.style.setProperty(
         '--agent-height',
         `${viewport?.height || window.innerHeight}px`,
       );
+      if (iphonePWA) root.current?.style.setProperty('--agent-viewport-top', `${viewport?.offsetTop || 0}px`);
+    };
     resize();
     viewport?.addEventListener('resize', resize);
+    if (iphonePWA) viewport?.addEventListener('scroll', resize);
     window.addEventListener('resize', resize);
     return () => {
       viewport?.removeEventListener('resize', resize);
+      viewport?.removeEventListener('scroll', resize);
       window.removeEventListener('resize', resize);
     };
-  }, []);
+  }, [iphonePWA]);
   useEffect(() => {
-    if (tab === 'chat') end.current?.scrollIntoView({ block: 'end' });
-  }, [conversation?.messages.length, pendingText, tab]);
+    if (tab !== 'chat') return;
+    if (iphonePWA) {
+      const scroll = root.current?.querySelector('.agent-scroll');
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    } else end.current?.scrollIntoView({ block: 'end' });
+  }, [conversation?.messages.length, pendingText, tab, iphonePWA]);
   useEffect(() => {
     const pop = () => {
       const match = data?.bots.find(
         (b) => b.slug === new URLSearchParams(location.search).get('bot'),
       );
+      if (iphonePWA && !match && !busyRef.current && !recorder.current) {
+        setSelected('');
+        setConversation(null);
+        setDraft('');
+      }
       if (
         match &&
         !busyRef.current &&
@@ -196,7 +211,24 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     };
     window.addEventListener('popstate', pop);
     return () => window.removeEventListener('popstate', pop);
-  }, [data]);
+  }, [data, iphonePWA]);
+
+  const showPicker = useCallback(() => {
+    if (busyRef.current || recorder.current) return;
+    setSelected('');
+    setConversation(null);
+    setDraft('');
+    setError('');
+    setDrawer(false);
+    const url = new URL(location.href);
+    url.search = '';
+    history.replaceState(history.state, '', url);
+  }, []);
+  useEffect(() => {
+    if (!iphonePWA) return;
+    window.addEventListener('central-bots-enter', showPicker);
+    return () => window.removeEventListener('central-bots-enter', showPicker);
+  }, [iphonePWA, showPicker]);
 
   function choose(next: AgentBot) {
     if (busy || recording) return;
@@ -330,7 +362,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }
 
   return (
-    <div className="agent-workspace" ref={root}>
+    <div className={`agent-workspace${iphonePWA ? ' agent-iphone-pwa' : ''}`} ref={root}>
       {drawer && (
         <button
           className="agent-drawer-backdrop"
@@ -431,11 +463,12 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
           </button>
           <button
             className="agent-icon agent-mobile"
-            title="Meus bots"
-            aria-label="Meus bots"
-            onClick={() => setDrawer(true)}
+            title={iphonePWA ? 'Escolher outro bot' : 'Meus bots'}
+            aria-label={iphonePWA ? 'Escolher outro bot' : 'Meus bots'}
+            disabled={busy || recording}
+            onClick={() => iphonePWA ? showPicker() : setDrawer(true)}
           >
-            <List size={20} />
+            {iphonePWA ? <ArrowLeft size={20} /> : <List size={20} />}
           </button>
           {bot && <BotAvatar name={bot.avatar} />}
           <div>
@@ -445,7 +478,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                 ? 'Consulta em andamento'
                 : bot?.active
                   ? bot.kind === 'marketing' ? 'Seu parceiro editorial' : 'Somente consultas autorizadas'
-                  : 'Aguardando conexão'}
+                  : data && iphonePWA ? 'Escolha com quem você quer conversar' : 'Aguardando conexão'}
             </p>
           </div>
           <button
@@ -502,6 +535,22 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
           </div>
         )}
         <div className="agent-scroll" aria-busy={loading || busy}>
+          {iphonePWA && data && !bot && !loading && (
+            <div className="agent-picker">
+              <h3>Com quem vamos conversar?</h3>
+              <p>Escolha um bot para abrir ou continuar o papo.</p>
+              <nav className="agent-picker-grid" aria-label="Escolha seu bot">
+                {data.bots.map(item => (
+                  <button type="button" key={item.id} className="agent-picker-card" onClick={() => choose(item)}>
+                    <BotAvatar name={item.avatar} size={72} />
+                    <strong>{item.name}</strong>
+                    <span>{item.kind === 'gestor' ? 'Visão geral dos bots' : item.kind === 'captador' ? 'Análise das captações' : item.kind === 'sentinela' ? 'Saúde do sistema' : item.kind === 'marketing' ? 'Ideias e conteúdo' : item.mission}</span>
+                    <small>{item.active ? 'Abrir conversa' : 'Ver histórico'}</small>
+                  </button>
+                ))}
+              </nav>
+            </div>
+          )}
           {bot?.kind === 'marketing' && ['ideas','memory','sources','marketing-settings'].includes(tab) && <MarketingPanel botId={bot.id} tab={tab} onChange={async () => { await refresh(); await loadConversation(bot.id); }} />}
           {loading && (
             <p className="agent-empty" role="status">
