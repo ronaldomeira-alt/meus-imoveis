@@ -1,6 +1,7 @@
 import { AgentError, rows } from '../central-bots/core.js';
 
 export const AI_CATALOG = {
+  deepinfra: { key:'DEEPINFRA_API_KEY', defaultModel:'openai/gpt-oss-120b', audio:'openai/whisper-large-v3-turbo', models:['openai/gpt-oss-120b','openai/gpt-oss-20b'], audioModels:['openai/whisper-large-v3-turbo'] },
   groq: { key:'GROQ_API_KEY', defaultModel:'openai/gpt-oss-120b', audio:'whisper-large-v3-turbo', models:['openai/gpt-oss-120b','openai/gpt-oss-20b'], audioModels:['whisper-large-v3-turbo','whisper-large-v3'] },
   openai: { key:'OPENAI_API_KEY', defaultModel:'gpt-4.1-mini', audio:'whisper-1', models:['gpt-4.1-mini','gpt-4.1'], audioModels:['whisper-1'] },
   gemini: { key:'GEMINI_API_KEY', defaultModel:'gemini-2.5-flash', audio:'gemini-2.5-flash', models:['gemini-2.5-flash'], audioModels:['gemini-2.5-flash'] },
@@ -8,6 +9,8 @@ export const AI_CATALOG = {
 // Standard text tariffs verified 2026-10-04: groq.com/pricing,
 // openai.com/index/gpt-4-1, ai.google.dev/gemini-api/docs/pricing.
 const PRICES = { 'openai/gpt-oss-120b':{input:0.15,output:0.60}, 'openai/gpt-oss-20b':{input:0.075,output:0.30}, 'gpt-4.1-mini':{input:0.40,output:1.60}, 'gpt-4.1':{input:2,output:8}, 'gemini-2.5-flash':{input:0.30,output:2.50} };
+// Same model IDs have different prices across providers (deepinfra.com model pages).
+const DEEPINFRA_PRICES = { 'openai/gpt-oss-120b':{input:0.037,output:0.17}, 'openai/gpt-oss-20b':{input:0.03,output:0.14} };
 const bytes = value => Uint8Array.from(atob(value),c=>c.charCodeAt(0));
 const base64 = value => btoa(String.fromCharCode(...value));
 async function masterKey(env) {
@@ -43,7 +46,7 @@ export async function resolveSystemAI(ctx) {
   const primary=ctx.accountId===(ctx.env.SYSTEM_AI_ACCOUNT_ID||ctx.env.MEUS_IMOVEIS_ACCOUNT_ID);
   const key=record?.encrypted_key ? await decryptAIKey(record.encrypted_key,ctx.accountId,provider,ctx.env) : primary ? ctx.env[c.key] : '';
   const config={provider,model:record?.model||ctx.env.SYSTEM_AI_MODEL||c.defaultModel,transcription_model:record?.transcription_model||ctx.env.SYSTEM_AI_TRANSCRIPTION_MODEL||c.audio,enabled:record?.enabled!==false,configured:!!key};
-  const env={...ctx.env,SYSTEM_AI_PROVIDER:provider,SYSTEM_AI_MODEL:config.model,SYSTEM_AI_TRANSCRIPTION_MODEL:config.transcription_model,SYSTEM_AI_ENABLED:String(config.enabled),[c.key]:key||'',MARKETING_MODEL_PRICES:JSON.stringify({...JSON.parse(ctx.env.MARKETING_MODEL_PRICES||'{}'),...PRICES})};
+  const env={...ctx.env,SYSTEM_AI_PROVIDER:provider,SYSTEM_AI_MODEL:config.model,SYSTEM_AI_TRANSCRIPTION_MODEL:config.transcription_model,SYSTEM_AI_ENABLED:String(config.enabled),[c.key]:key||'',MARKETING_MODEL_PRICES:JSON.stringify({...JSON.parse(ctx.env.MARKETING_MODEL_PRICES||'{}'),...PRICES,...(provider==='deepinfra'?DEEPINFRA_PRICES:{})})};
   return {config,env,record};
 }
 export async function globalAIContext(ctx) {

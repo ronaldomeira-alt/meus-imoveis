@@ -1,6 +1,12 @@
 import { AgentError } from './core.js';
 
 const CONFIG = {
+  deepinfra: {
+    key: 'DEEPINFRA_API_KEY',
+    model: 'AGENT_DEEPINFRA_MODEL',
+    defaultModel: 'openai/gpt-oss-120b',
+    url: 'https://api.deepinfra.com/v1/openai',
+  },
   groq: {
     key: 'GROQ_API_KEY',
     model: 'AGENT_GROQ_MODEL',
@@ -51,7 +57,7 @@ export function createAIProvider(env, preference = 'auto') {
     );
   const key = env[config.key];
   const model = env.SYSTEM_AI_MODEL || env[config.model] || config.defaultModel;
-  const audioModel = env.SYSTEM_AI_TRANSCRIPTION_MODEL || (name === 'groq' ? 'whisper-large-v3-turbo' : name === 'openai' ? 'whisper-1' : model);
+  const audioModel = env.SYSTEM_AI_TRANSCRIPTION_MODEL || (name === 'deepinfra' ? 'openai/whisper-large-v3-turbo' : name === 'groq' ? 'whisper-large-v3-turbo' : name === 'openai' ? 'whisper-1' : model);
   if (![model,audioModel].every(value=>/^[a-zA-Z0-9._/-]+$/.test(value)))
     throw new AgentError('Modelo de IA inválido.', 503);
 
@@ -157,7 +163,7 @@ export function createAIProvider(env, preference = 'auto') {
           temperature: 0.1,
           max_tokens: maxOutputTokens,
           ...(json ? { response_format: { type: 'json_object' } } : {}),
-          ...(name === 'groq' && /^openai\/gpt-oss/.test(model) && reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+          ...(['groq','deepinfra'].includes(name) && /^openai\/gpt-oss/.test(model) && reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
           ...(tools.length
             ? {
                 tools: tools.map((t) => ({ type: 'function', function: t })),
@@ -216,19 +222,17 @@ export function createAIProvider(env, preference = 'auto') {
         'audio/ogg': 'ogg',
         'audio/wav': 'wav',
         'audio/aac': 'aac',
+        'audio/mpeg': 'mp3',
       };
       const form = new FormData();
       form.append(
-        'file',
+        name === 'deepinfra' ? 'audio' : 'file',
         new Blob([bytes], { type: mime }),
         `voice.${extensions[mime] || 'webm'}`,
       );
-      form.append(
-        'model',
-        audioModel,
-      );
+      if (name !== 'deepinfra') form.append('model', audioModel);
       form.append('language', 'pt');
-      const result = await request(`${config.url}/audio/transcriptions`, {
+      const result = await request(name === 'deepinfra' ? `https://api.deepinfra.com/v1/inference/${audioModel}` : `${config.url}/audio/transcriptions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}` },
         body: form,

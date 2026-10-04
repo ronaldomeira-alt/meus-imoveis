@@ -76,7 +76,10 @@ test('isolated PostgreSQL enforces 120 calls, duplicate rejection and service-on
   const pg=new PGlite();try {
     await pg.exec(`create role anon;create role authenticated;create role service_role bypassrls; create schema auth;create table auth.users(id uuid primary key);create table accounts(id uuid primary key);create schema cron;create function cron.schedule(text,text,text) returns bigint language sql as $$ select 1::bigint $$;`);
     await pg.exec(readFileSync('supabase/migrations/20261004185432_system_ai.sql','utf8'));
+    await pg.exec(readFileSync('supabase/migrations/20261004221755_system_ai_deepinfra.sql','utf8'));
     await pg.exec(`insert into accounts values('${account}'); grant usage on schema public to service_role; set role service_role;`);
+    await pg.query('insert into system_ai_settings(account_id,provider,model,transcription_model) values($1,$2,$3,$4)',[account,'deepinfra','openai/gpt-oss-120b','openai/whisper-large-v3-turbo']);
+    assert.equal((await pg.query('select provider from system_ai_settings')).rows[0].provider,'deepinfra');
     const reserve=async id=>(await pg.query('select system_ai_reserve($1,$2) ok',[account,id])).rows[0].ok;
     const id=crypto.randomUUID();assert.equal(await reserve(id),true);assert.equal(await reserve(id),false);
     for(let i=1;i<120;i++)assert.equal(await reserve(crypto.randomUUID()),true);
@@ -88,4 +91,45 @@ test('isolated PostgreSQL enforces 120 calls, duplicate rejection and service-on
 });
 test('frontend has no vendor endpoints, client key variables or browser speech provider',()=>{
   for(const path of ['src/lib/ai-provider.ts','src/lib/groq.ts','src/lib/gemini.ts','src/lib/editorial-ai.ts','src/lib/audio-recorder.ts','src/App.tsx','src/components/ui/VoiceNotesInput.tsx'])assert.doesNotMatch(readFileSync(path,'utf8'),/api\.groq\.com|api\.openai\.com|generativelanguage\.googleapis|VITE_(GROQ|GEMINI)_API_KEY|new SpeechRecognition/);
+});
+
+test('DeepInfra keeps one provider for tools, JSON and iPhone audio, with provider-specific rates',async()=>{
+  const secret='test-deepinfra-secret-123456789';
+  const record={provider:'deepinfra',model:'openai/gpt-oss-120b',transcription_model:'openai/whisper-large-v3-turbo',enabled:true,encrypted_key:await encryptAIKey(secret,account,'deepinfra',env)};
+  const resolved=await resolveSystemAI({db:fixture({record}).factory(),accountId:account,env});
+  assert.equal(resolved.config.configured,true);
+  assert.deepEqual(costEnvelope(resolved.env,[],record.model).rates,{input:0.037,output:0.17});
+  assert.deepEqual(costEnvelope(resolved.env,[],'openai/gpt-oss-20b').rates,{input:0.03,output:0.14});
+  const groq=await resolveSystemAI({db:fixture().factory(),accountId:account,env});
+  assert.deepEqual(costEnvelope(groq.env,[],record.model).rates,{input:0.15,output:0.60});
+  const original=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{
+    calls.push([url,options]);assert.equal(options.headers.Authorization,`Bearer ${secret}`);
+    return Response.json(url.includes('/inference/')?{text:'Áudio fictício'}:{choices:[{message:{role:'assistant',content:'OK'}}],usage:{prompt_tokens:10,completion_tokens:5}});
+  };
+  try {
+    const provider=createAIProvider(resolved.env,'groq');assert.equal(provider.name,'deepinfra');
+    const tool={name:'getBotsStatus',description:'Dados sintéticos',parameters:{type:'object',properties:{}}};
+    const reply=await provider.complete({messages:[{role:'user',content:'Teste fictício'}],tools:[tool],requireTool:true,reasoningEffort:'low'});
+    assert.equal(reply.usage.completion_tokens,5);assert.ok(!JSON.stringify(reply).includes('usage'));
+    const body=JSON.parse(calls[0][1].body);assert.equal(body.tool_choice,'required');assert.equal(body.reasoning_effort,'low');assert.equal(body.model,record.model);
+    await provider.complete({messages:[{role:'user',content:'Retorne JSON fictício'}],tools:[],json:true});
+    assert.deepEqual(JSON.parse(calls[1][1].body).response_format,{type:'json_object'});
+    await provider.transcribe(Buffer.alloc(100),'audio/mp4');
+    assert.equal(calls[2][0],'https://api.deepinfra.com/v1/inference/openai/whisper-large-v3-turbo');
+    const audio=calls[2][1].body.get('audio');assert.equal(audio.name,'voice.m4a');assert.equal(audio.type,'audio/mp4');assert.equal(calls[2][1].body.get('file'),null);
+    assert.ok(calls.every(([url])=>url.startsWith('https://api.deepinfra.com/')));
+    assert.equal(marketingModel(resolved.env,'openai'),record.model);
+  }finally{globalThis.fetch=original;}
+});
+test('switching to DeepInfra requires its own key and never borrows the Groq credential',async()=>{
+  const config={provider:'deepinfra',model:'openai/gpt-oss-120b',transcription_model:'openai/whisper-large-v3-turbo',enabled:true};
+  const f=fixture();assert.equal((await f.send({action:'save',config})).status,400);
+  assert.equal((await (await f.send({action:'config'})).json()).provider,'groq');
+  const response=await f.send({action:'save',config:{...config,api_key:'test-deepinfra-secret-123456789'}});
+  assert.equal(response.status,200);const value=await response.json();assert.equal(value.provider,'deepinfra');assert.equal(value.configured,true);
+  assert.doesNotMatch(JSON.stringify(value),/test-deepinfra-secret|encrypted_key/);
+  const isolated=await resolveSystemAI({db:fixture({record:config,accountId:other}).factory(),accountId:other,env});
+  assert.equal(isolated.config.configured,false);assert.equal(isolated.env.DEEPINFRA_API_KEY,'');
+  assert.throws(()=>createAIProvider(isolated.env,'groq'));
 });

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {database,client} from './helpers/marketing-db.mjs';
 import {listCentral,chat} from '../supabase/functions/_shared/central-bots/service.js';
 
-test('all bot greetings call the same AI, store answers, keep Marketing budgets and operational grounding',{timeout:30000},async()=>{
+for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greetings call the same AI, store answers, keep Marketing budgets and operational grounding`,{timeout:30000},async()=>{
   const pg=await database(),nativeFetch=globalThis.fetch;
   try {
     const account=crypto.randomUUID(),user=crypto.randomUUID();
@@ -17,14 +17,14 @@ test('all bot greetings call the same AI, store answers, keep Marketing budgets 
     };
     const calls=[];
     globalThis.fetch=async(url,options)=>{
-      assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
+      assert.equal(url,provider==='deepinfra'?'https://api.deepinfra.com/v1/openai/chat/completions':'https://api.groq.com/openai/v1/chat/completions');
       const body=JSON.parse(options.body);calls.push(body);
       assert.match(body.messages[0].content,/coloquial, amigável, simples e leve/);
       assert.match(body.messages[0].content,/sem tabelas/);
       assert.match(body.messages[0].content,/não prova que a automação está funcionando/);
       return Response.json({choices:[{message:body.tool_choice==='required'?{role:'assistant',content:null,tool_calls:[{id:'call-fixture',type:'function',function:{name:'getBotsStatus',arguments:'{}'}}]}:{role:'assistant',content:'**Olá!** Como posso ajudar?'}}]});
     };
-    const ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',GROQ_API_KEY:'test-key',SYSTEM_AI_PROVIDER:'groq',SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.15,"output":0.60}}'}};
+    const ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',GROQ_API_KEY:'test-key',DEEPINFRA_API_KEY:'test-deepinfra-key',SYSTEM_AI_PROVIDER:provider,SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.15,"output":0.60}}'}};
     const listed=await listCentral(ctx);
     for(const bot of listed.bots){
       const result=await chat(ctx,{bot_id:bot.id,content:'Olá!',request_id:crypto.randomUUID()});
@@ -32,7 +32,7 @@ test('all bot greetings call the same AI, store answers, keep Marketing budgets 
     }
     assert.equal(calls.length,4);assert.ok(calls.every(c=>c.model==='openai/gpt-oss-120b'&&!c.tools&&!c.tool_choice));
     const runs=(await pg.query('select result,status from agent_runs')).rows;
-    assert.ok(runs.every(r=>r.status==='completed'&&r.result.provider==='groq'&&r.result.model==='openai/gpt-oss-120b'));
+    assert.ok(runs.every(r=>r.status==='completed'&&r.result.provider===provider&&r.result.model==='openai/gpt-oss-120b'));
     assert.ok(runs.some(r=>r.result.marketing_reserved_usd>0),'Marketing greeting must reserve its budget');
     const gestor=listed.bots.find(b=>b.kind==='gestor');
     const operational=await chat(ctx,{bot_id:gestor.id,content:'Olá! Consulte quais bots existem.',request_id:crypto.randomUUID()});

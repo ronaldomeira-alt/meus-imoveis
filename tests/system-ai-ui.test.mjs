@@ -4,7 +4,7 @@ import { createServer } from 'vite';
 import puppeteer from 'puppeteer-core';
 
 test('global AI settings on desktop and mobile save one server config, keep keys masked and report real failures',{timeout:60000},async()=>{
-  const fixture={provider:'groq',model:'openai/gpt-oss-120b',transcription_model:'whisper-large-v3-turbo',enabled:true,configured:true,can_manage:true,catalog:{groq:{models:['openai/gpt-oss-120b','openai/gpt-oss-20b'],audioModels:['whisper-large-v3-turbo']},gemini:{models:['gemini-2.5-flash'],audioModels:['gemini-2.5-flash']},openai:{models:['gpt-4.1-mini'],audioModels:['whisper-1']}}};
+  const fixture={provider:'groq',model:'openai/gpt-oss-120b',transcription_model:'whisper-large-v3-turbo',enabled:true,configured:true,can_manage:true,catalog:{deepinfra:{models:['openai/gpt-oss-120b','openai/gpt-oss-20b'],audioModels:['openai/whisper-large-v3-turbo']},groq:{models:['openai/gpt-oss-120b','openai/gpt-oss-20b'],audioModels:['whisper-large-v3-turbo']},gemini:{models:['gemini-2.5-flash'],audioModels:['gemini-2.5-flash']},openai:{models:['gpt-4.1-mini'],audioModels:['whisper-1']}}};
   const server=await createServer({configFile:false,cacheDir:'.audit_screenshots/system-ai-test-cache',oxc:{jsx:{runtime:'automatic'}},server:{port:0,host:'127.0.0.1'},plugins:[{
     name:'isolated-system-ai',enforce:'pre',resolveId(id){if(id==='/__ai_entry.js')return '\0ai-entry';},
     load(id){
@@ -31,6 +31,14 @@ test('global AI settings on desktop and mobile save one server config, keep keys
       await page.waitForFunction(()=>document.querySelector('[role=status]')?.textContent.includes('Conexão confirmada'));
       await page.evaluate(()=>{window.__fail=true;[...document.querySelectorAll('button')].find(b=>b.textContent==='Testar configuração salva').click();});
       await page.waitForSelector('[role=alert]');assert.match(await page.$eval('[role=alert]',e=>e.textContent),/indisponível/);
+      await page.select('[aria-label="Provedor"]','deepinfra');
+      assert.equal(await page.$eval('[aria-label="Modelo de texto"]',e=>e.value),'openai/gpt-oss-120b');
+      assert.equal(await page.$eval('[aria-label="Modelo de transcrição"]',e=>e.value),'openai/whisper-large-v3-turbo');
+      assert.equal(await page.$eval('[aria-label="Chave de API"]',e=>e.placeholder),'Informe a chave deste provedor');
+      await page.type('[aria-label="Chave de API"]','synthetic-deepinfra-key-123456');
+      await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Salvar configuração').click());
+      await page.waitForFunction(()=>document.querySelector('[aria-label="Chave de API"]').value==='');
+      assert.equal(await page.evaluate(()=>window.__calls.filter(c=>c.action==='save').at(-1).config.provider),'deepinfra');
       await page.select('[aria-label="Provedor"]','gemini');assert.equal(await page.$eval('[aria-label="Modelo de transcrição"]',e=>e.value),'gemini-2.5-flash');
     }
     assert.deepEqual(errors,[]);

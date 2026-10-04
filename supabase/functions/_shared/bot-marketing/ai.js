@@ -23,8 +23,8 @@ export function costEnvelope(env, messages, model) {
 }
 export function marketingModel(env, preference = 'auto') {
   if (env.SYSTEM_AI_MODEL) return env.SYSTEM_AI_MODEL;
-  const provider = preference === 'auto' ? env.AGENT_AI_PROVIDER || (env.GROQ_API_KEY ? 'groq' : env.OPENAI_API_KEY ? 'openai' : env.GEMINI_API_KEY ? 'gemini' : '') : preference;
-  return { groq: env.AGENT_GROQ_MODEL || 'openai/gpt-oss-20b', openai: env.AGENT_OPENAI_MODEL || 'gpt-4.1-mini', gemini: env.AGENT_GEMINI_MODEL || 'gemini-2.5-flash' }[provider];
+  const provider = preference === 'auto' ? env.AGENT_AI_PROVIDER || (env.DEEPINFRA_API_KEY ? 'deepinfra' : env.GROQ_API_KEY ? 'groq' : env.OPENAI_API_KEY ? 'openai' : env.GEMINI_API_KEY ? 'gemini' : '') : preference;
+  return { deepinfra: env.AGENT_DEEPINFRA_MODEL || 'openai/gpt-oss-120b', groq: env.AGENT_GROQ_MODEL || 'openai/gpt-oss-20b', openai: env.AGENT_OPENAI_MODEL || 'gpt-4.1-mini', gemini: env.AGENT_GEMINI_MODEL || 'gemini-2.5-flash' }[provider];
 }
 export async function editorialCall(ctx, bot, contract, data, reserve, providerFactory = createAIProvider) {
   const model = marketingModel(ctx.env, bot.provider);

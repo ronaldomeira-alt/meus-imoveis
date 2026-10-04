@@ -174,7 +174,7 @@ export async function listCentral(ctx, includePreviews = false) {
     settings,
     tools: TOOL_CATALOG,
     provider_configured: ctx.aiConfig ? ctx.aiConfig.enabled && ctx.aiConfig.configured : Boolean(
-      ctx.env.GROQ_API_KEY || ctx.env.OPENAI_API_KEY || ctx.env.GEMINI_API_KEY,
+      ctx.env.DEEPINFRA_API_KEY || ctx.env.GROQ_API_KEY || ctx.env.OPENAI_API_KEY || ctx.env.GEMINI_API_KEY,
     ),
   };
 }

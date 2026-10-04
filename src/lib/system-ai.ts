@@ -1,7 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
-export type SystemAIProvider = 'groq' | 'gemini' | 'openai';
+export type SystemAIProvider = 'groq' | 'gemini' | 'openai' | 'deepinfra';
 export interface SystemAIConfig {
   provider: SystemAIProvider;
   model: string;

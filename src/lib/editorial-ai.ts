@@ -118,7 +118,7 @@ function buildPropertyContext(property: Property): string {
  */
 export async function generatePropertyCaption(
   options: GenerateCaptionOptions
-): Promise<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' }> {
+): Promise<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' | 'deepinfra' }> {
   const {
     property,
     editorialSettings: providedSettings,
@@ -155,7 +155,7 @@ export async function generatePropertyCaption(
 
   const userPrompt = userPromptLines.join('\n');
 
-  return requestSystemAI<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' }>({action:'caption',system_prompt:systemPrompt,prompt:userPrompt});
+  return requestSystemAI<{ caption: string; providerUsed: 'groq' | 'gemini' | 'openai' | 'deepinfra' }>({action:'caption',system_prompt:systemPrompt,prompt:userPrompt});
 }
 
 /**
