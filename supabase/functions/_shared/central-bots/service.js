@@ -40,6 +40,10 @@ export async function bootstrap(ctx) {
     ctx.db.from('agent_bots').upsert(
       BUILTINS.filter(bot => bot.kind !== 'marketing' || ctx.env.MARKETING_BOT_ENABLED === 'true').map((bot) => ({
         ...bot,
+        // PostgREST batches use the union of columns. Missing fields otherwise
+        // become NULL, including on rows skipped by ON CONFLICT DO NOTHING.
+        autonomy: bot.autonomy ?? 'read_only',
+        notification_events: bot.notification_events ?? ['incident', 'approval'],
         account_id: ctx.accountId,
         created_by: ctx.user.id,
       })),

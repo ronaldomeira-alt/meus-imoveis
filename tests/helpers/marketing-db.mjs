@@ -42,6 +42,7 @@ class Query {
   delete() { this.mode='delete'; return this; }
   filter(k,op,v) { this.args.push(typeof v==='object'&&v!==null?JSON.stringify(v):v); this.where.push(`${ident(k)} ${op} $${this.args.length}`); return this; }
   eq(k,v) { return this.filter(k,'=',v); }
+  neq(k,v) { return this.filter(k,'<>',v); }
   gt(k,v) { return this.filter(k,'>',v); }
   gte(k,v) { return this.filter(k,'>=',v); }
   lt(k,v) { return this.filter(k,'<',v); }
@@ -58,8 +59,9 @@ class Query {
       let sql, fields=this.fields==='*'?'*':this.fields.split(',').map(ident).join(',');
       const where=this.where.length?' where '+this.where.join(' and '):'';
       if(this.mode==='insert') {
-        const cols=Object.keys(this.payload[0]);
-        const vals=this.payload.map(p=>'('+cols.map(k=>{const v=p[k];params.push(typeof v==='object'&&v!==null&&!['tools','notification_events','topics'].includes(k)?JSON.stringify(v):v);return '$'+params.length;}).join(',')+')').join(',');
+        // Match PostgREST's batch behavior: union columns, NULL for missing fields.
+        const cols=[...new Set(this.payload.flatMap(p=>Object.keys(p)))];
+        const vals=this.payload.map(p=>'('+cols.map(k=>{const v=Object.hasOwn(p,k)?p[k]:null;params.push(typeof v==='object'&&v!==null&&!['tools','notification_events','topics'].includes(k)?JSON.stringify(v):v);return '$'+params.length;}).join(',')+')').join(',');
         sql=`insert into public.${ident(this.name)}(${cols.map(ident).join(',')}) values ${vals}`;
         if(this.conflict) sql+=` on conflict (${this.conflict.onConflict.split(',').map(ident).join(',')}) ${this.conflict.ignoreDuplicates?'do nothing':'do update set '+cols.map(c=>`${ident(c)}=excluded.${ident(c)}`).join(',')}`;
         sql+=' returning '+fields;
