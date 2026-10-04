@@ -496,7 +496,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               {bot?.last_run?.status === 'running'
                 ? 'Consulta em andamento'
                 : bot?.active
-                  ? bot.kind === 'marketing' ? 'Seu parceiro editorial' : 'Somente consultas autorizadas'
+                  ? bot.kind === 'marketing' ? 'Vamos criar boas ideias juntos' : bot.kind === 'gestor' ? 'De olho na sua equipe de bots' : bot.kind === 'captador' ? 'Vamos conferir suas captações' : bot.kind === 'sentinela' ? 'De olho no seu sistema' : 'Vamos conversar'
                   : data && iphonePWA ? 'Escolha com quem você quer conversar' : 'Aguardando conexão'}
             </p>
           </div>

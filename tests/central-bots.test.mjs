@@ -324,7 +324,7 @@ test('AI adapters require server-only credentials and reject ungrounded numbers'
   );
   assert.match(
     groundedReply('999 contatos', [{ data: { count: 3 } }]),
-    /não foi possível validar/,
+    /Prefiro não te passar um resultado incerto/,
   );
   assert.equal(
     groundedReply('3 contatos', [{ data: { count: 3 } }]),
@@ -332,7 +332,7 @@ test('AI adapters require server-only credentials and reject ungrounded numbers'
   );
   assert.match(
     groundedReply('Tudo funcionando.', []),
-    /dados verificados suficientes/,
+    /confirmar os dados.*segurança/,
   );
 });
 test('operational evidence redacts credentials before reaching AI or chat sources', () => {

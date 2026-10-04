@@ -242,12 +242,12 @@ export function groundedReply(content, sources) {
   const text =
     typeof content === 'string' ? content.trim().slice(0, 12000) : '';
   if (!sources.length || !text)
-    return 'Não existem dados verificados suficientes para responder. Consulte as fontes ou tente novamente.';
+    return 'Ainda não consegui confirmar os dados pra te responder com segurança. Podemos tentar de novo.';
   const evidenceNumbers = new Set(JSON.stringify(sources).match(/\d+/g) || []);
   const unsupported = (text.match(/\d+/g) || []).some(
     (n) => !evidenceNumbers.has(n),
   );
   return unsupported
-    ? 'Os dados foram consultados, mas não foi possível validar todos os números da resposta. Confira as fontes verificadas abaixo.'
+    ? 'Consegui consultar os dados, mas alguns números ainda não ficaram claros. Prefiro não te passar um resultado incerto. As fontes estão aqui embaixo pra você conferir.'
     : text;
 }

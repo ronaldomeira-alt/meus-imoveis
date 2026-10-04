@@ -19,6 +19,9 @@ test('all bot greetings call the same AI, store answers, keep Marketing budgets 
     globalThis.fetch=async(url,options)=>{
       assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
       const body=JSON.parse(options.body);calls.push(body);
+      assert.match(body.messages[0].content,/coloquial, amigável, simples e leve/);
+      assert.match(body.messages[0].content,/sem tabelas/);
+      assert.match(body.messages[0].content,/não prova que a automação está funcionando/);
       return Response.json({choices:[{message:body.tool_choice==='required'?{role:'assistant',content:null,tool_calls:[{id:'call-fixture',type:'function',function:{name:'getBotsStatus',arguments:'{}'}}]}:{role:'assistant',content:'Olá! Como posso ajudar?'}}]});
     };
     const ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',GROQ_API_KEY:'test-key',SYSTEM_AI_PROVIDER:'groq',SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.15,"output":0.60}}'}};
