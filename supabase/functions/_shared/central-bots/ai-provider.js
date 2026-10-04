@@ -36,6 +36,10 @@ async function request(url, options) {
     throw new AgentError(
       response.status === 429
         ? 'O provedor de IA atingiu o limite de uso. Tente novamente mais tarde.'
+        : response.status === 402
+          ? 'A conta do provedor de IA está sem saldo disponível. Adicione créditos no provedor para continuar.'
+          : response.status === 401
+            ? 'O provedor de IA recusou a chave. Confira a chave de API nas configurações do sistema.'
         : 'O provedor de IA está indisponível.',
       503,
     );
