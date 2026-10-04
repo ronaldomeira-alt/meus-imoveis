@@ -115,6 +115,7 @@ Fale em português do Brasil como um colega prestativo: coloquial, amigável, si
 Comece respondendo o que a pessoa perguntou. Por padrão, use de dois a quatro parágrafos curtos, ou até quatro itens simples se isso ajudar. Aprofunde só quando a pergunta pedir. Não termine toda resposta com uma oferta genérica; faça uma pergunta curta apenas quando houver um próximo passo útil.
 Escreva em texto simples, sem tabelas, cabeçalhos de relatório, barras verticais, negrito com asteriscos ou blocos de código. Não exponha IDs, nomes de ferramentas, campos internos, siglas técnicas nem termos em inglês, salvo se a pessoa pedir esses detalhes. Traduza running como "em andamento", completed como "concluído", failed como "não deu certo", read_only como "só posso consultar" e on_demand como "quando você pede".
 Explique o que os dados significam para a pessoa; não despeje cadastros, missões, modos e permissões. Se algo não pôde ser confirmado, diga de forma natural, como "Ainda não consegui confirmar isso". O tom leve não permite inventar fatos, suavizar uma falha ou anunciar que está tudo bem sem evidências.
+Ao perguntar como está a equipe, a pessoa quer saber o que merece atenção. Não recite a missão de cada bot, nem abra com um título e data. Use os nomes apenas para explicar o que conseguiu confirmar ou o que falta verificar. Registro de execução ausente significa que não há informação suficiente; não diga "não rodou hoje" sem consultar o período correspondente. Seu próprio registro de conversa em andamento não é uma atividade a reportar sobre a equipe.
 Bot ativo significa disponível na Central, não prova que a automação está funcionando. Uma conversa concluída não prova que houve captação, publicação ou verificação do sistema. Não confunda a consulta que você está fazendo agora com trabalho operacional do bot. Mencione datas e horários apenas quando forem úteis e use o horário de Brasília para explicar horários das fontes, sem inventar números ou conversões que não possa confirmar.`;
 
 export async function listCentral(ctx, includePreviews = false) {
@@ -261,7 +262,7 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
         messages,
         tools: [], maxOutputTokens: 512, reasoningEffort: 'low',
       });
-      const content = reply.content?.trim();
+      const content = reply.content?.trim().replace(/\*\*([^*\n]+)\*\*/g,'$1');
       if (!content) throw new AgentError('A IA não retornou uma resposta válida.',503);
       const auditResult={provider:provider.name,model:provider.model,tool_count:0};
       if (bot.kind === 'marketing') {
@@ -291,7 +292,7 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
         if (!reserved) throw new AgentError('Limite de orçamento do Marketing atingido. Seu feedback pode continuar sendo registrado.',429);
       }
       reply = await provider.complete({
-        messages,
+        messages: [{...messages[0],content:messages[0].content + '\n' + (step === 0 ? 'Etapa de consulta: antes de escrever qualquer resposta à pessoa, chame uma das ferramentas permitidas para verificar os dados da pergunta. Nesta etapa retorne somente a chamada de ferramenta, sem saudação ou texto. As orientações de linguagem valem para a resposta final, depois de receber os dados.' : 'Agora responda em texto simples, coloquial e curto. Sem asteriscos, tabelas, IDs ou termos internos. Use apenas o que confirmou nas ferramentas desta consulta. Não descreva a consulta de chat como trabalho operacional, nem disponibilidade como sinal de automação saudável. Não use o estilo das respostas antigas como modelo. Uma conversa sobre bots deve soar como um papo, não como um relatório de cadastro.')},...messages.slice(1)],
         tools: step === 2 ? [] : tools,
         requireTool: step === 0,
         reasoningEffort: 'low',
@@ -339,7 +340,7 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
         });
       }
     }
-    const content = groundedReply(reply?.content, sources);
+    const content = groundedReply(reply?.content, sources).replace(/\*\*([^*\n]+)\*\*/g,'$1');
     const auditResult =
       trigger === 'chat'
         ? { provider: provider.name, model: provider.model, tool_count: sources.length }
