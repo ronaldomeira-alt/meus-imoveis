@@ -178,23 +178,68 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }, [selected, loadConversation]);
   useEffect(() => {
     const viewport = window.visualViewport;
+    let fullHeight = viewport?.height || window.innerHeight;
+    let safeTop = 0;
+    let frame = 0;
     const resize = () => {
-      root.current?.style.setProperty(
+      const element = root.current;
+      if (!element) return;
+      const height = viewport?.height || window.innerHeight;
+      element.style.setProperty(
         '--agent-height',
-        `${viewport?.height || window.innerHeight}px`,
+        `${height}px`,
       );
-      if (iphonePWA) root.current?.style.setProperty('--agent-viewport-top', `${viewport?.offsetTop || 0}px`);
+      if (iphonePWA) {
+        const keyboard = Math.abs((viewport?.scale || 1) - 1) < .05 && fullHeight - height > 150;
+        element.style.setProperty('--agent-viewport-top', `${viewport?.offsetTop || 0}px`);
+        element.dataset.keyboard = keyboard ? 'open' : 'closed';
+        if (keyboard) element.style.setProperty('--agent-stable-safe-top', `${safeTop}px`);
+        else {
+          element.style.removeProperty('--agent-stable-safe-top');
+          fullHeight = height;
+          safeTop = Math.max(safeTop, parseFloat(getComputedStyle(element).paddingTop) || 0);
+        }
+        // Keep the last messages visible as the keyboard changes the scroll area.
+        if (following.current) grow();
+      }
+    };
+    const focus = () => {
+      const element = root.current;
+      if (!element) return;
+      if (element.dataset.keyboard !== 'open') {
+        safeTop = Math.max(safeTop, parseFloat(getComputedStyle(element).paddingTop) || 0);
+      }
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(resize);
+    };
+    const rotate = () => {
+      fullHeight = viewport?.height || window.innerHeight;
+      safeTop = 0;
+      root.current?.style.removeProperty('--agent-stable-safe-top');
+      resize();
     };
     resize();
     viewport?.addEventListener('resize', resize);
     if (iphonePWA) viewport?.addEventListener('scroll', resize);
     window.addEventListener('resize', resize);
+    if (iphonePWA) {
+      window.addEventListener('scroll', resize);
+      window.addEventListener('orientationchange', rotate);
+      root.current?.addEventListener('focusin', focus);
+      root.current?.addEventListener('focusout', focus);
+    }
+    const element = root.current;
     return () => {
+      cancelAnimationFrame(frame);
       viewport?.removeEventListener('resize', resize);
       viewport?.removeEventListener('scroll', resize);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('scroll', resize);
+      window.removeEventListener('orientationchange', rotate);
+      element?.removeEventListener('focusin', focus);
+      element?.removeEventListener('focusout', focus);
     };
-  }, [iphonePWA]);
+  }, [iphonePWA, grow]);
   useEffect(() => {
     if (tab !== 'chat') return;
     grow();

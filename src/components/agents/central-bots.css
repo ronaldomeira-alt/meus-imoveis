@@ -597,8 +597,12 @@
   --agent-safe-top: env(safe-area-inset-top, 0px);
   --agent-safe-bottom: env(safe-area-inset-bottom, 0px);
   box-sizing: border-box;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   transform: translateY(var(--agent-viewport-top, 0px));
-  padding-top: var(--agent-safe-top);
+  padding-top: var(--agent-stable-safe-top, var(--agent-safe-top));
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
@@ -629,6 +633,7 @@
 .agent-inbox-heading time { margin-left: auto; flex-shrink: 0; color: var(--text-secondary); font-size: 12px; }
 .agent-inbox-preview { color: var(--text-secondary); font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-iphone-pwa .agent-composer { padding-bottom: calc(8px + var(--agent-safe-bottom)); }
+.agent-iphone-pwa[data-keyboard="open"] .agent-composer { padding-bottom: 8px; }
 @media (max-width: 767px) {
   .agent-iphone-pwa .agent-inbox-topbar { padding: 16px 20px 10px; min-height: 84px; }
   .agent-mobile {

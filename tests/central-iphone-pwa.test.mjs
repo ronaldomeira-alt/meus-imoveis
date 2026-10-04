@@ -40,17 +40,33 @@ test('iPhone PWA: choose faces before chat, switch/re-enter, deep links, safe ar
     mkdirSync('.audit_screenshots',{recursive:true});await page.screenshot({path:'.audit_screenshots/iphone-pwa-picker.png'});
     await page.click('.agent-picker-card');await page.waitForSelector('.agent-composer textarea');
     assert.equal(await page.$eval('.agent-topbar h2',e=>e.textContent),'Bot Gestor');
+    await page.focus('.agent-composer textarea');
     await page.evaluate(()=>{Object.defineProperty(visualViewport,'height',{value:430,configurable:true});Object.defineProperty(visualViewport,'offsetTop',{value:80,configurable:true});visualViewport.dispatchEvent(new Event('resize'));visualViewport.dispatchEvent(new Event('scroll'));});
+    assert.equal(await page.$eval('.agent-workspace',e=>e.dataset.keyboard),'open');
+    assert.equal(await page.$eval('.agent-workspace',e=>getComputedStyle(e).position),'fixed');
     assert.ok(await page.$eval('.agent-composer',e=>e.getBoundingClientRect().bottom<=511));
+    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'8px');
+    // Safari can pan the page on focus and temporarily report zero top inset.
+    // Fixed viewport anchoring must compensate without moving the bot header
+    // under the status bar or leaving a second keyboard-sized gap below input.
+    await page.evaluate(()=>{document.documentElement.style.overflow='auto';document.body.style.overflow='auto';document.body.style.height='1444px';document.querySelector('.agent-workspace').style.setProperty('--agent-safe-top','0px');window.scrollTo(0,80);window.dispatchEvent(new Event('scroll'));});
+    await page.waitForFunction(()=>window.scrollY===80);
+    assert.ok(await page.$eval('.agent-topbar',e=>Math.abs(e.getBoundingClientRect().top-139)<2));
+    assert.ok(await page.$eval('.agent-composer-row',e=>{const rect=e.getBoundingClientRect();return rect.bottom<=510&&510-rect.bottom<=36;}));
+
     assert.ok(await page.$eval('.agent-topbar',e=>e.getBoundingClientRect().top>=139));
     await page.type('.agent-composer textarea','Olá de teste');await page.click('[aria-label="Enviar mensagem"]');await page.waitForSelector('.agent-message-assistant');
     await page.evaluate(()=>{Object.defineProperty(visualViewport,'height',{value:844,configurable:true});Object.defineProperty(visualViewport,'offsetTop',{value:0,configurable:true});visualViewport.dispatchEvent(new Event('resize'));});
+    assert.equal(await page.$eval('.agent-workspace',e=>e.dataset.keyboard),'closed');
+    await page.evaluate(()=>{document.querySelector('.agent-workspace').style.setProperty('--agent-safe-top','59px');window.scrollTo(0,0);document.documentElement.style.overflow='';document.body.style.overflow='';document.body.style.height='';window.dispatchEvent(new Event('scroll'));});
+    assert.ok(await page.$eval('.agent-topbar',e=>Math.abs(e.getBoundingClientRect().top-59)<2));
+    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'42px');
     await page.click('[aria-label="Escolher outro bot"]');await page.waitForSelector('.agent-picker-card');assert.equal(await page.$('.agent-composer'),null);
     await page.click('.agent-picker-card:nth-child(3)');await page.waitForSelector('.agent-composer');
     await page.evaluate(()=>window.dispatchEvent(new Event('central-bots-enter')));await page.waitForSelector('.agent-picker-card');
     await page.goto(`${url}?bot=marketing`);await page.waitForSelector('.agent-composer');assert.equal(await page.$('.agent-picker-card'),null);
     for(const width of [320,430,844]) {await page.setViewport({width,height:width===844?390:844,isMobile:true,hasTouch:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.ok(await page.$eval('[aria-label="Escolher outro bot"]',e=>e.getBoundingClientRect().width>0));}
-    const safari=await browser.newPage();await safari.setUserAgent(iphone);await safari.setViewport({width:390,height:844,isMobile:true});await safari.goto(url);await safari.waitForSelector('.agent-composer');assert.equal(await safari.$('.agent-iphone-pwa'),null);
-    const desktop=await browser.newPage();await desktop.setViewport({width:1440,height:900});await desktop.goto(url);await desktop.waitForSelector('.agent-composer');assert.equal(await desktop.$('.agent-picker-card'),null);
+    const safari=await browser.newPage();await safari.setUserAgent(iphone);await safari.setViewport({width:390,height:844,isMobile:true});await safari.goto(url);await safari.waitForSelector('.agent-composer');assert.equal(await safari.$('.agent-iphone-pwa'),null);assert.notEqual(await safari.$eval('.agent-workspace',e=>getComputedStyle(e).position),'fixed');
+    const desktop=await browser.newPage();await desktop.setViewport({width:1440,height:900});await desktop.goto(url);await desktop.waitForSelector('.agent-composer');assert.equal(await desktop.$('.agent-picker-card'),null);assert.notEqual(await desktop.$eval('.agent-workspace',e=>getComputedStyle(e).position),'fixed');
   }finally{await browser?.close();await server.close();}
 });
