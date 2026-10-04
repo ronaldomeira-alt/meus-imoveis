@@ -26,6 +26,7 @@ import {
 import { AudioRecorder } from '../../lib/audio-recorder';
 import { BotAvatar } from './BotAvatar';
 import { CreateBotModal } from './CreateBotModal';
+import { MarketingPanel } from './MarketingPanel';
 import './central-bots.css';
 
 const date = (value?: string | null) =>
@@ -445,7 +446,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               {bot?.last_run?.status === 'running'
                 ? 'Consulta em andamento'
                 : bot?.active
-                  ? 'Somente consultas autorizadas'
+                  ? bot.kind === 'marketing' ? 'Seu parceiro editorial' : 'Somente consultas autorizadas'
                   : 'Aguardando conexão'}
             </p>
           </div>
@@ -463,6 +464,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
           <nav className="agent-tabs" aria-label="Visões do bot">
             {[
               ['chat', 'Conversa'],
+              ...(bot.kind === 'marketing' ? [['ideas', 'Ideias'], ['memory', 'Memória'], ['sources', 'Fontes e atividade'], ['marketing-settings', 'Configurações']] : []),
               ['activity', 'Atividade'],
               [
                 'incidents',
@@ -502,6 +504,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
           </div>
         )}
         <div className="agent-scroll" aria-busy={loading || busy}>
+          {bot?.kind === 'marketing' && ['ideas','memory','sources','marketing-settings'].includes(tab) && <MarketingPanel botId={bot.id} tab={tab} onChange={async () => { await refresh(); await loadConversation(bot.id); }} />}
           {loading && (
             <p className="agent-empty" role="status">
               Conectando à Central...

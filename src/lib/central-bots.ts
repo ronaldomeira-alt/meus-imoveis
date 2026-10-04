@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 export const CENTRAL_BOTS_ENABLED =
   import.meta.env.VITE_CENTRAL_BOTS_ENABLED === 'true';
 export type BotAvatarName =
-  'gestor' | 'captador' | 'sentinela' | 'jade' | 'coral' | 'silver';
+  'gestor' | 'captador' | 'sentinela' | 'jade' | 'coral' | 'silver' | 'marketing';
 export interface AgentRun {
   id: string;
   bot_id: string;

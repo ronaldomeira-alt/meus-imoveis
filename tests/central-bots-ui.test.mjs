@@ -5,6 +5,7 @@ import { createServer } from 'vite';
 import puppeteer from 'puppeteer-core';
 import { BUILTINS } from '../supabase/functions/_shared/central-bots/core.js';
 import { TOOL_CATALOG } from '../supabase/functions/_shared/central-bots/tools.js';
+import { DEFAULTS, PROFILE } from '../supabase/functions/_shared/bot-marketing/core.js';
 
 // All data is local test fixtures. This server never calls production services.
 const now = '2026-10-03T15:00:00.000Z';
@@ -47,6 +48,13 @@ const fixture = {
 };
 const mockModule = `
 const data = ${JSON.stringify(fixture)};
+const marketing = ${JSON.stringify({
+  settings: { enabled: false, paused: false, config: DEFAULTS, profile: PROFILE, next_research_at: now, last_cycle_at: null, last_error: null },
+  ideas: [{ id: 'idea-fixture', topic: 'Pauta de teste no Bessa', angle: 'Rotina do bairro', status: 'proposed', created_at: now, delivered_at: now, draft_id: null, proposal: { message: 'Ronaldo, esta é uma ideia de teste, com evidência fictícia isolada.', why_now: 'Cenário de teste', fit: 'Contexto de teste', format: 'Vídeo', hook: 'Conhecer o bairro', practical: 'Mostrar o trajeto', effort: 'Gravação curta', limits: 'Fixture local; não é pesquisa real.', evidence: [{ id: 'evidence-fixture', url: 'https://www.gov.br/teste', quote: 'Citação fictícia para testar a interface.', published_at: now, observed_at: now }] } }],
+  memory: [{ id: 'memory-fixture', kind: 'fact', nature: 'observed', topic: 'Bessa', state: 'active', data: { claim: 'Memória fictícia de teste', url: 'https://www.gov.br/teste' }, updated_at: now }],
+  sources: [{ id: 'source-fixture', url: 'https://www.gov.br/teste', identity: 'Fonte fictícia', access_status: 'unknown', last_checked_at: null, limits: 'Fixture local', trust: 'unreviewed' }],
+  tasks: [], capabilities: { search: false, instagram_binding: false, media_analysis: false, server_enabled: true },
+})};
 const messages = {};
 window.__agentActions = [];
 export const CENTRAL_BOTS_ENABLED = true;
@@ -55,6 +63,16 @@ export async function centralRequest(body) {
   window.__agentActions.push(body);
   if (window.__failCentral) throw new Error('Falha simulada de conexão');
   if (body.action === 'list') return structuredClone(data);
+  if (body.action === 'marketing') {
+    if(body.operation==='panel') return structuredClone(marketing);
+    if(body.operation==='feedback') marketing.ideas.find(i=>i.id===body.idea_id).status=body.status||'saved';
+    if(body.operation==='settings') { Object.assign(marketing.settings.config,body.settings); if('enabled' in body.settings)marketing.settings.enabled=body.settings.enabled; if('paused' in body.settings)marketing.settings.paused=body.settings.paused; }
+    if(body.operation==='profile') Object.assign(marketing.settings.profile,body.profile);
+    if(body.operation==='draft') marketing.ideas.find(i=>i.id===body.idea_id).draft_id='draft-fixture';
+    if(body.operation==='memory_correct') marketing.memory.find(m=>m.id===body.memory_id).data.correction=body.correction;
+    if(body.operation==='memory_delete') marketing.memory=marketing.memory.filter(m=>m.id!==body.memory_id);
+    return {saved:true};
+  }
   if (body.action === 'conversation') return { conversation_id: body.bot_id, messages: messages[body.bot_id] || [], runs: [], events: [] };
   if (body.action === 'chat') {
     (messages[body.bot_id] ||= []).push({id: crypto.randomUUID(), role:'user', content:body.content, created_at:'${now}', sources:[]}, {id:crypto.randomUUID(), role:'assistant', content:'Consulta de teste concluída: 3 contatos.', created_at:'${now}', sources:[{tool:'getCaptureSummary', observed_at:'${now}', data:{count:3, fixture:true}}]});
@@ -139,7 +157,7 @@ test(
         await page.$$eval('.agent-bot-item', (items) =>
           items.map((i) => i.querySelector('strong').textContent).join(','),
         ),
-        'Bot Gestor,Bot Captador,Bot Sentinela',
+        'Bot Gestor,Bot Captador,Bot Sentinela,Bot de Marketing',
       );
       await page.type('.agent-composer textarea', 'Quantos contatos existem?');
       await page.click('[aria-label="Enviar mensagem"]');
@@ -153,6 +171,26 @@ test(
         await page.$eval('.agent-source', (e) => e.textContent),
         /fixture/,
       );
+      await page.click('.agent-bot-item:nth-child(4)');
+      await page.waitForFunction(() => document.querySelector('.agent-topbar h2')?.textContent==='Bot de Marketing');
+      assert.ok(await page.$('.agent-marketing-avatar'));
+      await page.click('.agent-tabs button:nth-child(2)');
+      await page.waitForSelector('.marketing-card');
+      await page.evaluate(() => [...document.querySelectorAll('.marketing-card button')].find(b=>b.textContent==='Aprovar ideia').click());
+      await page.waitForFunction(() => window.__agentActions.some(a=>a.operation==='feedback'&&a.status==='approved'));
+      assert.ok(await page.evaluate(() => !window.__agentActions.some(a=>/publish|schedule_post/.test(a.operation||''))));
+      await page.click('.agent-tabs button:nth-child(3)');
+      await page.waitForFunction(() => document.querySelector('.marketing-panel')?.textContent.includes('Perfil editorial'));
+      await page.type('.marketing-panel form textarea:nth-of-type(1)','');
+      await page.evaluate(() => [...document.querySelectorAll('.marketing-panel button')].find(b=>b.textContent==='Corrigir perfil').click());
+      await page.waitForFunction(() => window.__agentActions.some(a=>a.operation==='profile'));
+      await page.click('.agent-tabs button:nth-child(4)');
+      await page.waitForFunction(() => document.querySelector('.marketing-panel')?.textContent.includes('Fonte fictícia'));
+      await page.screenshot({path:'.audit_screenshots/marketing-desktop.png'});
+      await page.click('.agent-tabs button:nth-child(5)');
+      await page.waitForFunction(() => document.querySelector('.marketing-panel')?.textContent.includes('Pesquisa e avisos'));
+      await page.evaluate(() => [...document.querySelectorAll('.marketing-state button')].find(b=>b.textContent==='Pausar').click());
+      await page.waitForFunction(() => document.querySelector('.marketing-state button')?.textContent==='Retomar');
       await page.click('[aria-label="Adicionar bot"]');
       await page.waitForSelector('dialog[open]');
       await page.type('dialog input:not([type=checkbox])', 'Analista de teste');
@@ -167,7 +205,7 @@ test(
           'Analista de teste',
       );
       await page.waitForFunction(
-        () => document.querySelectorAll('.agent-bot-item').length === 4,
+        () => document.querySelectorAll('.agent-bot-item').length === 5,
       );
       await page.screenshot({ path: '.audit_screenshots/central-desktop.png' });
 
@@ -260,6 +298,16 @@ test(
       await page.screenshot({
         path: '.audit_screenshots/central-keyboard.png',
       });
+      // Marketing is verified at mobile/PWA sizes with the same shared workspace.
+      await page.setViewport({width:320,height:844,isMobile:true,hasTouch:true});
+      await page.click('button[aria-label="Meus bots"]');
+      await page.click('.agent-bot-item:nth-child(4)');
+      await page.click('.agent-tabs button:nth-child(5)');
+      await page.waitForSelector('.marketing-panel input[type=number]');
+      assert.equal(await page.evaluate(() => [...document.querySelectorAll('.marketing-panel,.marketing-card,.agent-main')].some(e=>e.scrollWidth>e.clientWidth+2)),false);
+      await page.screenshot({path:'.audit_screenshots/marketing-mobile-320.png'});
+      await page.click('.agent-tabs button:first-child');
+      await page.type('.agent-composer textarea','Pergunta ditada');
       await page.evaluate(() => {
         window.__failCentral = true;
       });

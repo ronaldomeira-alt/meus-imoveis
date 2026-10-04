@@ -14,6 +14,7 @@ export const AVATARS = [
   'jade',
   'coral',
   'silver',
+  'marketing',
 ];
 export const AUTONOMIES = ['read_only', 'propose', 'approval', 'allowed_auto'];
 export const MODES = ['on_demand', 'scheduled', 'monitoring'];
@@ -159,6 +160,7 @@ export const BUILTINS = [
       'getCaptureSummary',
       'getCaptureMetrics',
       'getOpenIncidents',
+      'getMarketingStatus',
     ],
     work_mode: 'on_demand',
   },
@@ -192,8 +194,15 @@ export const BUILTINS = [
       'getIncidentDetails',
       'getLastDeepInspection',
       'getRecentFailures',
+      'getMarketingStatus',
     ],
     work_mode: 'monitoring',
+  },
+  {
+    slug: 'marketing', name: 'Bot de Marketing', kind: 'marketing', avatar: 'marketing', sort_order: 3,
+    mission: 'Parceiro editorial de Ronaldo: pesquisar fontes acessíveis, aprender com feedback e propor ideias sustentadas. Pode permanecer em silêncio. Nunca publicar nem usar conversas privadas do CRM.',
+    tools: ['getMarketingStatus','getMarketingMemory','getMarketingIdeas'], work_mode: 'scheduled', autonomy: 'propose',
+    notification_events: ['result'],
   },
 ];
 

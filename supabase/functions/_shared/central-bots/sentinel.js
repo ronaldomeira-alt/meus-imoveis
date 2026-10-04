@@ -1,4 +1,5 @@
 import { rows, event, maintenanceDossier, AgentError } from './core.js';
+import { marketingStatus } from '../bot-marketing/store.js';
 
 export function isDailyInspectionDue(lastStartedAt, now = new Date()) {
   if (!lastStartedAt) return true;
@@ -72,6 +73,15 @@ export async function collectHealth(ctx, deep = false) {
       });
     }
   }
+  if (ctx.env.MARKETING_BOT_ENABLED === 'true') await check('marketing_worker', 'Ciclos do Marketing registrados sem depender dos demais bots.', async () => {
+    const observed = await marketingStatus(ctx);
+    if (observed.unavailable) return { status: 'unknown', observed: observed.reason };
+    if (!observed.settings.enabled || observed.settings.paused) return { status: 'skipped', observed: 'Marketing pausado ou aguardando ativação.' };
+    const task = observed.tasks[0];
+    if (!task) return { status: 'unknown', observed: 'Ainda não há ciclo concluído.' };
+    const overdue = task.status === 'running' && Date.parse(task.created_at) < Date.now()-3600000;
+    return { status: task.status === 'failed' || overdue ? 'fail' : task.status === 'completed' ? 'ok' : 'unknown', observed: task.error || `Último ciclo: ${task.status}; acesso às fontes deve ser consultado separadamente.`, evidence: observed };
+  });
   await check(
     'captador_telemetry',
     'Rodada registrada após o horário configurado, com tolerância de 90 minutos.',

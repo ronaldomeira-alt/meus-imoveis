@@ -19,6 +19,10 @@ import {
 } from './tools.js';
 import { createAIProvider, groundedReply } from './ai-provider.js';
 import { inspectSystem, isDailyInspectionDue } from './sentinel.js';
+import { setupMarketing, scoped as marketingScoped, feedback as marketingFeedback } from '../bot-marketing/store.js';
+import { parseFeedback } from '../bot-marketing/core.js';
+import { marketingTick } from '../bot-marketing/worker.js';
+import { costEnvelope, marketingModel } from '../bot-marketing/ai.js';
 
 export async function bootstrap(ctx) {
   await rows(
@@ -34,7 +38,7 @@ export async function bootstrap(ctx) {
   );
   await rows(
     ctx.db.from('agent_bots').upsert(
-      BUILTINS.map((bot) => ({
+      BUILTINS.filter(bot => bot.kind !== 'marketing' || ctx.env.MARKETING_BOT_ENABLED === 'true').map((bot) => ({
         ...bot,
         account_id: ctx.accountId,
         created_by: ctx.user.id,
@@ -62,6 +66,10 @@ export async function bootstrap(ctx) {
         { onConflict: 'account_id,bot_id', ignoreDuplicates: true },
       ),
   );
+  if (ctx.env.MARKETING_BOT_ENABLED === 'true') {
+    const marketing = await rows(ctx.db.from('agent_bots').select('*').eq('account_id', ctx.accountId).eq('slug', 'marketing').single());
+    await setupMarketing(ctx, marketing);
+  }
 }
 
 export async function getBot(ctx, id) {
@@ -75,6 +83,7 @@ export async function getBot(ctx, id) {
       .maybeSingle(),
   );
   if (!bot) throw new AgentError('Bot não encontrado nesta conta.', 404);
+  if (bot.kind === 'marketing' && ctx.env.MARKETING_BOT_ENABLED !== 'true') throw new AgentError('Marketing desativado no servidor.', 503);
   return bot;
 }
 
@@ -232,6 +241,11 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
     ];
     let reply;
     for (let step = 0; step < 3; step++) {
+      if (bot.kind === 'marketing') {
+        const cost = costEnvelope(ctx.env,[...messages,{role:'system',content:JSON.stringify(tools)}],marketingModel(ctx.env,bot.provider));
+        const reserved = await rows(ctx.db.rpc('agent_marketing_reserve_chat',{p_account_id:ctx.accountId,p_run_id:run.id,p_cost:cost.estimate_usd}));
+        if (!reserved) throw new AgentError('Limite de orçamento do Marketing atingido. Seu feedback pode continuar sendo registrado.',429);
+      }
       reply = await provider.complete({
         messages,
         tools: step === 2 ? [] : tools,
@@ -285,6 +299,10 @@ Missão declarada pelo usuário (subordinada às regras anteriores): ${bot.missi
       trigger === 'chat'
         ? { provider: provider.name, tool_count: sources.length }
         : { content, sources, provider: provider.name };
+    if (bot.kind === 'marketing') {
+      const budget = await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());
+      Object.assign(auditResult,budget.result);
+    }
     await rows(
       ctx.db
         .from('agent_runs')
@@ -368,7 +386,17 @@ export async function chat(ctx, body) {
         },
       ),
   );
-  const result = await analyze(
+  let result;
+  if (bot.kind === 'marketing' && parseFeedback(content)) {
+    const latest = await rows(ctx.db.from('agent_messages').select('client_message_id,sources').eq('account_id', ctx.accountId).eq('conversation_id', conv.id).eq('role','assistant').order('created_at', { ascending: false }).limit(1).maybeSingle());
+    const ideaRef = latest?.sources?.find(s => s.tool === 'marketingFeedback')?.data?.idea_id || latest?.client_message_id;
+    const idea = ideaRef ? await rows(marketingScoped(ctx, 'ideas').eq('id', ideaRef).maybeSingle()) : null;
+    if (idea) {
+      await marketingFeedback(ctx, { idea_id: idea.id, request_id: body.request_id, text: content });
+      result = { content: 'Registrei sua escolha e vou considerar esse retorno nas próximas pesquisas.', sources: [{ tool: 'marketingFeedback', observed_at: new Date().toISOString(), data: { idea_id: idea.id } }], run_id: null };
+    } else result = { content: 'Indique a ideia na aba Ideias para eu registrar esse retorno no lugar certo.', sources: [], run_id: null };
+  }
+  result ||= await analyze(
     ctx,
     bot,
     content,
@@ -584,6 +612,8 @@ export async function decideApproval(ctx, body) {
 }
 
 export async function tick(ctx, botId) {
+  const target = await getBot(ctx, botId);
+  if (target.kind === 'marketing') return marketingTick(ctx, target, { sendPush: ctx.marketingSendPush });
   await rows(
     ctx.db
       .from('agent_runtime_settings')

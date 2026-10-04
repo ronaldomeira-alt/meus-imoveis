@@ -1,0 +1,74 @@
+import { useCallback, useEffect, useState } from 'react';
+import { centralRequest } from '../../lib/central-bots';
+
+type Idea = { id: string; topic: string; angle: string; status: string; created_at: string; delivered_at: string | null; draft_id: string | null; proposal: { message: string; why_now: string; fit: string; format: string; hook: string; practical: string; effort: string; limits: string; correction?: string; evidence: { id: string; url: string; quote: string; published_at: string; observed_at: string }[] } };
+type Memory = { id: string; kind: string; nature: string; topic: string; state: string; data: Record<string, unknown>; updated_at: string };
+type Source = { id: string; url: string; identity: string; access_status: string; last_checked_at: string | null; limits: string | null; trust: string };
+type Task = { id: string; status: string; phase: string; steps: number; calls: number; reserved_usd: number; measured_usd: number; created_at: string; error: string | null; checkpoint: { judgment?: { reason: string }; limits?: string[]; usage?: { measured_usd: number | null }[] } };
+type Panel = { settings: { enabled: boolean; paused: boolean; config: Record<string, number | string | boolean>; profile: { declared: { tone: string }; desired_topics: string[]; rejected_topics: string[]; restrictions: string[]; provenance: string; inferences: unknown[] }; next_research_at: string; last_cycle_at: string | null; last_error: string | null }; ideas: Idea[]; memory: Memory[]; sources: Source[]; tasks: Task[]; capabilities: { search: boolean; instagram_binding: boolean; media_analysis: boolean; server_enabled: boolean } };
+const labels: Record<string, string> = { proposed: 'Propostas', saved: 'Guardadas', approved: 'Aprovadas', discarded: 'Descartadas', published: 'Publicadas', investigating: 'Em investigação', pending: 'Aguardando', running: 'Em andamento', completed: 'Concluída', failed: 'Interrompida', accessible: 'Acessível', unavailable: 'Indisponível', unknown: 'Acesso não verificado', context: 'Contexto', plan: 'Escolha de caminhos', collect: 'Leitura de fontes', select: 'Investigação de sinais', evaluate: 'Julgamento editorial', persist: 'Memória e propostas', deliver: 'Entrega', done: 'Concluída' };
+labels.review = 'Revisão editorial';
+labels.corrected = 'Corrigida por você';
+labels.needs_review = 'Precisa de nova conferência';
+const date = (v: string | null) => v ? new Date(v).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'Ainda não registrado';
+const safeLink = (url: string) => { try { return new URL(url).protocol === 'https:' ? url : undefined; } catch { return undefined; } };
+const limits: [string, string, number, number, number][] = [
+  ['research_minutes', 'Intervalo entre pesquisas (minutos)', 60, 10080, 60], ['analysis_minutes', 'Intervalo entre análises (minutos)', 60, 10080, 60], ['delivery_minutes', 'Intervalo de entrega na conversa (minutos)', 60, 10080, 60], ['push_daily_limit', 'Máximo de avisos por dia', 0, 5, 1], ['push_interval_minutes', 'Intervalo mínimo entre avisos (minutos)', 60, 10080, 60], ['similar_days', 'Intervalo para tema ou ângulo semelhante (dias)', 1, 180, 1], ['max_sources', 'Máximo de leituras por ciclo', 1, 12, 1], ['max_steps', 'Máximo de etapas por ciclo', 1, 20, 1], ['max_calls', 'Máximo de chamadas por ciclo', 1, 8, 1], ['max_investigations', 'Máximo de investigações abertas', 0, 4, 1], ['cycle_budget_usd', 'Teto por ciclo (US$)', 0.001, 2, 0.001], ['daily_budget_usd', 'Teto diário (US$)', 0.001, 10, 0.001], ['retention_days', 'Retenção de leituras e pesquisas (dias)', 1, 730, 1],
+];
+
+export function MarketingPanel({ botId, tab, onChange }: { botId: string; tab: string; onChange: () => Promise<void> }) {
+  const [data, setData] = useState<Panel | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [status, setStatus] = useState('proposed'), [query, setQuery] = useState(''), [editing, setEditing] = useState(''), [correction, setCorrection] = useState('');
+  const [config, setConfig] = useState<Record<string, number | string | boolean>>({}), [tone, setTone] = useState(''), [wanted, setWanted] = useState(''), [rejected, setRejected] = useState('');
+  const load = useCallback(async (signal?: AbortSignal) => {
+    const result = await centralRequest<Panel>({ action: 'marketing', bot_id: botId, operation: 'panel', filters: query ? { topic: query } : {} }, signal);
+    if (!signal?.aborted) { setData(result); setConfig(result.settings.config); setTone(result.settings.profile.declared.tone); setWanted(result.settings.profile.desired_topics.join('\n')); setRejected(result.settings.profile.rejected_topics.join('\n')); }
+  }, [botId, query]);
+  useEffect(() => { const controller = new AbortController(); load(controller.signal).catch(e => { if (!controller.signal.aborted) setError(e.message); }); return () => controller.abort(); }, [load]);
+  async function act(operation: string, payload: Record<string, unknown> = {}) {
+    if (busy) return;
+    setBusy(true); setError('');
+    try { await centralRequest({ action: 'marketing', bot_id: botId, operation, request_id: crypto.randomUUID(), ...payload }); await Promise.all([load(), onChange()]); setEditing(''); setCorrection(''); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível salvar.'); }
+    finally { setBusy(false); }
+  }
+  if (!data) return <div className="marketing-panel" role="status">{error || 'Carregando o Marketing...'}</div>;
+  return <div className="marketing-panel" aria-busy={busy}>
+    {error && <p className="agent-error" role="alert">{error}</p>}
+    <div className="marketing-state"><span>{!data.settings.enabled ? 'Aguardando ativação' : data.settings.paused ? 'Pausado' : 'Pesquisa autônoma ativa'}</span><button className="agent-command" disabled={busy} onClick={() => void act('settings', { settings: { paused: !data.settings.paused } })}>{data.settings.paused ? 'Retomar' : 'Pausar'}</button></div>
+    {tab === 'ideas' && <>
+      <p>Uma boa pesquisa pode terminar sem sugestão. As ideias continuam aqui mesmo sem aviso no celular.</p>
+      <div className="marketing-filters" aria-label="Estado das ideias">{['proposed','saved','approved','discarded','published','investigating'].map(s => <button className="agent-command" key={s} aria-pressed={status === s} onClick={() => setStatus(s)}>{labels[s]}</button>)}</div>
+      {!data.ideas.some(i => i.status === status) && <p className="agent-empty">Nenhuma ideia neste estado.</p>}
+      {data.ideas.filter(i => i.status === status).map(i => <article className="marketing-card" key={i.id}>
+        <small>{date(i.created_at)}</small><h3>{i.topic}</h3><p>{i.proposal.message}</p>
+        {i.proposal.correction && <p role="status" className="agent-warning">{i.proposal.correction}</p>}
+        <details><summary>Ver o ângulo e as evidências</summary><p><strong>Ângulo:</strong> {i.angle}</p><p><strong>Por que agora:</strong> {i.proposal.why_now}</p><p><strong>Por que combina:</strong> {i.proposal.fit}</p><p><strong>{i.proposal.format}:</strong> {i.proposal.hook}</p><p>{i.proposal.practical}</p><p><strong>Esforço:</strong> {i.proposal.effort}</p><p>{i.proposal.limits}</p>{i.proposal.evidence.map(e => <blockquote key={e.id}><p>{e.quote}</p><a href={safeLink(e.url)} target="_blank" rel="noopener noreferrer">Conferir fonte</a><small> Publicada: {date(e.published_at)} · Observada: {date(e.observed_at)}</small></blockquote>)}</details>
+        <div className="marketing-filters">{[['saved','Guardar para depois'],['approved','Aprovar ideia'],['discarded','Descartar'],['published','Já publiquei']].map(([s,label]) => <button className="agent-command" key={s} disabled={busy || i.status === s} onClick={() => void act('feedback', { idea_id: i.id, status: s, text: label })}>{label}</button>)}<button className="agent-command" disabled={busy || !!i.draft_id} onClick={() => void act('draft', { idea_id: i.id })}>{i.draft_id ? 'Rascunho enviado' : 'Enviar como rascunho'}</button></div>
+        <form onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const text = String(new FormData(form).get('feedback') || ''); if (text.trim()) void act('feedback', { idea_id: i.id, text }); }}><label>Seu retorno<input name="feedback" placeholder="Não combina comigo porque…" maxLength={4000} required /></label><button className="agent-command" disabled={busy}>Registrar retorno</button></form>
+      </article>)}<small>Aprovar uma ideia não publica nem agenda conteúdo.</small>
+    </>}
+    {tab === 'memory' && <>
+      <h3>Perfil editorial</h3><p>{data.settings.profile.provenance}</p>
+      <form onSubmit={e => { e.preventDefault(); void act('profile', { profile: { declared: { ...data.settings.profile.declared, tone }, desired_topics: wanted.split('\n').map(s => s.trim()).filter(Boolean), rejected_topics: rejected.split('\n').map(s => s.trim()).filter(Boolean) } }); }}>
+        <label>Como você quer falar<textarea value={tone} onChange={e => setTone(e.target.value)} maxLength={2000} /></label><label>Temas desejados (um por linha)<textarea value={wanted} onChange={e => setWanted(e.target.value)} /></label><label>Temas que você não quer abordar (um por linha)<textarea value={rejected} onChange={e => setRejected(e.target.value)} /></label><button className="agent-command" disabled={busy}>Corrigir perfil</button>
+      </form><details><summary>Inferências revisáveis</summary><p>{data.settings.profile.inferences.length ? JSON.stringify(data.settings.profile.inferences) : 'Ainda não há inferências sobre sua audiência.'}</p><button className="agent-command" disabled={busy} onClick={() => void act('profile', { profile: { inferences: [] } })}>Remover inferências</button></details>
+      <h3>Memória com origem</h3><label>Buscar por assunto<input value={query} onChange={e => setQuery(e.target.value)} maxLength={150} /></label>
+      {data.memory.map(m => <article className="marketing-card" key={m.id}><h4>{m.topic}</h4><small>{labels[m.state] || (m.kind === 'fact' ? 'Citação observada' : m.kind === 'investigation' ? 'Hipótese em investigação' : m.nature === 'user_opinion' ? 'Retorno explícito seu' : 'Registro editorial')} · {date(m.updated_at)}</small><p>{String(m.data.claim || m.data.caption || m.data.hypothesis || m.data.justification || m.data.quote || m.data.correction || '')}</p>{typeof m.data.url === 'string' && <a href={safeLink(m.data.url)} target="_blank" rel="noopener noreferrer">Ver origem</a>}<details><summary>Consultar registro</summary><pre>{JSON.stringify(m.data, null, 2)}</pre></details><div className="marketing-filters"><button className="agent-command" onClick={() => { setEditing(m.id); setCorrection(''); }}>Corrigir</button><button className="agent-command" disabled={busy} onClick={() => void act('memory_delete', { memory_id: m.id })}>Remover memória</button></div>{editing === m.id && <form onSubmit={e => { e.preventDefault(); void act('memory_correct', { memory_id: m.id, correction }); }}><label>Correção<textarea value={correction} onChange={e => setCorrection(e.target.value)} required maxLength={4000} /></label><button className="agent-command" disabled={busy}>Salvar correção</button></form>}</article>)}
+    </>}
+    {tab === 'sources' && <>
+      <h3>Fontes e pesquisas</h3><p>{data.capabilities.search ? 'Pesquisa web configurada; cada artigo precisa ser conferido.' : 'Descoberta pelos feeds oficiais. Pesquisa web ampla ainda não configurada.'}</p><p>{data.capabilities.instagram_binding ? 'Conexão Instagram vinculada. Veja o resultado da leitura na atividade.' : 'Instagram aguarda vínculo seguro no servidor.'} Vídeos e imagens ainda não são analisados.</p>
+      {data.sources.map(s => <article className="marketing-card" key={s.id}><h4><a href={safeLink(s.url)} target="_blank" rel="noopener noreferrer">{s.identity}</a></h4><p>{labels[s.access_status] || s.access_status} · {date(s.last_checked_at)}</p><p>{s.limits}</p></article>)}
+      <form onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); void act('source', { url: f.get('url'), identity: f.get('identity'), kind: f.get('kind') }); }}><label>Nome da fonte<input name="identity" required maxLength={200} /></label><label>Endereço da fonte<input name="url" type="url" required /></label><label>Tipo<select name="kind"><option value="article">Artigo</option><option value="feed">Feed de notícias</option></select></label><button className="agent-command" disabled={busy}>Acompanhar fonte</button><small>Novos domínios precisam entrar na lista de fontes autorizadas do servidor.</small></form>
+      <h3>Atividade real</h3><p>Último ciclo: {date(data.settings.last_cycle_at)} · Próxima pesquisa: {date(data.settings.next_research_at)}</p>{data.settings.last_error && <p className="agent-warning">{data.settings.last_error}</p>}
+      {data.tasks.map(t => <article className="marketing-card" key={t.id}><h4>{labels[t.status] || t.status} · {labels[t.phase] || t.phase}</h4><small>{date(t.created_at)}</small><p>{t.checkpoint.judgment?.reason || 'Pesquisa ainda em andamento.'}</p><p>{t.error}</p><details><summary>Limites e cobertura</summary><p>{t.steps} etapas · {t.calls} chamadas · Reserva conservadora: US$ {Number(t.reserved_usd).toFixed(5)}</p><p>Custo calculado por tokens: {t.checkpoint.usage?.some(u => u.measured_usd != null) ? `US$ ${Number(t.measured_usd).toFixed(5)} (tarifas configuradas; sem fatura)` : 'Desconhecido'}</p>{t.checkpoint.limits?.map((l, idx) => <p key={idx}>{l}</p>)}</details></article>)}
+    </>}
+    {tab === 'marketing-settings' && <>
+      <h3>Pesquisa e avisos</h3><p>Horários em America/Sao_Paulo. Estes limites são tetos, nunca metas. Fatos, preferências e ideias ficam separados do chat de 30 dias.</p>
+      <form onSubmit={e => { e.preventDefault(); void act('settings', { settings: config }); }}>
+        <label className="marketing-toggle"><input type="checkbox" checked={!!config.enabled} onChange={e => setConfig(c => ({ ...c, enabled: e.target.checked }))} />Ativar pesquisa autônoma</label>
+        {limits.map(([key,label,min,max,step]) => <label key={key}>{label}<input type="number" min={min} max={max} step={step} value={Number(config[key] ?? min)} onChange={e => setConfig(c => ({ ...c, [key]: Number(e.target.value) }))} required /></label>)}
+        <label>Silêncio a partir de<input type="time" value={String(config.quiet_start || '20:00')} onChange={e => setConfig(c => ({ ...c, quiet_start: e.target.value }))} required /></label><label>Avisos liberados a partir de<input type="time" value={String(config.quiet_end || '08:00')} onChange={e => setConfig(c => ({ ...c, quiet_end: e.target.value }))} required /></label><button className="agent-command" disabled={busy}>Salvar configurações</button>
+      </form><p>Para desativação isolada, desligue a pesquisa aqui ou a flag MARKETING_BOT_ENABLED no servidor.</p>
+    </>}
+  </div>;
+}

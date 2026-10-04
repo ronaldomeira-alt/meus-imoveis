@@ -20,6 +20,7 @@ import {
 } from './service.js';
 import { inspectSystem } from './sentinel.js';
 import { createAIProvider } from './ai-provider.js';
+import { marketingAction } from '../bot-marketing/store.js';
 
 function secretsEqual(a, b) {
   const left = Buffer.from(a || ''),
@@ -163,6 +164,7 @@ export function createAgentHandler(
       if (!body || typeof body !== 'object' || Array.isArray(body))
         throw new AgentError('Requisição inválida.');
       const ctx = await authorize(req, body, env, factory);
+      ctx.marketingSendPush = sendPush;
       ctx.crmAccountId =
         ctx.accountId === env.MEUS_IMOVEIS_ACCOUNT_ID
           ? env.MATCH_CANONICAL_ACCOUNT_ID
@@ -188,6 +190,12 @@ export function createAgentHandler(
         }
       };
       switch (body.action) {
+        case 'marketing': {
+          if (env.MARKETING_BOT_ENABLED !== 'true') throw new AgentError('Marketing desativado no servidor.', 503);
+          const bot = await getBot(ctx, body.bot_id);
+          if (bot.kind !== 'marketing') throw new AgentError('Ação disponível apenas no Marketing.', 403);
+          return json(await marketingAction(ctx, bot, body));
+        }
         case 'list':
           return json(await listCentral(ctx));
         case 'conversation':

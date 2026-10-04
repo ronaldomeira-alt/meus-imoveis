@@ -56,7 +56,7 @@ export function createAIProvider(env, preference = 'auto') {
 
   return {
     name,
-    async complete({ messages, tools, requireTool = false }) {
+    async complete({ messages, tools, requireTool = false, json = false, maxOutputTokens = 1600, reasoningEffort }) {
       if (name === 'gemini') {
         const system = messages
           .filter((m) => m.role === 'system')
@@ -100,7 +100,7 @@ export function createAIProvider(env, preference = 'auto') {
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: system }] },
               contents,
-              generationConfig: { temperature: 0.1, maxOutputTokens: 1600 },
+              generationConfig: { temperature: 0.1, maxOutputTokens, ...(json ? { responseMimeType: 'application/json' } : {}) },
               ...(tools.length
                 ? {
                     tools: [
@@ -125,6 +125,7 @@ export function createAIProvider(env, preference = 'auto') {
         const parts = result.candidates?.[0]?.content?.parts || [];
         return {
           role: 'assistant',
+          get usage() { return result.usageMetadata ? { prompt_tokens: result.usageMetadata.promptTokenCount, completion_tokens: (result.usageMetadata.candidatesTokenCount || 0) + (result.usageMetadata.thoughtsTokenCount || 0) } : null; },
           providerContent: result.candidates?.[0]?.content,
           content: parts
             .filter((p) => p.text && !p.thought)
@@ -152,7 +153,9 @@ export function createAIProvider(env, preference = 'auto') {
           model,
           messages,
           temperature: 0.1,
-          max_tokens: 1600,
+          max_tokens: maxOutputTokens,
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
+          ...(name === 'groq' && /^openai\/gpt-oss/.test(model) && reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
           ...(tools.length
             ? {
                 tools: tools.map((t) => ({ type: 'function', function: t })),
@@ -165,6 +168,7 @@ export function createAIProvider(env, preference = 'auto') {
       const message = result.choices?.[0]?.message;
       if (!message)
         throw new AgentError('A IA não retornou uma resposta válida.', 503);
+      Object.defineProperty(message, 'usage', { value: result.usage, enumerable: false });
       return message;
     },
     async transcribe(bytes, mime) {
