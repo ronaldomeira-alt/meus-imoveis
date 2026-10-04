@@ -99,11 +99,7 @@
 .agent-avatar {
   display: inline-block;
   flex-shrink: 0;
-  border-radius: 8px;
-  background-image: url("/agents/avatars.png");
-  background-size: 300% 300%;
-  background-repeat: no-repeat;
-  background-color: #e8e9e8;
+  background: transparent;
 }
 .agent-dot {
   display: inline-block;
@@ -602,22 +598,32 @@
 .agent-iphone-pwa .agent-sidebar { display: none; }
 .agent-iphone-pwa .agent-mobile { display: inline-flex; }
 .agent-iphone-pwa .agent-picker {
-  padding: 24px 18px calc(24px + var(--agent-safe-bottom));
+  padding: 12px 20px calc(24px + var(--agent-safe-bottom));
 }
-.agent-picker h3 { font-size: 21px; font-weight: 700; }
-.agent-picker > p { margin: 8px 0 24px; color: var(--text-secondary); line-height: 1.6; }
-.agent-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.agent-inbox-topbar { justify-content: space-between; border-bottom: 0; padding: 16px 20px 10px; min-height: 84px; }
+.agent-inbox-topbar .agent-inbox-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.agent-inbox-action, .agent-profile-menu {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border: 1px solid var(--border-subtle, #ffffff15);
+  border-radius: 50%; color: var(--text-primary); background: transparent;
+}
+.agent-profile-menu { background: #ffffff08; color: var(--text-secondary); font-size: 16px; font-weight: 600; }
+.agent-inbox-search { width: 100%; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px; background: #ffffff08; color: var(--text-primary); border: 1px solid var(--border-subtle, #ffffff15); font-size: 16px; }
+.agent-picker-grid { display: flex; flex-direction: column; }
 .agent-picker-card {
-  display: flex; flex-direction: column; align-items: center; gap: 12px;
-  min-width: 0; padding: 22px 12px; text-align: center; border-radius: 16px;
-  border: 1px solid var(--border-subtle, #ffffff15); background: var(--bg-base-alt);
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; min-width: 0; padding: 16px 0; text-align: left;
+  border: 0; background: transparent; color: var(--text-primary);
 }
-.agent-picker-card:active { background: #4cab9219; border-color: #48b99b; }
-.agent-picker-card strong { font-size: 14px; overflow-wrap: anywhere; }
-.agent-picker-card > span:not(.agent-avatar):not(.agent-marketing-avatar) { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
-.agent-picker-card small { color: #48b99b; font-size: 12px; margin-top: auto; }
+.agent-picker-card:active { opacity: .65; }
+.agent-inbox-copy { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+.agent-inbox-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.agent-inbox-heading strong { font-size: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-inbox-heading time { margin-left: auto; flex-shrink: 0; color: var(--text-secondary); font-size: 12px; }
+.agent-inbox-preview { color: var(--text-secondary); font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-iphone-pwa .agent-composer { padding-bottom: calc(8px + var(--agent-safe-bottom)); }
 @media (max-width: 767px) {
+  .agent-iphone-pwa .agent-inbox-topbar { padding: 16px 20px 10px; min-height: 84px; }
   .agent-mobile {
     display: inline-flex;
   }

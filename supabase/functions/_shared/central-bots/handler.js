@@ -198,7 +198,7 @@ export function createAgentHandler(
           return json(await marketingAction(ctx, bot, body));
         }
         case 'list':
-          return json(await listCentral(ctx));
+          return json(await listCentral(ctx, body.include_previews === true));
         case 'conversation':
           return json(await getConversation(ctx, body.bot_id));
         case 'chat':

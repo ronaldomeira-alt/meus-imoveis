@@ -71,6 +71,7 @@ export interface AgentEvent {
   payload: Record<string, unknown>;
 }
 export interface CentralData {
+  previews?: Record<string, Pick<AgentMessage, 'content' | 'role' | 'created_at'>>;
   bots: AgentBot[];
   approvals: AgentApproval[];
   incidents: AgentIncident[];

@@ -12,6 +12,7 @@ import {
   Mic,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Square,
   X,
@@ -43,6 +44,13 @@ const errorText = (error: unknown) =>
   error instanceof Error && error.name !== 'AbortError'
     ? error.message
     : 'A consulta foi interrompida. Tente novamente.';
+const previewDate = (value: string) => {
+  const timestamp = new Date(value), now = new Date();
+  if (Number.isNaN(timestamp.getTime())) return '';
+  return timestamp.toDateString() === now.toDateString()
+    ? timestamp.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'})
+    : timestamp.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'});
+};
 const labels: Record<string, string> = {
   running: 'Em andamento',
   completed: 'Concluído',
@@ -67,6 +75,7 @@ type Props = { onOpenMenu: () => void; onOpenCaptador: () => void };
 
 export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   const [iphonePWA] = useState(isIPhonePWA);
+  const [searchOpen, setSearchOpen] = useState(false), [search, setSearch] = useState('');
   const root = useRef<HTMLDivElement>(null),
     end = useRef<HTMLDivElement>(null),
     recorder = useRef<AudioRecorder | null>(null);
@@ -102,7 +111,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     ) || [];
 
   const refresh = useCallback(async () => {
-    const result = await centralRequest<CentralData>({ action: 'list' });
+    const result = await centralRequest<CentralData>({ action: 'list', ...(iphonePWA ? {include_previews:true} : {}) });
     if (!mounted.current) return;
     setData(result);
     setSelected((current) =>
@@ -220,6 +229,8 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     setDraft('');
     setError('');
     setDrawer(false);
+    setSearch('');
+    setSearchOpen(false);
     const url = new URL(location.href);
     url.search = '';
     history.replaceState(history.state, '', url);
@@ -452,7 +463,15 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
         className="agent-main"
         aria-label={bot ? `Conversa com ${bot.name}` : 'Central de Bots'}
       >
-        <header className="agent-topbar">
+        {iphonePWA && !bot && data ? (
+          <header className="agent-topbar agent-inbox-topbar">
+            <button className="agent-profile-menu" aria-label="Menu principal" onClick={onOpenMenu}>RM</button>
+            <div className="agent-inbox-actions">
+              <button className="agent-inbox-action" aria-label="Buscar bots" aria-expanded={searchOpen} onClick={()=>setSearchOpen(value=>!value)}><Search size={23}/></button>
+              <button className="agent-inbox-action" aria-label="Criar bot" onClick={()=>setCreate(true)}><Plus size={27}/></button>
+            </div>
+          </header>
+        ) : <header className="agent-topbar">
           <button
             className="agent-icon agent-mobile"
             title="Menu principal"
@@ -490,7 +509,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
           >
             <RefreshCw size={18} />
           </button>
-        </header>
+        </header>}
         {bot && (
           <nav className="agent-tabs" aria-label="Visões do bot">
             {[
@@ -537,18 +556,19 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
         <div className="agent-scroll" aria-busy={loading || busy}>
           {iphonePWA && data && !bot && !loading && (
             <div className="agent-picker">
-              <h3>Com quem vamos conversar?</h3>
-              <p>Escolha um bot para abrir ou continuar o papo.</p>
-              <nav className="agent-picker-grid" aria-label="Escolha seu bot">
-                {data.bots.map(item => (
+              {searchOpen && <input className="agent-inbox-search" aria-label="Buscar bot pelo nome" placeholder="Buscar bot" value={search} onChange={event=>setSearch(event.target.value)} autoFocus />}
+              <nav className="agent-picker-grid" aria-label="Conversas com seus bots">
+                {data.bots.filter(item=>item.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))).map(item => (
                   <button type="button" key={item.id} className="agent-picker-card" onClick={() => choose(item)}>
-                    <BotAvatar name={item.avatar} size={72} />
-                    <strong>{item.name}</strong>
-                    <span>{item.kind === 'gestor' ? 'Visão geral dos bots' : item.kind === 'captador' ? 'Análise das captações' : item.kind === 'sentinela' ? 'Saúde do sistema' : item.kind === 'marketing' ? 'Ideias e conteúdo' : item.mission}</span>
-                    <small>{item.active ? 'Abrir conversa' : 'Ver histórico'}</small>
+                    <BotAvatar name={item.avatar} size={54} />
+                    <span className="agent-inbox-copy">
+                      <span className="agent-inbox-heading"><strong>{item.name}</strong>{data.previews?.[item.id] && <time dateTime={data.previews[item.id].created_at}>{previewDate(data.previews[item.id].created_at)}</time>}</span>
+                      <span className="agent-inbox-preview">{data.previews?.[item.id] ? `${data.previews[item.id].role==='user' ? 'Você: ' : ''}${data.previews[item.id].content}` : item.active ? 'Toque para começar a conversa' : 'Ver histórico da conversa'}</span>
+                    </span>
                   </button>
                 ))}
               </nav>
+              {search && !data.bots.some(item=>item.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR'))) && <p className="agent-empty">Nenhum bot encontrado.</p>}
             </div>
           )}
           {bot?.kind === 'marketing' && ['ideas','memory','sources','marketing-settings'].includes(tab) && <MarketingPanel botId={bot.id} tab={tab} onChange={async () => { await refresh(); await loadConversation(bot.id); }} />}

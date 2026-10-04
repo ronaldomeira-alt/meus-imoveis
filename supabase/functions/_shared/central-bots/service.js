@@ -110,7 +110,7 @@ async function conversation(ctx, botId) {
   );
 }
 
-export async function listCentral(ctx) {
+export async function listCentral(ctx, includePreviews = false) {
   await bootstrap(ctx);
   const [bots, approvals, approvalHistory, incidents, settings] =
     await Promise.all([
@@ -150,8 +150,17 @@ export async function listCentral(ctx) {
           .single(),
       ),
     ]);
+  const previews = {};
+  if (includePreviews) {
+    const conversations = await rows(ctx.db.from('agent_conversations').select('id,bot_id').eq('account_id',ctx.accountId));
+    await Promise.all(conversations.filter(conv=>bots.some(bot=>bot.id===conv.bot_id)).map(async conv=>{
+      const latest=await rows(ctx.db.from('agent_messages').select('role,content,created_at').eq('account_id',ctx.accountId).eq('conversation_id',conv.id).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false}).limit(1).maybeSingle());
+      if (latest) previews[conv.bot_id]={...latest,content:latest.content.slice(0,220)};
+    }));
+  }
   return {
     bots,
+    ...(includePreviews ? {previews} : {}),
     approvals: [...approvals, ...approvalHistory],
     incidents,
     settings,

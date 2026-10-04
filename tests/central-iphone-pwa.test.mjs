@@ -4,7 +4,7 @@ import {mkdirSync} from 'node:fs';
 import {createServer} from 'vite';
 import puppeteer from 'puppeteer-core';
 import {BUILTINS} from '../supabase/functions/_shared/central-bots/core.js';
-const data={bots:BUILTINS.map((b,i)=>({...b,id:`fixture-${i}`,active:true})),approvals:[],incidents:[],settings:{enabled:true},provider_configured:true,tools:[]};
+const data={bots:BUILTINS.map((b,i)=>({...b,id:`fixture-${i}`,active:true})),previews:{'fixture-0':{role:'assistant',content:'Vamos conferir seus bots.',created_at:'2026-10-04T12:30:00Z'}},approvals:[],incidents:[],settings:{enabled:true},provider_configured:true,tools:[]};
 const iphone='Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
 test('iPhone PWA: choose faces before chat, switch/re-enter, deep links, safe areas and keyboard; Safari/desktop unchanged',{timeout:60000},async()=>{
   const server=await createServer({configFile:false,cacheDir:'.audit_screenshots/iphone-pwa-cache',oxc:{jsx:{runtime:'automatic'}},server:{port:0,host:'127.0.0.1'},plugins:[{
@@ -24,6 +24,16 @@ test('iPhone PWA: choose faces before chat, switch/re-enter, deep links, safe ar
     assert.equal(await page.$$eval('.agent-picker-card',items=>items.length),4);
     assert.equal(await page.$('.agent-composer'),null);
     assert.equal(await page.evaluate(()=>window.__calls.filter(c=>c.action==='conversation').length),0);
+    assert.equal(await page.$eval('.agent-inbox-preview',e=>e.textContent),'Vamos conferir seus bots.');
+    assert.equal(await page.$('.agent-picker h3'),null);
+    assert.equal(await page.$eval('.agent-picker-card',e=>getComputedStyle(e).borderTopWidth),'0px');
+    assert.ok(await page.$$eval('.agent-picker-card .agent-avatar',nodes=>nodes.every(e=>getComputedStyle(e).backgroundImage==='none'&&e.querySelector('svg'))));
+    await page.click('[aria-label="Buscar bots"]');await page.type('[aria-label="Buscar bot pelo nome"]','Sentinela');
+    assert.equal(await page.$$eval('.agent-picker-card',nodes=>nodes.length),1);
+    await page.$eval('[aria-label="Buscar bot pelo nome"]',e=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(e,'');e.dispatchEvent(new Event('input',{bubbles:true}));});
+    await page.waitForFunction(()=>document.querySelectorAll('.agent-picker-card').length===4);
+    await page.click('[aria-label="Buscar bots"]');
+    await page.click('[aria-label="Criar bot"]');await page.waitForSelector('.agent-modal');await page.click('[aria-label="Fechar"]');
     // Inject OS insets and keyboard dimensions; desktop engines have no notch.
     await page.addStyleTag({content:'.agent-workspace.agent-iphone-pwa{--agent-safe-top:59px;--agent-safe-bottom:34px}'});
     assert.ok(await page.$eval('.agent-topbar',e=>e.getBoundingClientRect().top>=59));

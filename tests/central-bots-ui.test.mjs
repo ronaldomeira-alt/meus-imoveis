@@ -173,7 +173,7 @@ test(
       );
       await page.click('.agent-bot-item:nth-child(4)');
       await page.waitForFunction(() => document.querySelector('.agent-topbar h2')?.textContent==='Bot de Marketing');
-      assert.ok(await page.$('.agent-marketing-avatar'));
+      assert.ok(await page.$('.agent-topbar .agent-avatar svg'));
       await page.click('.agent-tabs button:nth-child(2)');
       await page.waitForSelector('.marketing-card');
       await page.evaluate(() => [...document.querySelectorAll('.marketing-card button')].find(b=>b.textContent==='Aprovar ideia').click());
