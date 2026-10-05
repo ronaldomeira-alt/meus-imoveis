@@ -18,7 +18,18 @@ import {
   botsStatus,
 } from './tools.js';
 import { createAIProvider, groundedReply } from './ai-provider.js';
-import { identityPolicy, conversationRoute, ROUTING_POLICY, parseRoute, requestedPeriod, hasExplicitPeriod, temporalPolicy } from './conversation.js';
+import {
+  identityPolicy,
+  capabilityPolicy,
+  routeGuidance,
+  isDirectRoute,
+  conversationRoute,
+  ROUTING_POLICY,
+  parseRoute,
+  requestedPeriod,
+  hasExplicitPeriod,
+  temporalPolicy,
+} from './conversation.js';
 import { BOT_COMMUNICATION_POLICY, technicalDetailsRequested, communicationSafe, humanFallback, humanSourceSummary } from './communication.js';
 import { inspectSystem, isDailyInspectionDue } from './sentinel.js';
 import { setupMarketing, scoped as marketingScoped, feedback as marketingFeedback } from '../bot-marketing/store.js';
@@ -259,6 +270,56 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
   const sources = [];
   const technical = technicalDetailsRequested(prompt);
   try {
+function botSpecificDirectives(bot) {
+  const sections = [];
+
+  sections.push(`RACIOCÍNIO TEMPORAL (AMERICA/SAO_PAULO):
+- Todas as datas e horários devem respeitar o fuso horário de Brasília.
+- Se o usuário perguntar quantas vezes você trabalhou hoje e hoje não houve execuções registradas (count = 0), responda com clareza que hoje ainda não houve execuções registradas.
+- Se a última atividade foi ontem ou em outra data anterior, informe com exatidão data e horário local.`);
+
+  if (bot.kind === 'captador' || bot.kind === 'gestor') {
+    sections.push(`POLÍTICA USER_QUERY_FIDELITY (NUNCA INVENTAR FILTROS):
+- Ao chamar a ferramenta de busca (searchCapturedProperties), use ESTRITAMENTE os filtros solicitados pelo usuário na pergunta.
+- Se o usuário NÃO disse "hoje" ou não especificou um período, NÃO passe "period: today" nem "days". Deixe o período em branco para buscar todo o histórico disponível.
+- Se o usuário NÃO especificou um status exato (como DISCOVERED ou WAITING_RESPONSE), NÃO passe o filtro de status. Deixe o status em branco para buscar todos os registros compatíveis.
+- Nunca estreite a busca arbitrariamente.`);
+  }
+
+  if (bot.kind === 'captador') {
+    sections.push(`RODADAS E HORÁRIOS OPERACIONAIS (BOT CAPTADOR):
+- Para você (Bot Captador): os horários oficiais configurados são 09:00 e 19:00 (horário de Brasília).
+- A próxima rodada deve seguir estritamente o horário atual de Brasília: se agora for antes das 09:00, a próxima é hoje às 09:00; se for entre 09:00 e 19:00, a próxima é hoje às 19:00; se já passou das 19:00, a próxima é amanhã às 09:00. NUNCA diga que a próxima rodada é 19:00 se esse horário já passou hoje! Use sempre os campos proxima_rodada_resumo e proxima_rodada_texto fornecidos pela ferramenta.`);
+  }
+
+  if (bot.kind === 'marketing') {
+    sections.push(`FRESHNESS POLICY & PESQUISA ATIVA (BOT DE MARKETING):
+- Se o usuário perguntar o que apareceu de interessante hoje, pedir ideias de conteúdo, tendências ou sugestão de vídeos/posts: consulte as ideias/memória.
+- Se a memória/ideias estiver vazia ou não houver registros para o dia atual: É OBRIGATÓRIO chamar a ferramenta researchMarketTrends nesta mesma conversa para buscar notícias frescas e pautas em tempo real nos canais oficiais antes de responder!
+- NUNCA termine dizendo que "não há pesquisas registradas" se você pode pesquisar agora com researchMarketTrends. A ausência de dados é um GATILHO PARA PESQUISAR.
+- Depois de obter notícias reais, cruze os fatos com a carteira de bairros (Bessa, Manaíra, Cabo Branco, etc.) e sugira pautas objetivas baseadas nos acontecimentos encontrados.
+- ISOLAMENTO ENTRE BOTS: Você é o Bot de Marketing. Você NÃO executa nem acompanha rodadas de captação imobiliária (essas pertencem exclusivamente ao Bot Captador às 09h e 19h). NUNCA mencione horários ou rodadas de captação como se fossem pesquisas suas!`);
+  }
+
+  if (bot.kind === 'sentinela') {
+    sections.push(`INVESTIGAÇÃO ENCADEADA E DISTINÇÃO DE INTERPRETAÇÃO (BOT SENTINELA):
+- Ao investigar problemas do sistema ou responder perguntas como "quais problemas encontrou" ou "o que aconteceu aqui": NÃO pare na listagem preliminar de getOpenIncidents.
+- Se identificar uma ocorrência aberta ou anomalia, chame a ferramenta de diagnóstico getComponentDiagnostics (com o componente afetado) ou runLiveInspection para investigar os fatos em tempo real antes de responder.
+- Reduza a incerteza com ferramentas diagnósticas.
+- Distinga sempre com clareza: FATO (o que foi comprovado pela ferramenta), HIPÓTESE (suspeita que ainda exige verificação) e CAUSA CONFIRMADA. Se a causa não foi confirmada, diga com naturalidade que a causa ainda é desconhecida e está em investigação.
+- REGRA CRÍTICA (OBSERVADO ≠ CAUSA CONFIRMADA e OBSERVADO ≠ COMPORTAMENTO ESPERADO):
+  - Nunca afirme que um erro ou código HTTP (ex: HTTP 401) "faz parte da proteção de uma rota privada" a menos que haja evidência real de que aquela rota específica deveria exigir autenticação (ex: verificação match_api onde o esperado é 401).
+  - Se a ferramenta apenas detectar HTTP 401 sem saber se aquilo era esperado (ex: app_http), você NUNCA deve inventar que "é normal". Afirme a verdade: "A rota respondeu 401, ou seja, recusou o acesso. Ainda preciso confirmar se isso era o comportamento esperado ou se existe alguma falha de autenticação ou configuração."`);
+  }
+
+  if (bot.kind === 'gestor') {
+    sections.push(`RESUMO FACTUAL DOS BOTS (BOT GESTOR):
+- Ao ser perguntado "como estão meus bots hoje", use os dados de getBotsStatus para apresentar um resumo humano, limpo e direto dos 4 bots (Gestor, Captador, Sentinela e Marketing), mencionando o status e a última/próxima atividade confirmada de cada um sem cair em jargões técnicos.`);
+  }
+
+  return sections.join('\n\n');
+}
+
     let route = trigger === 'chat' ? conversationRoute(prompt) : 'operational';
     if (route === 'classify') {
       const routingMessages = [{role:'system',content:ROUTING_POLICY}, ...history.slice(-4), {role:'user',content:prompt}];
@@ -269,8 +330,19 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
       const decision = await provider.complete({messages:routingMessages,tools:[],maxOutputTokens:64,reasoningEffort:'low'});
       route = parseRoute(decision.content);
     }
-    if (route === 'conversation') {
-      const messages = [{ role: 'system', content: `Você é ${bot.name}. ${BOT_COMMUNICATION_POLICY}\n${identityPolicy(bot)}\nCONVERSA DIRETA: responda ao que foi dito usando o histórico, sem ferramentas. Não afirme resultados, status, horários nem lembranças operacionais. Se a pergunta depender desses dados, peça uma breve clarificação; não invente uma resposta factual. Não diga que faltam dados quando a pessoa só está discutindo seu jeito de falar. Não repita jargões que ela pediu para evitar.` }, ...history, { role: 'user', content: prompt }];
+    if (isDirectRoute(route)) {
+      const messages = [
+        {
+          role: 'system',
+          content: `Você é ${bot.name}, da Central de Bots do Meus Imóveis. ${BOT_COMMUNICATION_POLICY}
+${identityPolicy(bot)}
+${capabilityPolicy(bot)}
+
+${routeGuidance(route, bot)}`,
+        },
+        ...history,
+        { role: 'user', content: prompt },
+      ];
       if (bot.kind === 'marketing') {
         const cost = costEnvelope(ctx.env,messages,marketingModel(ctx.env,bot.provider));
         if (!await rows(ctx.db.rpc('agent_marketing_reserve_chat',{p_account_id:ctx.accountId,p_run_id:run.id,p_cost:cost.estimate_usd}))) throw new AgentError('Limite de orçamento do Marketing atingido.',429);
@@ -308,6 +380,7 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
         role: 'system',
         content: `Você é ${bot.name}, da Central de Bots do Meus Imóveis. ${BOT_COMMUNICATION_POLICY}
 ${identityPolicy(bot)}
+${capabilityPolicy(bot)}
 ${temporalPolicy(prompt)}
 Data/hora atual: ${nowBrasilia} (Fuso America/Sao_Paulo).
 
@@ -315,36 +388,7 @@ ${operationalContext}
 
 DIRETRIZES CRÍTICAS DE AUTONOMIA E VERACIDADE:
 
-1. POLÍTICA USER_QUERY_FIDELITY (NUNCA INVENTAR FILTROS):
-- Ao chamar qualquer ferramenta de busca (ex: searchCapturedProperties), use ESTRITAMENTE os filtros solicitados pelo usuário na pergunta.
-- Se o usuário NÃO disse "hoje" ou não especificou um período, NÃO passe "period: today" nem "days". Deixe o período em branco para buscar todo o histórico disponível.
-- Se o usuário NÃO especificou um status exato (como DISCOVERED ou WAITING_RESPONSE), NÃO passe o filtro de status. Deixe o status em branco para buscar todos os registros compatíveis.
-- Nunca estreite a busca arbitrariamente.
-
-2. RACIOCÍNIO TEMPORAL (AMERICA/SAO_PAULO):
-- Todas as datas e horários devem respeitar o fuso horário de Brasília.
-- Se o usuário perguntar quantas vezes você trabalhou hoje e hoje não houve rodadas (rodadas_hoje_count = 0), responda com clareza: "Hoje ainda não houve nenhuma rodada registrada."
-- Se a última rodada foi ontem ou em outra data anterior, informe com exatidão: "A última rodada registrada foi em [data] às [horário de Brasília]." NUNCA diga frases contraditórias como "hoje rodou... ontem".
-- Para o Bot Captador: os horários oficiais configurados são 09:00 e 19:00 (horário de Brasília).
-- A próxima rodada deve seguir estritamente o horário atual de Brasília: se agora for antes das 09:00, a próxima é hoje às 09:00; se for entre 09:00 e 19:00, a próxima é hoje às 19:00; se já passou das 19:00, a próxima é amanhã às 09:00. NUNCA diga que a próxima rodada é 19:00 se esse horário já passou hoje! Use sempre os campos proxima_rodada_resumo e proxima_rodada_texto fornecidos pela ferramenta.
-
-3. FRESHNESS POLICY & PESQUISA ATIVA (BOT DE MARKETING):
-- Se o usuário perguntar o que apareceu de interessante hoje, pedir ideias de conteúdo, tendências ou sugestão de vídeos/posts: consulte as ideias/memória.
-- Se a memória/ideias estiver vazia ou não houver registros para o dia atual: É OBRIGATÓRIO chamar a ferramenta researchMarketTrends nesta mesma conversa para buscar notícias frescas e pautas em tempo real nos canais oficiais antes de responder!
-- NUNCA termine dizendo que "não há pesquisas registradas" se você pode pesquisar agora com researchMarketTrends. A ausência de dados é um GATILHO PARA PESQUISAR.
-- Depois de obter notícias reais, cruze os fatos com a carteira de bairros (Bessa, Manaíra, Cabo Branco, etc.) e sugira pautas objetivas baseadas nos acontecimentos encontrados.
-
-4. INVESTIGAÇÃO ENCADEADA E DISTINÇÃO DE INTERPRETAÇÃO (BOT SENTINELA):
-- Ao investigar problemas do sistema ou responder perguntas como "quais problemas encontrou" ou "o que aconteceu aqui": NÃO pare na listagem preliminar de getOpenIncidents.
-- Se identificar uma ocorrência aberta ou anomalia, chame a ferramenta de diagnóstico getComponentDiagnostics (com o componente afetado) ou runLiveInspection para investigar os fatos em tempo real antes de responder.
-- Reduza a incerteza com ferramentas diagnósticas.
-- Distinga sempre com clareza: FATO (o que foi comprovado pela ferramenta), HIPÓTESE (suspeita que ainda exige verificação) e CAUSA CONFIRMADA. Se a causa não foi confirmada, diga com naturalidade que a causa ainda é desconhecida e está em investigação.
-- REGRA CRÍTICA (OBSERVADO ≠ CAUSA CONFIRMADA e OBSERVADO ≠ COMPORTAMENTO ESPERADO):
-  - Nunca afirme que um erro ou código HTTP (ex: HTTP 401) "faz parte da proteção de uma rota privada" a menos que haja evidência real de que aquela rota específica deveria exigir autenticação (ex: verificação match_api onde o esperado é 401).
-  - Se a ferramenta apenas detectar HTTP 401 sem saber se aquilo era esperado (ex: app_http), você NUNCA deve inventar que "é normal". Afirme a verdade: "A rota respondeu 401, ou seja, recusou o acesso. Ainda preciso confirmar se isso era o comportamento esperado ou se existe alguma falha de autenticação ou configuração."
-
-5. RESUMO FACTUAL DOS BOTS (BOT GESTOR):
-- Ao ser perguntado "como estão meus bots hoje", use os dados de getBotsStatus para apresentar um resumo humano, limpo e direto dos 4 bots (Gestor, Captador, Sentinela e Marketing), mencionando o status e a última/próxima atividade confirmada de cada um sem cair em jargões técnicos.
+${botSpecificDirectives(bot)}
 
 ${technical ? "A pessoa pediu detalhes técnicos explicitamente. Pode apresentá-los, preservando os limites de segurança e a distinção entre fato e hipótese." : "A pessoa não pediu detalhes técnicos. Use a explicação humana das fontes e preserve as incertezas."}
 Missão declarada pelo usuário: ${bot.mission}`,

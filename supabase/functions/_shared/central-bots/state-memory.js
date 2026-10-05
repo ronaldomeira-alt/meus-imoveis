@@ -229,13 +229,22 @@ export async function buildAgentOperationalContext(ctx, bot, prompt = '') {
     }
   }
 
-  sections.push(`
-DIRETRIZES DE CONTINUIDADE E VERACIDADE (CAMADA 4):
-1. CONTINUIDADE: Você não nasceu hoje. Use as informações acima para manter continuidade em conversas subsequentes. Se Ronaldo perguntar "o que você encontrou na sua última pesquisa?", "como está aquele problema que você estava acompanhando?" ou "o que ficou pendente?", responda com base nas suas memórias e estado recente.
-2. FONTE FACTUAL SOBERANA: Memória serve para dar contexto histórico e continuidade, NUNCA para suplantar o estado real do banco de dados operacional. Se a pergunta for sobre dados factuais atuais (ex: quantas rodadas rodaram hoje, status atual de um alerta, imóveis disponíveis), consulte OBRIGATORIAMENTE a ferramenta factual na conversa atual. O banco operacional sempre vence a memória.
-3. SEPARAÇÃO ESTRITA DE EXECUÇÕES (BOT CAPTADOR): Diferencie categoricamente a conversa com Ronaldo no chat (${lastChatBrasilia || 'hoje'}) da rodada de captação da OLX pela VM Hyper-V (${lastOpBrasilia || 'anterior'}). NUNCA diga que o Captador trabalhou ou captou imóveis em um horário em que você apenas conversou no chat da Central.
-4. ATUALIZAÇÃO DE PROBLEMA (SENTINELA): Se Ronaldo perguntar por um problema que você estava acompanhando, identifique a ocorrência pelo seu foco recente e consulte o estado ATUAL via ferramenta (getComponentDiagnostics ou getOpenIncidents) antes de responder se melhorou ou se continua aberto.
-5. NOVELTY / INEDITISMO (MARKETING): Se Ronaldo pedir uma nova sugestão de pauta/vídeo, confira as ideias já apresentadas e proponha uma pauta com ângulo diferente, evitando repetições.`);
+  const continuityDirectives = [
+    'DIRETRIZES DE CONTINUIDADE E VERACIDADE (CAMADA 4):',
+    '1. CONTINUIDADE: Você não nasceu hoje. Use as informações acima para manter continuidade em conversas subsequentes. Se Ronaldo perguntar sobre seu trabalho anterior, foco recente ou o que ficou pendente, responda com base nas suas memórias e estado recente.',
+    '2. FONTE FACTUAL SOBERANA: Memória serve para dar contexto histórico e continuidade, NUNCA para suplantar o estado real do banco de dados operacional. Se a pergunta for sobre dados factuais atuais (ex: quantas rodadas rodaram hoje, status atual de um alerta, imóveis disponíveis), consulte OBRIGATORIAMENTE a ferramenta factual na conversa atual. O banco operacional sempre vence a memória.',
+  ];
+
+  if (bot.kind === 'captador') {
+    continuityDirectives.push(`3. SEPARAÇÃO ESTRITA DE EXECUÇÕES (BOT CAPTADOR): Diferencie categoricamente a conversa com Ronaldo no chat (${lastChatBrasilia || 'hoje'}) da rodada de captação da OLX pela VM Hyper-V (${lastOpBrasilia || 'anterior'}). NUNCA diga que o Captador trabalhou ou captou imóveis em um horário em que você apenas conversou no chat da Central.`);
+  } else if (bot.kind === 'sentinela') {
+    continuityDirectives.push('3. ATUALIZAÇÃO DE PROBLEMA (SENTINELA): Se Ronaldo perguntar por um problema que você estava acompanhando, identifique a ocorrência pelo seu foco recente e consulte o estado ATUAL via ferramenta (getComponentDiagnostics ou getOpenIncidents) antes de responder se melhorou ou se continua aberto.');
+  } else if (bot.kind === 'marketing') {
+    continuityDirectives.push('3. NOVELTY / INEDITISMO (MARKETING): Se Ronaldo pedir uma nova sugestão de pauta/vídeo, confira as ideias já apresentadas e proponha uma pauta com ângulo diferente, evitando repetições.');
+    continuityDirectives.push('4. ESCOPO EDITORIAL EXCLUSIVO (MARKETING): Suas pesquisas dizem respeito a pautas, notícias e mercado imobiliário regional. Você não realiza rodadas de captação OLX nem possui horários de captação.');
+  }
+
+  sections.push(continuityDirectives.join('\n'));
 
   return sections.join('\n');
 }
