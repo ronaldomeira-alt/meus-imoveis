@@ -224,7 +224,7 @@ test('all built-ins and custom bots are bounded by the server tool allowlist', a
       kind: 'custom',
       tools: ['execute_sql', 'getCaptureSummary'],
     }).length,
-    1,
+    2, // Own compact memory is a global read-only capability.
   );
   await assert.rejects(
     executeTool({}, captador, null, 'execute_sql', {}),

@@ -94,6 +94,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     recorder = useRef<AudioRecorder | null>(null);
   const mounted = useRef(true),
     selectedRef = useRef(''),
+    conversationSession = useRef(crypto.randomUUID()),
     recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     busyRef = useRef(false);
   const [data, setData] = useState<CentralData | null>(null),
@@ -128,7 +129,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     ) || [];
 
   const refresh = useCallback(async () => {
-    const result = await centralRequest<CentralData>({ action: 'list', ...(iphonePWA ? {include_previews:true} : {}) });
+    const result = await centralRequest<CentralData>({ action: 'list' });
     if (!mounted.current) return;
     setData(result);
     setSelected((current) =>
@@ -143,11 +144,12 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }, [iphonePWA]);
   const loadConversation = useCallback(
     async (id: string, signal?: AbortSignal) => {
+      const sessionId=conversationSession.current;
       const result = await centralRequest<ConversationData>(
-        { action: 'conversation', bot_id: id },
+        { action: 'conversation', bot_id: id,session_id:sessionId },
         signal,
       );
-      if (mounted.current && selectedRef.current === id && !signal?.aborted)
+      if (mounted.current && selectedRef.current === id && conversationSession.current===sessionId && !signal?.aborted)
         setConversation(result);
     },
     [],
@@ -180,6 +182,10 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
   }, [refresh, loadConversation]);
   useEffect(() => {
     selectedRef.current = selected;
+    conversationSession.current=crypto.randomUUID();
+    setConversation(null);
+    setPendingText('');
+    setLiveReply(null);
     if (!selected) return;
     const controller = new AbortController();
     loadConversation(selected, controller.signal).catch((e) => {
@@ -342,7 +348,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     following.current=true;
     busyRef.current=true;setBusy(true);setError('');setLiveReply({content:''});
     try {
-      const result=await centralRequest<{message?:AgentMessage}>({action:'chat',bot_id:bot.id,content,request_id:crypto.randomUUID()},undefined,text=>{
+      const result=await centralRequest<{message?:AgentMessage}>({action:'chat',bot_id:bot.id,content,session_id:conversationSession.current,request_id:crypto.randomUUID()},undefined,text=>{
         if(mounted.current)setLiveReply({content:text});
       });
       if(!mounted.current)return;

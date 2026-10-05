@@ -150,6 +150,7 @@ export async function researchMarketTrends(ctx, args = {}) {
 
   const findings = [];
   const sourcesChecked = [];
+  let webRead = false;
 
   for (const seed of SEEDS) {
     try {
@@ -177,6 +178,7 @@ export async function researchMarketTrends(ctx, args = {}) {
     try {
       const searchQuery = query || 'mercado imobiliário João Pessoa tendências';
       const web = await searchWeb(searchQuery, ctx.env);
+      webRead = true;
       const webResults = (web.results || []).slice(0, 4);
       for (const res of webResults) {
         findings.push({
@@ -202,6 +204,8 @@ export async function researchMarketTrends(ctx, args = {}) {
 
   return {
     source: 'live_market_research',
+    success: sourcesChecked.length>0||webRead,
+    unavailable: sourcesChecked.length===0&&!webRead,
     observed_at: now.toISOString(),
     observed_at_brasilia: brasiliaTime,
     query_used: query || 'feeds_oficiais_joao_pessoa',
@@ -209,8 +213,8 @@ export async function researchMarketTrends(ctx, args = {}) {
     sources_checked: sourcesChecked,
     findings: findings.slice(0, 8),
     neighborhoods_in_portfolio: activeNeighborhoods,
-    freshness: 'live_research_completed_now',
-    guidance: 'Notícias e tendências recentes obtidas diretamente dos canais oficiais e pesquisas. Utilize estas evidências reais para sugerir pautas de conteúdo.',
+    freshness: sourcesChecked.length>0||webRead ? 'live_research_completed_now' : 'sources_unavailable',
+    guidance: sourcesChecked.length>0||webRead ? 'Notícias e pistas obtidas das fontes consultadas. Resultados de busca e títulos são pistas, não fatos verificados sem leitura do artigo.' : 'Nenhuma fonte de pesquisa retornou dados verificáveis. Isso não comprova ausência de notícias ou tendências.',
   };
 }
 

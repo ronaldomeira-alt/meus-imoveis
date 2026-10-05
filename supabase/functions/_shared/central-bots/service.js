@@ -1,3 +1,5 @@
+import {OWNER_COMMAND_POLICY,extraRoundRequested,LIVE_OPERATIONS,isRoutineDeferral} from './owner-control.js';
+import {rememberChat,chatMemoryContext} from './chat-memory.js';
 import {
   rows,
   AgentError,
@@ -201,20 +203,14 @@ export async function listCentral(ctx, includePreviews = false) {
   };
 }
 
-export async function getConversation(ctx, botId) {
+export async function getConversation(ctx, botId, sessionId = null) {
+  if(sessionId && !UUID.test(sessionId))throw new AgentError('Sessão de conversa inválida.');
   await getBot(ctx, botId);
   const conv = await conversation(ctx, botId);
+  let messageQuery=ctx.db.from('agent_messages').select('*').eq('account_id',ctx.accountId).eq('conversation_id',conv.id).gt('expires_at',new Date().toISOString());
+  if(sessionId)messageQuery=messageQuery.eq('session_id',sessionId);
   const [messages, runs, events] = await Promise.all([
-    rows(
-      ctx.db
-        .from('agent_messages')
-        .select('*')
-        .eq('account_id', ctx.accountId)
-        .eq('conversation_id', conv.id)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(100),
-    ),
+    rows(messageQuery.order('created_at',{ascending:false}).limit(100)),
     rows(
       ctx.db
         .from('agent_runs')
@@ -292,6 +288,8 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
   const run = inserted.data;
   const sources = [];
   const technical = technicalDetailsRequested(prompt);
+  const extraRound = Boolean(ctx.user && extraRoundRequested(prompt));
+  if(extraRound) await event(ctx,bot.id,run.id,'extra_round_requested',{requested_by:ctx.user.id,requested_at:new Date().toISOString(),request_id:requestId});
   try {
 function botSpecificDirectives(bot) {
   const sections = [];
@@ -352,7 +350,7 @@ function botSpecificDirectives(bot) {
   return sections.join('\n\n');
 }
 
-    let route = trigger === 'chat' ? conversationRoute(prompt) : 'operational';
+    let route = extraRound ? 'operational' : trigger === 'chat' ? conversationRoute(prompt) : 'operational';
     if (route === 'classify') {
       const routingMessages = [{role:'system',content:ROUTING_POLICY}, ...history.slice(-4), {role:'user',content:prompt}];
       if (bot.kind === 'marketing') {
@@ -364,6 +362,7 @@ function botSpecificDirectives(bot) {
     }
     if (requiresOperationalEvidence(prompt)) route = 'operational';
     if (isDirectRoute(route)) {
+      const rememberedContext = await chatMemoryContext(ctx,bot.id);
       const directPreferences = redactOperationalData(await buildAgentPreferencesContext(ctx, bot).catch(() => ''), ctx.env);
       const messages = [
         {
@@ -373,7 +372,9 @@ ${identityPolicy(bot)}
 ${capabilityPolicy(bot)}
 
 ${routeGuidance(route, bot)}
-${directPreferences}`,
+${directPreferences}
+${OWNER_COMMAND_POLICY}
+${rememberedContext}`,
         },
         ...history,
         { role: 'user', content: prompt },
@@ -426,6 +427,9 @@ ${preferencesContext ? `\n${preferencesContext}\n` : ''}
 DIRETRIZES CRÍTICAS DE AUTONOMIA E VERACIDADE:
 
 ${botSpecificDirectives(bot)}
+${OWNER_COMMAND_POLICY}
+${await chatMemoryContext(ctx,bot.id)}
+Se perguntarem sobre algo que já foi discutido ou feito, consulte getAgentMemory com os termos relevantes. Não invente recordações.
 
 ${technical ? "A pessoa pediu detalhes técnicos explicitamente. Pode apresentá-los, preservando os limites de segurança e a distinção entre fato e hipótese." : "A pessoa não pediu detalhes técnicos. Use a explicação humana das fontes e preserve as incertezas."}
 Missão declarada pelo usuário: ${bot.mission}`,
@@ -443,7 +447,7 @@ Missão declarada pelo usuário: ${bot.mission}`,
       }
 
       const stepPrompt = step === 0
-        ? 'Etapa inicial: chame a ferramenta mais apropriada para obter os dados necessários para responder à pergunta (retorne apenas a chamada de ferramenta, sem texto livre).'
+        ? (extraRound ? 'Rodada extra por solicitação direta do usuário: execute agora a operação pedida nas fontes habilitadas. Não adie por horários e não devolva apenas histórico de atividades. Respeite a proibição de contato/publicação quando presente. Retorne uma chamada de ferramenta.' : 'Etapa inicial: chame a ferramenta mais apropriada para obter os dados necessários para responder à pergunta (retorne apenas a chamada de ferramenta, sem texto livre).')
         : (step < maxSteps - 1
           ? `Você recebeu dados da ferramenta. Avalie com critério:
 - Se os dados obtidos já forem suficientes para responder completamente com fatos e segurança, gere a resposta final ao Ronaldo em texto simples, coloquial, amigável e direto.
@@ -451,16 +455,18 @@ Missão declarada pelo usuário: ${bot.mission}`,
 - Nunca diga que não sabe uma informação se você possui uma ferramenta capaz de descobri-la.`
           : `Etapa final: elabore a resposta final para o Ronaldo em texto simples, coloquial, caloroso e direto. ${technical ? 'Pode incluir detalhes técnicos.' : 'Sem asteriscos, termos de banco de dados ou jargões internos.'} Responda estritamente com base nos fatos confirmados nas ferramentas desta conversa.`);
 
+      const recalling=/lembra|lembrar|falamos|conversamos|combinamos|eu te disse/i.test(prompt);
+      const immediateTools=recalling && step===0 ? tools.filter(tool=>tool.name==='getAgentMemory') : extraRound && step===0 ? tools.filter(tool=>LIVE_OPERATIONS.has(tool.name)) : [];
       reply = await provider.complete({
         messages: [{...messages[0],content:messages[0].content + '\n' + stepPrompt},...messages.slice(1)],
-        tools: step === maxSteps - 1 ? [] : tools,
+        tools: step === maxSteps - 1 ? [] : immediateTools.length ? immediateTools : tools,
         requireTool: step === 0,
         reasoningEffort: 'low',
         onText: ctx.onText && step > 0 ? text => {
           const boundary=text.search(/\S+$/u);
           const prefix=boundary<0?text:text.slice(0,boundary);
           const safe=redactOperationalData(prefix,ctx.env).replace(/\*\*/g,'');
-          if(!instagramAccessReceipt(prompt,sources) && !sources.some(source => ['configureAgentBehavior','updateMarketingPreferences','rollbackAgentConfiguration'].includes(source.tool)) && safe.trim() && groundedReply(safe,sources)===safe.trim() && communicationSafe(safe,sources,technical)) ctx.onText(safe);
+          if(!(extraRound && isRoutineDeferral(safe)) && !instagramAccessReceipt(prompt,sources) && !sources.some(source => ['configureAgentBehavior','updateMarketingPreferences','rollbackAgentConfiguration'].includes(source.tool)) && safe.trim() && groundedReply(safe,sources)===safe.trim() && communicationSafe(safe,sources,technical)) ctx.onText(safe);
         } : undefined,
       });
       if (!reply.tool_calls?.length) break;
@@ -516,10 +522,22 @@ Missão declarada pelo usuário: ${bot.mission}`,
       }
     }
     const grounded = (configurationReceipt(sources) || instagramAccessReceipt(prompt, sources) || groundedReply(reply?.content, sources)).replace(/\*\*([^*\n]+)\*\*/g,'$1');
-    const content = communicationSafe(grounded,sources,technical) ? grounded : humanFallback(sources);
+    let content = communicationSafe(grounded,sources,technical) ? grounded : humanFallback(sources);
+    if(extraRound) {
+      const live=sources.filter(source=>LIVE_OPERATIONS.has(source.tool));
+      const verified=live.some(source=>source.data&&!source.data.unavailable&&source.data.success!==false);
+      if(isRoutineDeferral(content))content=verified ? 'Executei a consulta nas fontes habilitadas. O resultado confirmado está registrado nas fontes desta resposta.' : 'Não consegui confirmar a execução nesta tentativa; os registros indicam o impedimento real. O horário da rotina não impede seu pedido.';
+      if(!verified && live.some(source=>source.data?.reason)) {
+        const reason=live.find(source=>source.data?.reason)?.data.reason;
+        if(communicationSafe(reason,live,technical))content=reason;
+      }
+      const when=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}).format(new Date());
+      content=(verified?'Fiz uma consulta extra a seu pedido em ':'Tentei a execução extra a seu pedido em ')+when+' (horário de Brasília).\n\n'+content;
+      await event(ctx,bot.id,run.id,verified?'extra_round_completed':'extra_round_unconfirmed',{requested_by:ctx.user.id,request_id:requestId,tools:live.map(source=>source.tool),verified});
+    }
     const auditResult =
       trigger === 'chat'
-        ? { provider: provider.name, model: provider.model, tool_count: sources.length, conversation_route:route }
+        ? { extra_round:extraRound,requested_by:ctx.user?.id||null,provider: provider.name, model: provider.model, tool_count: sources.length, conversation_route:route }
         : { content, sources, provider: provider.name };
     if (bot.kind === 'marketing') {
       const budget = await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());
@@ -560,6 +578,7 @@ export async function chat(ctx, body) {
   const content = requiredText(body.content, 'Mensagem');
   if (!UUID.test(body.request_id || ''))
     throw new AgentError('Identificador da mensagem inválido.');
+  if(body.session_id && !UUID.test(body.session_id))throw new AgentError('Sessão de conversa inválida.');
   const conv = await conversation(ctx, bot.id);
   const previous = await rows(
     ctx.db
@@ -581,16 +600,9 @@ export async function chat(ctx, body) {
     throw new AgentError('Não foi possível verificar o limite de uso.', 503);
   if (count >= 60)
     throw new AgentError('Limite de consultas da hora atingido.', 429);
-  const history = await rows(
-    ctx.db
-      .from('agent_messages')
-      .select('role,content')
-      .eq('account_id', ctx.accountId)
-      .eq('conversation_id', conv.id)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(12),
-  );
+  let historyQuery=ctx.db.from('agent_messages').select('role,content').eq('account_id',ctx.accountId).eq('conversation_id',conv.id).gt('expires_at',new Date().toISOString());
+  if(body.session_id)historyQuery=historyQuery.eq('session_id',body.session_id);
+  const history=await rows(historyQuery.order('created_at',{ascending:false}).limit(12));
   await rows(
     ctx.db
       .from('agent_messages')
@@ -601,6 +613,7 @@ export async function chat(ctx, body) {
           client_message_id: body.request_id,
           role: 'user',
           content,
+          ...(body.session_id?{session_id:body.session_id,expires_at:new Date(Date.now()+86400000).toISOString()}:{}),
         },
         {
           onConflict: 'account_id,conversation_id,client_message_id,role',
@@ -619,6 +632,7 @@ export async function chat(ctx, body) {
       result = { content: 'Registrei sua escolha e vou considerar esse retorno nas próximas pesquisas.', sources: [{ tool: 'marketingFeedback', observed_at: new Date().toISOString(), data: { idea_id: idea.id } }], run_id: null };
     } else result = { content: 'Indique a ideia na aba Ideias para eu registrar esse retorno no lugar certo.', sources: [], run_id: null };
   }
+  try {
   result ||= await analyze(
     ctx,
     bot,
@@ -627,6 +641,10 @@ export async function chat(ctx, body) {
     body.request_id,
     history.reverse(),
   );
+  } catch(error) {
+    await rememberChat(ctx,bot.id,body.request_id,content,[{tool:'requestedTask',data:{unavailable:true,success:false,reason:'Não foi possível concluir a execução.'}}],extraRoundRequested(content));
+    throw error;
+  }
   const message = await rows(
     ctx.db
       .from('agent_messages')
@@ -635,6 +653,7 @@ export async function chat(ctx, body) {
         conversation_id: conv.id,
         client_message_id: body.request_id,
         role: 'assistant',
+        ...(body.session_id?{session_id:body.session_id,expires_at:new Date(Date.now()+86400000).toISOString()}:{}),
         content: result.content,
         sources: result.sources,
       })
@@ -656,6 +675,7 @@ export async function chat(ctx, body) {
     }).catch(() => {});
   }
 
+  await rememberChat(ctx,bot.id,body.request_id,content,result.sources,extraRoundRequested(content));
   return { message, run_id: result.run_id };
 }
 

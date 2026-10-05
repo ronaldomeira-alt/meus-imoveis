@@ -80,11 +80,11 @@ export async function centralRequest(body,signal,onText) {
     if(body.operation==='memory_delete') marketing.memory=marketing.memory.filter(m=>m.id!==body.memory_id);
     return {saved:true};
   }
-  if (body.action === 'conversation') return { conversation_id: body.bot_id, messages: messages[body.bot_id] || [], runs: [], events: [] };
+  if (body.action === 'conversation') return { conversation_id: body.bot_id, messages: (messages[body.bot_id] || []).filter(m=>!body.session_id||m.session_id===body.session_id), runs: [], events: [] };
   if (body.action === 'clear_conversation') { messages[body.bot_id] = []; return { ok: true, bot_id: body.bot_id }; }
   if (body.action === 'chat') {
     onText?.('Consulta ');await new Promise(resolve=>setTimeout(resolve,300));onText?.('Consulta de teste ');await new Promise(resolve=>setTimeout(resolve,300));
-    (messages[body.bot_id] ||= []).push({id: crypto.randomUUID(), role:'user', content:body.content, created_at:'${now}', sources:[]}, {id:crypto.randomUUID(), role:'assistant', content:'Consulta de teste concluída: 3 contatos.', created_at:'${now}', sources:[{tool:'getCaptureSummary', observed_at:'${now}', data:{count:3, fixture:true}}]});
+    (messages[body.bot_id] ||= []).push({id: crypto.randomUUID(), session_id:body.session_id, role:'user', content:body.content, created_at:'${now}', sources:[]}, {id:crypto.randomUUID(), session_id:body.session_id, role:'assistant', content:'Consulta de teste concluída: 3 contatos.', created_at:'${now}', sources:[{tool:'getCaptureSummary', observed_at:'${now}', data:{count:3, fixture:true}}]});
     return {message:messages[body.bot_id].at(-1)};
   }
   if (body.action === 'create_bot') { const bot = {...body.bot, id:'bot-custom', slug:'custom', kind:'custom', active:true}; data.bots.push(bot); return {bot}; }
@@ -190,6 +190,11 @@ test(
         await page.$eval('.agent-source', (e) => e.textContent),
         /fixture/,
       );
+      await page.click('.agent-bot-item:nth-child(2)');
+      await page.waitForFunction(()=>document.querySelector('.agent-topbar h2')?.textContent==='Bot Captador');
+      await page.click('.agent-bot-item:nth-child(1)');
+      await page.waitForFunction(()=>document.querySelector('.agent-empty h3')?.textContent==='Bot Gestor');
+      assert.equal(await page.$('.agent-message-assistant'),null,'Returning to a bot starts a new empty session');
       await page.click('.agent-bot-item:nth-child(4)');
       await page.waitForFunction(() => document.querySelector('.agent-topbar h2')?.textContent==='Bot de Marketing');
       assert.ok(await page.$('.agent-topbar .agent-avatar svg'));

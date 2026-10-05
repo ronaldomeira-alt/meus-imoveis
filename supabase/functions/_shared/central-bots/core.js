@@ -174,7 +174,7 @@ export const BUILTINS = [
     sort_order: 1,
     mission:
       'Analisar somente os dados reais do Captador operacional. Não executar rodadas, mudar campanhas, configurações, limites, filas, tombstones ou a VM.',
-    tools: [
+    tools: ['searchNewProperties',
       'getCaptureSummary',
       'getRecentRounds',
       'getRecentResponses',

@@ -1,3 +1,4 @@
+import {extraRoundRequested,OWNER_COMMAND_POLICY} from './owner-control.js';
 // Conversation decisions never grant tools, permissions or operational authority.
 export const AGENT_IDENTITIES = {
   captador: 'Sou o Bot Captador. Falo do meu trabalho de busca e acompanhamento de imóveis: encontrei, abordei, estou aguardando resposta. Na Central só consulto a operação; não inicio buscas nem altero campanhas por esta conversa.',
@@ -11,7 +12,7 @@ export const AGENT_CAPABILITIES = {
     role: 'Captação automatizada de imóveis na OLX (João Pessoa e Cabedelo).',
     sources: 'Portal OLX na região metropolitana de João Pessoa.',
     schedules: 'Rodadas oficiais programadas para 09:00 e 19:00 (horário de Brasília) via VM dedicada.',
-    boundaries: 'Na Central atuo exclusivamente em modo consulta analítica. Não inicio buscas operacionais nem altero campanhas, filtros, tombstones ou configurações operacionais por esta conversa. Não cuido de pautas de marketing nem monitoro servidores e conexões técnicas.',
+    boundaries: 'Na Central faço consultas e pesquisas extras de imóveis quando o usuário pede, sem enviar mensagens nem enfileirar contatos. Os horários 09:00 e 19:00 orientam apenas a rotina automática, não impedem pesquisa extra. Não altero campanhas, filtros, tombstones ou configurações operacionais por esta conversa. Não cuido de pautas de marketing nem monitoro servidores e conexões técnicas.',
   },
   marketing: {
     role: 'Parceiro criativo e editorial imobiliário.',
@@ -85,10 +86,11 @@ const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').
 
 export function requiresOperationalEvidence(prompt) {
   const text = normalize(prompt);
-  return /instagram|(?:meu|minha)\s+(?:perfil|rede social)|(?:o que|que)\s+(?:voce|vc)\s+(?:tem feito|fez|pesquisou|analisou)|(?:olhe|olha|acesse|confira|consulte|pesquise)\b|quando.*(?:pesquisa|pesquisar|trabalhar)|(?:quero|peco|faca|inclua|incluir|adicione|acrescente).*(?:bot|rotina|diretriz|comportamento|preferencia)|(?:configure|configura|ajuste|altere|mude).*bot/.test(text);
+  return /lembra|lembrar|ja falamos|falamos antes|ultima vez|conversamos|combinamos|eu te disse|instagram|(?:meu|minha)\s+(?:perfil|rede social)|(?:o que|que)\s+(?:voce|vc)\s+(?:tem feito|fez|pesquisou|analisou)|(?:olhe|olha|acesse|confira|consulte|pesquise)\b|quando.*(?:pesquisa|pesquisar|trabalhar)|(?:quero|peco|faca|inclua|incluir|adicione|acrescente).*(?:bot|rotina|diretriz|comportamento|preferencia)|(?:configure|configura|ajuste|altere|mude).*bot/.test(text);
 }
 
 export function conversationRoute(prompt) {
+  if(extraRoundRequested(prompt))return 'operational';
   const text = normalize(prompt.trim());
   if (requiresOperationalEvidence(prompt)) return 'operational';
 

@@ -1,3 +1,5 @@
+import {searchNewProperties} from './property-research.js';
+import {recallChatMemory} from './chat-memory.js';
 import { rows, rangeArgs, AgentError, UUID, BUILTINS, event } from './core.js';
 import { PERIODS } from './conversation.js';
 import { getRelevantMemories } from './state-memory.js';
@@ -245,12 +247,16 @@ export const TOOL_CATALOG = [
   ['rollbackAgentConfiguration', 'Restaura a configuração anterior de um bot antes da última alteração de comportamento.'],
   ['getAgentConversationContext', 'Consulta o contexto recente de conversa, estado ou ideias de outro bot (gestor, captador, sentinela, marketing) para atender o usuário sob demanda sem contaminação.'],
   ['acknowledgeOrResolveIncident', 'Reconhece ou resolve formalmente uma ocorrência técnica aberta do Sentinela após correção ou verificação, sem exclusão destrutiva.'],
+  ['searchNewProperties', 'Pesquisa imóveis novos agora nas fontes públicas configuradas, sem enviar mensagens, sem enfileirar contatos e sem esperar os horários automáticos.'],
+  ['getAgentMemory', 'Recupera memória compacta e evidências anteriores deste bot, incluindo pedidos, preferências e execuções extra comprovadas.'],
   ['updateMarketingPreferences', 'Atualiza preferências de pesquisa, tópicos de interesse, tom e foco editorial do Marketing.'],
 ].map(([name, description]) => ({
   name,
   description,
   parameters:
-    name === 'getInstagramContext'
+    name === 'getAgentMemory' ? {type:'object',properties:{query:{type:'string',maxLength:200},limit:{type:'integer',minimum:1,maximum:20}},additionalProperties:false}
+    : name === 'searchNewProperties' ? {type:'object',properties:{},additionalProperties:false}
+    : name === 'getInstagramContext'
       ? { type: 'object', properties: {}, additionalProperties: false }
       : name === 'getIncidentDetails'
       ? {
@@ -290,7 +296,7 @@ export function allowedTools(bot) {
       ? TOOL_CATALOG.map((t) => t.name)
       : BUILTINS.find((b) => b.kind === bot.kind)?.tools || [];
   return TOOL_CATALOG.filter(
-    (t) => permitted.includes(t.name) && bot.tools.includes(t.name),
+    (t) => t.name==='getAgentMemory' || permitted.includes(t.name) && bot.tools.includes(t.name),
   );
 }
 
@@ -466,6 +472,8 @@ export async function dispatch(ctx, name, args) {
   if (Object.hasOwn(capture, name)) return capture[name](ctx, args);
   const { since, until, limit } = rangeArgs(args);
   switch (name) {
+    case 'searchNewProperties': return searchNewProperties(ctx,args);
+    case 'getAgentMemory': return recallChatMemory(ctx,ctx.currentBotId,args);
     case 'getInstagramContext': return readInstagram(ctx);
     case 'getMarketingStatus': return marketingStatus(ctx);
     case 'getMarketingMemory': {
@@ -886,6 +894,8 @@ export async function executeTool(ctx, bot, runId, name, args = {}) {
   if (!args || typeof args !== 'object' || Array.isArray(args))
     throw new AgentError('Argumentos inválidos.');
   const customKeys = {
+    getAgentMemory:['query','limit'],
+    searchNewProperties:[],
     getInstagramContext: [],
     getIncidentDetails: ['incident_id'],
     getMarketingMemory: ['topic', 'kind', 'state'],
@@ -922,7 +932,7 @@ export async function executeTool(ctx, bot, runId, name, args = {}) {
     throw new AgentError('Parâmetro não permitido na ferramenta.');
   const start = Date.now();
   try {
-    const result = await dispatch(ctx, name, args);
+    const result = await dispatch({...ctx,currentBotId:bot.id}, name, args);
     await event(
       ctx,
       bot.id,
