@@ -241,6 +241,27 @@ export async function getConversation(ctx, botId) {
   };
 }
 
+export async function clearConversation(ctx, botId) {
+  if (botId && botId !== 'all') {
+    const bot = await getBot(ctx, botId);
+    const conv = await conversation(ctx, bot.id);
+    await ctx.db
+      .from('agent_messages')
+      .delete()
+      .eq('account_id', ctx.accountId)
+      .eq('conversation_id', conv.id);
+    await event(ctx, bot.id, null, 'conversation_cleared', {
+      conversation_id: conv.id,
+    });
+    return { ok: true, bot_id: bot.id, conversation_id: conv.id };
+  }
+  await ctx.db
+    .from('agent_messages')
+    .delete()
+    .eq('account_id', ctx.accountId);
+  return { ok: true, cleared_all: true };
+}
+
 async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
   if (!bot.active) throw new AgentError('Este bot está desativado.', 409);
   const provider = createAIProvider(ctx.env, bot.provider);

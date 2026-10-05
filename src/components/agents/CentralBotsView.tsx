@@ -15,6 +15,7 @@ import {
   Search,
   ShieldCheck,
   Square,
+  Trash2,
   X,
 } from 'lucide-react';
 import {
@@ -440,6 +441,36 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
     }
   }
 
+  async function clearChat() {
+    if (!bot || busyRef.current) return;
+    if (
+      !window.confirm(
+        `Limpar o histórico de conversas com ${bot.name}? As memórias e aprendizados do bot serão preservados.`,
+      )
+    )
+      return;
+    busyRef.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await centralRequest({ action: 'clear_conversation', bot_id: bot.id });
+      if (mounted.current) {
+        setConversation((prev) => (prev ? { ...prev, messages: [] } : null));
+        setData((prev) => {
+          if (!prev?.previews) return prev;
+          const nextPreviews = { ...prev.previews };
+          delete nextPreviews[bot.id];
+          return { ...prev, previews: nextPreviews };
+        });
+      }
+    } catch (e) {
+      if (mounted.current) setError(errorText(e));
+    } finally {
+      busyRef.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
   return (
     <div className={`agent-workspace${iphonePWA ? ' agent-iphone-pwa' : ''}`} ref={root}>
       {drawer && (
@@ -568,6 +599,17 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                   : data && iphonePWA ? 'Escolha com quem você quer conversar' : 'Aguardando conexão'}
             </p>
           </div>
+          {bot && tab === 'chat' && (
+            <button
+              className="agent-icon"
+              title="Limpar conversa"
+              aria-label="Limpar conversa"
+              disabled={busy || recording}
+              onClick={() => void clearChat()}
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
           <button
             className="agent-icon"
             title="Atualizar"
@@ -959,12 +1001,6 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
               >
                 <ArrowUp size={20} />
               </button>
-            </div>
-            <div className="agent-composer-meta">
-              <span>
-                Histórico: últimos 30 dias
-              </span>
-              <span>{draft.length}/4000</span>
             </div>
           </form>
         )}

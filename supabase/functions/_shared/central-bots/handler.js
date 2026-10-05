@@ -12,6 +12,7 @@ import {
 import {
   listCentral,
   getConversation,
+  clearConversation,
   getBot,
   createBot,
   chat,
@@ -205,6 +206,8 @@ export function createAgentHandler(
           return json(await listCentral(ctx, body.include_previews === true));
         case 'conversation':
           return json(await getConversation(ctx, body.bot_id));
+        case 'clear_conversation':
+          return json(await clearConversation(ctx, body.bot_id));
         case 'chat': {
           if(body.stream !== true)return json(await chat(ctx,body));
           const encoder=new TextEncoder();let closed=false;

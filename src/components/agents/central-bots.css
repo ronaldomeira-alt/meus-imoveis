@@ -288,7 +288,7 @@
   width: 100%;
   max-width: 880px;
   align-self: center;
-  padding: 10px 30px calc(12px + env(safe-area-inset-bottom));
+  padding: 8px 30px calc(6px + env(safe-area-inset-bottom));
 }
 .agent-composer-row {
   display: flex;
@@ -314,7 +314,7 @@
   color: inherit;
 }
 .agent-composer-meta {
-  display: flex;
+  display: none;
   justify-content: space-between;
   font-size: 10px;
   color: var(--text-secondary);
@@ -632,8 +632,8 @@
 .agent-inbox-heading strong { font-size: 17px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-inbox-heading time { margin-left: auto; flex-shrink: 0; color: var(--text-secondary); font-size: 12px; }
 .agent-inbox-preview { color: var(--text-secondary); font-size: 14px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agent-iphone-pwa .agent-composer { padding-bottom: calc(8px + var(--agent-safe-bottom)); }
-.agent-iphone-pwa[data-keyboard="open"] .agent-composer { padding-bottom: 8px; }
+.agent-iphone-pwa .agent-composer { padding-bottom: calc(4px + var(--agent-safe-bottom, 0px)); }
+.agent-iphone-pwa[data-keyboard="open"] .agent-composer, [data-keyboard="open"] .agent-composer { padding-bottom: 2px; }
 @media (max-width: 767px) {
   .agent-iphone-pwa .agent-inbox-topbar { padding: 16px 20px 10px; min-height: 84px; }
   .agent-mobile {
@@ -696,7 +696,7 @@
     padding: 20px 16px;
   }
   .agent-composer {
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 12px calc(4px + env(safe-area-inset-bottom));
   }
   .agent-error,
   .agent-warning {

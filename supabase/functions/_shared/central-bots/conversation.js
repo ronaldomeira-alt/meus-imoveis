@@ -3,7 +3,7 @@ export const AGENT_IDENTITIES = {
   captador: 'Sou o Bot Captador. Falo do meu trabalho de busca e acompanhamento de imóveis: encontrei, abordei, estou aguardando resposta. Na Central só consulto a operação; não inicio buscas nem altero campanhas por esta conversa.',
   sentinela: 'Sou o Bot Sentinela. Observo o sistema, confiro evidências e investigo problemas. Explico o impacto em palavras comuns. Posso recomendar e encaminhar investigação; não corrijo produção nem afirmo uma causa sem confirmação.',
   marketing: 'Sou o Bot de Marketing. Sou um parceiro criativo: pesquiso assuntos, conecto ideias ao mercado imobiliário e proponho conteúdos. Diferencio uma sugestão minha de uma notícia confirmada. Não digo que publiquei algo sem registro de publicação.',
-  gestor: 'Sou o Bot Gestor. Acompanho a equipe, reúno o que merece atenção e ajudo a decidir o próximo passo. Falo eu sobre minha análise e uso o nome dos colegas ao falar do trabalho deles. Não confundo minha consulta com uma execução operacional deles.',
+  gestor: 'Sou o Bot Gestor. Lidero e acompanho a equipe de bots, comando as diretrizes e comportamentos dos colegas conforme suas orientações, reúno o que merece atenção e ajudo você a decidir o próximo passo. Falo eu sobre minha análise e uso o nome dos colegas ao falar do trabalho deles.',
 };
 
 export const AGENT_CAPABILITIES = {
@@ -24,9 +24,9 @@ export const AGENT_CAPABILITIES = {
     boundaries: 'Sou estritamente voltado à observação, diagnóstico e investigação. Não realizo reparos em produção, não altero código e não tenho permissão para zerar ou apagar ocorrências do sistema pelo chat. Quando o usuário informa que um ajuste já foi feito, reconheço a atualização e me coloco à disposição para conferir se o problema normalizou ou se ainda persiste.',
   },
   gestor: {
-    role: 'Coordenação, visão consolidada da equipe e acompanhamento de aprovações.',
+    role: 'Liderança, coordenação, visão consolidada da equipe e comando das diretrizes dos bots.',
     sources: 'Visão agregada dos 4 bots (Gestor, Captador, Sentinela, Marketing), aprovações pendentes e histórico de atividades.',
-    boundaries: 'Consolido e explico o trabalho dos bots e pendências de aprovação. Não tenho permissão para reconfigurar código do sistema ou alterar comportamentos internos dos bots diretamente pelo chat. Se o usuário quiser sugerir ou pedir mudanças de comportamento, oriento com clareza sobre o que pode ser configurado, o que depende de aprovação e o que precisaria ser alterado no sistema pelos desenvolvedores.',
+    boundaries: 'Como Bot Gestor, comando, orquestro e configuro o comportamento, foco e prioridades dos outros bots conforme as diretrizes do Ronaldo. Não tenho permissão para alterar código de infraestrutura do sistema ou da VM Hyper-V diretamente pelo chat.',
   },
 };
 
@@ -55,7 +55,7 @@ export function routeGuidance(route, bot) {
   switch (route) {
     case 'self_or_capability':
       return `DIRETRIZ DE CAPACIDADE/IDENTIDADE:
-Responda diretamente sobre quem você é, seus canais/fontes, seu papel e seus limites funcionais. Não use ferramentas de banco de dados para explicar como você funciona. Seja claro sobre o que você consegue fazer, o que depende de aprovação e o que não tem autorização para fazer. Se perguntarem sobre outros bots, respeite seu escopo.`;
+Responda diretamente sobre quem você é, seus canais/fontes, seu papel e seus limites funcionais. Não use ferramentas de banco de dados para explicar como você funciona. Seja claro sobre o que você consegue fazer, o que depende de aprovação e o que não tem autorização para fazer. Se perguntarem sobre outros bots, respeite seu escopo.${bot.kind === 'gestor' ? '\nComo Bot Gestor: se perguntarem se você controla, comanda ou coordena os bots, confirme com segurança que sim, você é o líder e orquestrador da equipe, responsável por alinhar as diretrizes e configurar foco, regras e prioridades dos bots para o Ronaldo.' : ''}`;
     case 'action_request':
       return `DIRETRIZ DE PEDIDO DE AÇÃO:
 O usuário está perguntando sobre a possibilidade de executar uma ação (ex: zerar ocorrência, mudar comportamento de bot, pausar, apagar).
@@ -105,7 +105,7 @@ export function conversationRoute(prompt) {
   if (action) return 'action_request';
 
   // 4. Perguntas sobre capacidades, canais pesquisados, escopo funcional ou limites (SELF_OR_CAPABILITY)
-  const capability = /(?:quais(?:\s+(?:sao|e))?(?:\s+(?:os?|as?|seus?|suas?))?|que)\s+(?:canais|fontes|redes|meios|tipos|coisas|assuntos|temas)|(?:onde|em que locais?|em que canais?)\s+voce\s+pesquisa|(?:o que|quais tipos de coisa)\s+(?:eu posso|consigo|da pra|posso)\s+pedir|(?:consigo|posso|da pra)(?:[,\s]+aqui no chat)?[,\s]+pedir algo diferente|(?:tipo )?mudar algo no comportamento|(?:sabe|sabe o que|esta sabendo|sabe dizer).*(?:outros bots|colegas|resto da equipe)|(?:o que|como)\s+voce\s+(?:faz|consegue|pode)\s+(?:investigar|pesquisar|fazer|ajudar)/.test(text);
+  const capability = /(?:quais(?:\s+(?:sao|e))?(?:\s+(?:os?|as?|seus?|suas?))?|que)\s+(?:canais|fontes|redes|meios|tipos|coisas|assuntos|temas)|(?:onde|em que locais?|em que canais?)\s+voce\s+pesquisa|(?:o que|quais tipos de coisa)\s+(?:eu posso|consigo|da pra|posso)\s+pedir|(?:consigo|posso|da pra)(?:[,\s]+aqui no chat)?[,\s]+pedir algo diferente|(?:tipo )?mudar algo no comportamento|(?:sabe|sabe o que|esta sabendo|sabe dizer).*(?:outros bots|colegas|resto da equipe)|(?:o que|como)\s+voce\s+(?:faz|consegue|pode)\s+(?:investigar|pesquisar|fazer|ajudar)|(?:voce|vc)\s+(?:nao\s+)?(?:controla|comanda|manda|gerencia|coordena|lidera|dirige)|(?:quem|como)\s+(?:controla|comanda|manda|gerencia|coordena|lidera)|(?:papel|relacao|hierarquia|funcao)\s+com\s+(?:os\s+)?(?:outros\s+)?bots|(?:voce|vc)\s+(?:pode|consegue)\s+(?:coordenar|comandar|controlar)/.test(text);
   if (capability && !/(?:hoje|ontem|semana passada|quantos?|quais foram)/.test(text)) {
     return 'self_or_capability';
   }
@@ -126,7 +126,7 @@ export function conversationRoute(prompt) {
 export const ROUTING_POLICY = `Classifique a intenção desta mensagem considerando o histórico recente. Retorne SOMENTE um JSON no formato {"route": "<rota>"}.
 Rotas válidas:
 - conversation: saudação, papo social, agradecimento, preferências de linguagem e tom.
-- self_or_capability: perguntas sobre identidade, canais/fontes pesquisadas, funções, limites, o que pode ser pedido ao bot, ou se ele monitora outros bots. Não requer fatos operacionais mutáveis.
+- self_or_capability: perguntas sobre identidade, canais/fontes pesquisadas, funções, limites, o que pode ser pedido ao bot, se ele comanda/controla/coordena outros bots, ou regras da equipe. Não requer fatos operacionais mutáveis.
 - action_request: pedidos para executar ações, zerar/apagar ocorrências, mudar comportamento de bots, pausar, resolver.
 - follow_up: confirmações contextuais ("você entendeu minha pergunta?"), atualizações de status informadas pelo usuário ("já ajustamos isso"), correções ("não foi isso que perguntei") ou feedback. Se for continuação que pede mais dados de uma busca factual anterior (ex: "e aqueles?"), classifique como operational.
 - operational: perguntas sobre fatos operacionais reais e mutáveis que exigem consulta atual ao banco (contagens, imóveis captados, rodadas do dia, ocorrências abertas, status de alertas, pesquisas realizadas hoje, resumo dos bots).

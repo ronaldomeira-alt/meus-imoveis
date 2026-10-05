@@ -81,6 +81,7 @@ export async function centralRequest(body,signal,onText) {
     return {saved:true};
   }
   if (body.action === 'conversation') return { conversation_id: body.bot_id, messages: messages[body.bot_id] || [], runs: [], events: [] };
+  if (body.action === 'clear_conversation') { messages[body.bot_id] = []; return { ok: true, bot_id: body.bot_id }; }
   if (body.action === 'chat') {
     onText?.('Consulta ');await new Promise(resolve=>setTimeout(resolve,300));onText?.('Consulta de teste ');await new Promise(resolve=>setTimeout(resolve,300));
     (messages[body.bot_id] ||= []).push({id: crypto.randomUUID(), role:'user', content:body.content, created_at:'${now}', sources:[]}, {id:crypto.randomUUID(), role:'assistant', content:'Consulta de teste concluída: 3 contatos.', created_at:'${now}', sources:[{tool:'getCaptureSummary', observed_at:'${now}', data:{count:3, fixture:true}}]});
