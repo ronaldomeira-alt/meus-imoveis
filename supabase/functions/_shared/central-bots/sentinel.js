@@ -1,6 +1,7 @@
 import { rows, event, maintenanceDossier, AgentError } from './core.js';
 import { marketingStatus } from '../bot-marketing/store.js';
 import { humanIncident } from './communication.js';
+import { handleSentinelStateChange } from './autonomy.js';
 
 export function isDailyInspectionDue(lastStartedAt, now = new Date()) {
   if (!lastStartedAt) return true;
@@ -348,6 +349,8 @@ export async function inspectSystem(
   const run = await rows(insertedRun);
   try {
     const result = await collectHealth(ctx, deep);
+    const resolvedIncidents = [];
+    const openedIncidents = [];
     for (const check of result.checks) {
       const fingerprint = `health:${check.component}`;
       const existing = await rows(
@@ -360,7 +363,7 @@ export async function inspectSystem(
           .maybeSingle(),
       );
       if (check.status === 'ok' || check.status === 'skipped') {
-        if (existing)
+        if (existing) {
           await rows(
             ctx.db
               .from('agent_incidents')
@@ -368,6 +371,8 @@ export async function inspectSystem(
               .eq('account_id', ctx.accountId)
               .eq('id', existing.id),
           );
+          resolvedIncidents.push(existing);
+        }
         continue;
       }
       const dossier = {
@@ -436,14 +441,10 @@ export async function inspectSystem(
           incident_id: incident.id,
           component: check.component,
         });
-        await ctx.notify(bot, 'incident', {
-          title: 'Bot Sentinela: atenção necessária',
-          body: humanIncident(incident),
-          url: `/central-de-bots?bot=sentinela&incident=${incident.id}`,
-          tag: `agent-incident-${incident.id}`,
-        });
+        openedIncidents.push(incident);
       }
     }
+    await handleSentinelStateChange(ctx, bot, { resolvedIncidents, openedIncidents }).catch(() => {});
     await rows(
       ctx.db
         .from('agent_runs')

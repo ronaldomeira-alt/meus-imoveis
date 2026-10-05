@@ -1,4 +1,5 @@
 import { AgentError, rows, event, redactOperationalData } from '../central-bots/core.js';
+import { syncMarketingAutonomousResearch } from '../central-bots/autonomy.js';
 import { fingerprint, assessIdea, safeSourceUrl, normalize, localDay } from './core.js';
 import { readSource, searchWeb, readInventory, readInstagram } from './sources.js';
 import { editorialCall } from './ai.js';
@@ -182,6 +183,11 @@ export async function marketingTick(ctx, bot, dependencies = {}) {
         done = true; phase = 'done';
         await event(ctx, bot.id, null, 'marketing_cycle_completed', { task_id: task.id, ideas: cp.idea_ids || [], reason: cp.judgment?.reason, limits: cp.limits });
         cp.articles = (cp.articles || []).map(({ text, ...article }) => ({ ...article, excerpt: text?.slice(0, 600) }));
+        await syncMarketingAutonomousResearch(ctx, bot, {
+          topic: cp.plan?.hypothesis || 'Tendências do Mercado Imobiliário',
+          summary: cp.judgment?.reason || `Pesquisei fontes de mercado e gerei ${(cp.idea_ids || []).length} pauta(s) para análise.`,
+          ideaProposal: (cp.idea_ids || []).length ? { id: cp.idea_ids[0], isHighRelevance: true } : null,
+        }).catch(() => {});
         break;
       default: throw new AgentError('Etapa de pesquisa inválida.');
     }

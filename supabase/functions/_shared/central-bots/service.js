@@ -24,6 +24,7 @@ import { inspectSystem, isDailyInspectionDue } from './sentinel.js';
 import { setupMarketing, scoped as marketingScoped, feedback as marketingFeedback } from '../bot-marketing/store.js';
 import { parseFeedback } from '../bot-marketing/core.js';
 import { marketingTick } from '../bot-marketing/worker.js';
+import { executeDailyDigest } from './autonomy.js';
 import { costEnvelope, marketingModel } from '../bot-marketing/ai.js';
 import {
   updateAgentOperationalState,
@@ -769,6 +770,7 @@ export async function decideApproval(ctx, body) {
 export async function tick(ctx, botId) {
   const target = await getBot(ctx, botId);
   if (target.kind === 'marketing') return marketingTick(ctx, target, { sendPush: ctx.marketingSendPush });
+  if (target.kind === 'gestor') return executeDailyDigest(ctx, target);
   await rows(
     ctx.db
       .from('agent_runtime_settings')
@@ -813,7 +815,7 @@ export async function tick(ctx, botId) {
       trigger: 'schedule',
     });
   }
-  if (bot.work_mode === 'monitoring') {
+    if (bot.work_mode === 'monitoring') {
     const changed = await rows(
       ctx.db
         .from('agent_events')
