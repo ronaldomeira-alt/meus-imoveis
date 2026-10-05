@@ -7,6 +7,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import {readDecision} from '../scripts/technical-read-gate.mjs';
 
 test('Runner never exports credentials, private metadata, images, untracked files or unrestricted agent tools',()=>{
   for(const name of ['.env','src/.env','node_modules/file.js','public/private.jpg','.marketing-release.local/key.js','.agents/skills/private.js','supabase/.temp/key.js'])assert.equal(sourceAllowed(name),false,name);
@@ -27,6 +28,13 @@ test('Snapshot uses the committed revision, excludes keys and rejects invented c
     git(['add','.']);git(['-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','--quiet','-m','fixture']);
     await writeFile(path.join(repo,'src','example.ts'),'export const limit = 99;');await writeFile(path.join(repo,'src','uncommitted.ts'),'private fixture');
     const manifest=await prepareSnapshot(repo,snapshot);assert.deepEqual(manifest.files,['src/example.ts']);
+    const decision=(name,args)=>readDecision({toolCall:{name,args}},snapshot,manifest.files);
+    assert.equal((await decision('view_file',{AbsolutePath:path.join(snapshot,'src','example.ts')})).decision,'allow');
+    assert.equal((await decision('view_file',{AbsolutePath:path.join(repo,'.env')})).decision,'deny');
+    assert.equal((await decision('view_file',{AbsolutePath:path.join(snapshot,'.agents','hooks.json')})).decision,'deny');
+    assert.equal((await decision('grep_search',{SearchPath:snapshot})).decision,'allow');
+    assert.equal((await decision('grep_search',{SearchPath:root})).decision,'deny');
+    for(const name of ['run_command','write_to_file','call_mcp_tool','schedule','invoke_subagent','ask_permission'])assert.equal((await decision(name,{})).decision,'deny',name);
     assert.equal(await readFile(path.join(snapshot,'src','example.ts'),'utf8'),'export const limit = 10;');
     const result={assessment:'confirmed',findings:[{file:'src/example.ts',evidence:'limit = 10'}]};
     assert.equal((await checkFindings(result,snapshot,manifest)).code_revision,manifest.revision);
