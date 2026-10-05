@@ -341,6 +341,9 @@ export function extractEvidenceNumbers(sources) {
   allowed.add('2026');
   allowed.add('2027');
 
+  // Códigos de status HTTP comuns em diagnósticos do Sentinela
+  ['200', '400', '401', '403', '404', '409', '422', '429', '500', '502', '503', '504'].forEach(c => allowed.add(c));
+
   return allowed;
 }
 

@@ -87,25 +87,31 @@ export function conversationRoute(prompt) {
   const text = normalize(prompt.trim());
 
   // 1. Saudações puras e amenidades sociais (incluindo checagens coloquiais como "como estamos?")
-  if (/^(?:ola|oi|oie|bom dia|boa tarde|boa noite|boa madrugada|obrigad[oa]|valeu)(?:[\s,!?.]+(?:como estamos|tudo bem|tudo bom|como vai|beleza|tranquilo|por ai)(?:\s+agora)?)?[\s!?.]*$/.test(text)) {
+  if (/^(?:ola|oi|oie|bom dia|boa tarde|boa noite|boa madrugada|obrigad[oa]|valeu)(?:[\s,]+(?:gestor|captador|sentinela|marketing|ronaldo|bot|amigo|equipe))?(?:[\s,!?.]+(?:como estamos|tudo bem|tudo bom|como vai|beleza|tranquilo|por ai)(?:\s+agora)?)?[\s!?.]*$/.test(text)) {
     return 'conversation';
   }
 
   // 2. Metacomunicação, tom de voz, identidade básica (preserva compatibilidade)
   const meta = /(?:por que|porque|pq).*(?:voce (?:diz|fala|responde)|ele e voce)|(?:fale|responda|seja|explique).*(?:primeira pessoa|menos tecnico|mais simples|mais amigavel|coloquial)|(?:quem e voce|qual (?:e )?seu nome|como voce funciona)/.test(text);
 
-  // 3. Pedidos de ação ou mudança operacional (ACTION_REQUEST)
+  // 3. Comandos executáveis de configuração de agentes, orquestração e resolução formal
+  const isAgentConfigOrResolution = /(?:mude|muda|altere|altera|configure|configura|ajuste|ajusta)\s+o\s+(?:estilo|tom|foco|comportamento)|(?:focar|foque|focado)\s+em|(?:priorizar|priorize|priorizando)|(?:volta|reverte|desfaz)\s+a\s+configuracao|a partir de hoje quero|(?:ja\s+(?:foi\s+)?(?:tratad|corrigid|resolvid)|pode conferir|confere se\s+(?:resolveu|normalizou))/i.test(text);
+  if (isAgentConfigOrResolution && !/(?:consigo|posso|da pra)\s+pedir algo diferente/i.test(text)) {
+    return 'operational';
+  }
+
+  // 4. Pedidos genéricos de ação ou mutação não autorizada (ACTION_REQUEST)
   const action = /(?:tem como|e possivel|posso|pode|consegue|conseguir(?:ia)?)\s+(?:zerar|apagar|remover|excluir|encerrar|limpar|resolver|modificar|alterar|mudar|pausar)|(?:apaga|apague|zere|zera|encerre|encerra|remove|remova|exclui|exclua|pausa|pause|limpa|limpe)\s+(?:ess[ae]|o|a|os|as)?\s*(?:ocorrencia|incidente|alerta|aviso|bot|comportamento)/.test(text);
   if (action) return 'action_request';
 
   // 4. Perguntas sobre capacidades, canais pesquisados, escopo funcional ou limites (SELF_OR_CAPABILITY)
-  const capability = /(?:quais|quais os?|que)\s+(?:canais|fontes|redes|meios|tipos|coisas|assuntos|temas)|(?:o que|quais tipos de coisa)\s+(?:eu posso|consigo|da pra|posso)\s+pedir|(?:consigo|posso|da pra)(?:[,\s]+aqui no chat)?[,\s]+pedir algo diferente|(?:tipo )?mudar algo no comportamento|(?:sabe|sabe o que|esta sabendo|sabe dizer).*(?:outros bots|colegas|resto da equipe)|(?:o que|como)\s+voce\s+(?:faz|consegue|pode)\s+(?:investigar|pesquisar|fazer|ajudar)/.test(text);
+  const capability = /(?:quais(?:\s+(?:sao|e))?(?:\s+(?:os?|as?|seus?|suas?))?|que)\s+(?:canais|fontes|redes|meios|tipos|coisas|assuntos|temas)|(?:onde|em que locais?|em que canais?)\s+voce\s+pesquisa|(?:o que|quais tipos de coisa)\s+(?:eu posso|consigo|da pra|posso)\s+pedir|(?:consigo|posso|da pra)(?:[,\s]+aqui no chat)?[,\s]+pedir algo diferente|(?:tipo )?mudar algo no comportamento|(?:sabe|sabe o que|esta sabendo|sabe dizer).*(?:outros bots|colegas|resto da equipe)|(?:o que|como)\s+voce\s+(?:faz|consegue|pode)\s+(?:investigar|pesquisar|fazer|ajudar)/.test(text);
   if (capability && !/(?:hoje|ontem|semana passada|quantos?|quais foram)/.test(text)) {
     return 'self_or_capability';
   }
 
   // 5. Follow-ups conversacionais, confirmações de entendimento e correções (FOLLOW_UP)
-  const followUp = /(?:ja|nos ja)?\s*(?:ajustamos|corrigimos|resolvemos|consertamos|arrumamos|alteramos|atualizamos)(?:\s+(?:isso|com|no|o|a))?|(?:voce|vc)\s+entendeu\b|(?:voce|vc)?\s*(?:esta|ta)\s+repetindo|(?:nao (?:foi|era) isso|nao perguntei isso|nao foi o que (?:eu )?perguntei)/.test(text);
+  const followUp = /(?:ja|nos ja)?\s*(?:ajustamos|corrigimos|resolvemos|consertamos|arrumamos|alteramos|atualizamos)(?:\s+(?:isso|com|no|o|a))?|(?:voce|vc)\s+entendeu\b|(?:voce|vc)?\s*(?:esta|ta)\s+repetindo|(?:nao (?:foi|era) isso|nao perguntei isso|nao foi o que (?:eu )?perguntei)|(?:nao gostei|tem outra|outra opcao|outra ideia|que mais voce)/.test(text);
   if (followUp) return 'follow_up';
 
   // 6. Consultas operacionais factuais

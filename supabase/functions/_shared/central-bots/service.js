@@ -43,6 +43,7 @@ import {
   buildAgentOperationalContext,
   syncToolExecutionToState,
 } from './state-memory.js';
+import { buildAgentPreferencesContext } from './preferences.js';
 
 export async function bootstrap(ctx) {
   await rows(
@@ -293,19 +294,19 @@ function botSpecificDirectives(bot) {
   }
 
   if (bot.kind === 'marketing') {
-    sections.push(`FRESHNESS POLICY & PESQUISA ATIVA (BOT DE MARKETING):
-- Se o usuário perguntar o que apareceu de interessante hoje, pedir ideias de conteúdo, tendências ou sugestão de vídeos/posts: consulte as ideias/memória.
-- Se a memória/ideias estiver vazia ou não houver registros para o dia atual: É OBRIGATÓRIO chamar a ferramenta researchMarketTrends nesta mesma conversa para buscar notícias frescas e pautas em tempo real nos canais oficiais antes de responder!
-- NUNCA termine dizendo que "não há pesquisas registradas" se você pode pesquisar agora com researchMarketTrends. A ausência de dados é um GATILHO PARA PESQUISAR.
-- Depois de obter notícias reais, cruze os fatos com a carteira de bairros (Bessa, Manaíra, Cabo Branco, etc.) e sugira pautas objetivas baseadas nos acontecimentos encontrados.
-- ISOLAMENTO ENTRE BOTS: Você é o Bot de Marketing. Você NÃO executa nem acompanha rodadas de captação imobiliária (essas pertencem exclusivamente ao Bot Captador às 09h e 19h). NUNCA mencione horários ou rodadas de captação como se fossem pesquisas suas!`);
+    sections.push(`FRESHNESS POLICY, PESQUISA ATIVA E POLÍTICA DE UMA IDEIA (BOT DE MARKETING):
+- FONTES PRÓPRIAS E ISOLAMENTO: Você é o Bot de Marketing. Suas fontes são canais e feeds oficiais da nossa região (portais de João Pessoa/Cabedelo, IBGE, Agência Brasil) e tendências web sobre mercado imobiliário. Você NÃO executa nem acompanha rodadas de captação imobiliária (essas pertencem exclusivamente ao Bot Captador às 09h e 19h). NUNCA mencione horários do Captador, VM Hyper-V ou captação de proprietários como se fossem pesquisas suas!
+- POLÍTICA DE UMA IDEIA: Ao sugerir pautas ou ideias de conteúdo, apresente SEMPRE UMA ÚNICA IDEIA PRINCIPAL por vez, bem desenvolvida e estruturada (gancho, formato, canal, por que faz sentido agora). Não despeje listas genéricas de 5 ideias. Guarde as alternativas no estado. Finalize com um convite natural: "Quer que eu desenvolva essa ou prefere explorar outra linha?".
+- ALTERNATIVAS SOB DEMANDA: Se o usuário disser "não gostei", "tem outra opção?" ou "que mais você pensou?", NÃO refaça a pesquisa web do zero: consulte e proponha uma das ideias alternativas já existentes no seu estado/memória!
+- Se o usuário pedir ideias ou tendências e não houver registros para o dia de hoje, chame a ferramenta researchMarketTrends nesta conversa para buscar notícias frescas antes de responder.
+- Se o usuário pedir para você mudar seu próprio tom ou foco no chat, chame a ferramenta updateMarketingPreferences.`);
   }
 
   if (bot.kind === 'sentinela') {
-    sections.push(`INVESTIGAÇÃO ENCADEADA E DISTINÇÃO DE INTERPRETAÇÃO (BOT SENTINELA):
-- Ao investigar problemas do sistema ou responder perguntas como "quais problemas encontrou" ou "o que aconteceu aqui": NÃO pare na listagem preliminar de getOpenIncidents.
-- Se identificar uma ocorrência aberta ou anomalia, chame a ferramenta de diagnóstico getComponentDiagnostics (com o componente afetado) ou runLiveInspection para investigar os fatos em tempo real antes de responder.
-- Reduza a incerteza com ferramentas diagnósticas.
+    sections.push(`INVESTIGAÇÃO ENCADEADA, RESOLUÇÃO DE INCIDENTES E DISTINÇÃO DE INTERPRETAÇÃO (BOT SENTINELA):
+- Ao investigar problemas do sistema ou responder perguntas como "quais problemas encontrou" ou "o que aconteceu aqui": NÃO pare na listagem preliminar de getOpenIncidents. Se identificar uma ocorrência aberta ou anomalia, chame a ferramenta de diagnóstico getComponentDiagnostics (com o componente afetado) ou runLiveInspection para investigar os fatos em tempo real antes de responder.
+- SE O USUÁRIO DISSER QUE JÁ CORRIGIU ("já corrigimos isso", "pode conferir?", "confere se resolveu"): execute imediatamente uma verificação ativa (runLiveInspection ou getComponentDiagnostics no componente). Se o teste comprovar que o problema foi corrigido, chame acknowledgeOrResolveIncident para marcar formalmente a ocorrência como resolvida no histórico de auditoria! Responda direto sobre o componente verificado, sem despejar relatórios de outros componentes normais.
+- SE O USUÁRIO PEDIR PARA ZERAR UMA OCORRÊNCIA TRATADA ("zera essa ocorrência de erro 401 que já foi tratada"): execute a ferramenta acknowledgeOrResolveIncident para registrar formalmente a resolução/ciência. Confirme que ela não aparecerá mais como pendência aberta (mantendo o histórico seguro no banco).
 - Distinga sempre com clareza: FATO (o que foi comprovado pela ferramenta), HIPÓTESE (suspeita que ainda exige verificação) e CAUSA CONFIRMADA. Se a causa não foi confirmada, diga com naturalidade que a causa ainda é desconhecida e está em investigação.
 - REGRA CRÍTICA (OBSERVADO ≠ CAUSA CONFIRMADA e OBSERVADO ≠ COMPORTAMENTO ESPERADO):
   - Nunca afirme que um erro ou código HTTP (ex: HTTP 401) "faz parte da proteção de uma rota privada" a menos que haja evidência real de que aquela rota específica deveria exigir autenticação (ex: verificação match_api onde o esperado é 401).
@@ -313,8 +314,14 @@ function botSpecificDirectives(bot) {
   }
 
   if (bot.kind === 'gestor') {
-    sections.push(`RESUMO FACTUAL DOS BOTS (BOT GESTOR):
-- Ao ser perguntado "como estão meus bots hoje", use os dados de getBotsStatus para apresentar um resumo humano, limpo e direto dos 4 bots (Gestor, Captador, Sentinela e Marketing), mencionando o status e a última/próxima atividade confirmada de cada um sem cair em jargões técnicos.`);
+    sections.push(`COMANDO MASTER, ORQUESTRAÇÃO E RESUMO FACTUAL (BOT GESTOR):
+- VOCÊ É O LÍDER E ORQUESTRADOR CENTRAL: A regra antiga de que você não reprograma bots foi revogada por Ronaldo. Você AGORA TEM autorização explícita para interpretar comandos em linguagem natural e configurar o comportamento, estilo, foco, prioridades e regras dos outros bots (Marketing, Captador, Sentinela e Gestor)!
+- CONFIGURAÇÃO DE BOTS: Quando Ronaldo pedir para alterar foco ou comportamento de um bot (ex: "mude o estilo do Marketing para focar em investidores", "Captador priorizando apartamentos de 3 quartos no Bessa", "Sentinela alertando só erros críticos"): chame a ferramenta configureAgentBehavior com os parâmetros correspondentes!
+- COMANDOS COMPOSTOS OU DE ÁUDIO (DECOMPOSIÇÃO): Quando Ronaldo enviar uma instrução contendo diretivas para múltiplos bots numa única mensagem (ex: Marketing focado em alto padrão, Captador em 3 quartos no Bessa/Manaíra e Sentinela em erros críticos), decomponha o pedido e chame configureAgentBehavior para cada bot individualmente, respondendo de forma clara, estruturada e sem misturar as diretivas entre os bots.
+- REVERSÃO (ROLLBACK): Se Ronaldo pedir para reverter uma configuração ("volta como era antes", "desfaz a última alteração"), chame rollbackAgentConfiguration para restaurar o estado anterior.
+- LIMITES DE INFRAESTRUTURA PROTEGIDA (NÍVEL 3): O Bot Captador roda numa VM Hyper-V dedicada com horários fixos de scraping (09:00 e 19:00) controlados pelo Task Scheduler do Windows. Se Ronaldo pedir para alterar essa frequência física (ex: rodar a cada 1 hora): aplique o que for regra de negócio (ex: foco em aluguel) via configureAgentBehavior, mas explique tecnicamente e com clareza que o agendamento da VM Hyper-V depende de ajuste na infraestrutura do Windows. NUNCA finja que alterou horários da VM.
+- CONSULTA SOB DEMANDA DE OUTROS BOTS: Se Ronaldo perguntar o que outro bot andou fazendo, conversando ou pensando, use getAgentConversationContext ou getBotsStatus para consultar sob demanda sem contaminação.
+- RESUMO FACTUAL DOS BOTS: Ao ser perguntado "como estão meus bots hoje", use os dados de getBotsStatus para apresentar um resumo humano, limpo e direto dos 4 bots, mencionando o status e a última/próxima atividade confirmada de cada um.`);
   }
 
   return sections.join('\n\n');
@@ -374,6 +381,7 @@ ${routeGuidance(route, bot)}`,
     }).format(new Date());
 
     const operationalContext = redactOperationalData(await buildAgentOperationalContext(ctx, bot, prompt).catch(() => 'A memória de continuidade está indisponível. Consulte as ferramentas factuais; não invente lembranças.'),ctx.env);
+    const preferencesContext = await buildAgentPreferencesContext(ctx, bot).catch(() => '');
 
     const messages = [
       {
@@ -385,6 +393,7 @@ ${temporalPolicy(prompt)}
 Data/hora atual: ${nowBrasilia} (Fuso America/Sao_Paulo).
 
 ${operationalContext}
+${preferencesContext ? `\n${preferencesContext}\n` : ''}
 
 DIRETRIZES CRÍTICAS DE AUTONOMIA E VERACIDADE:
 
@@ -572,7 +581,8 @@ export async function chat(ctx, body) {
       ),
   );
   let result;
-  if (bot.kind === 'marketing' && parseFeedback(content)) {
+  const isAlternativeOrInquiry = /(?:tem\s+outra|outra\s+op|outra\s+ideia|que\s+mais|mostra\s+outra|manda\s+outra|troca\s+essa|\?)/i.test(content);
+  if (bot.kind === 'marketing' && !isAlternativeOrInquiry && parseFeedback(content)) {
     const latest = await rows(ctx.db.from('agent_messages').select('client_message_id,sources').eq('account_id', ctx.accountId).eq('conversation_id', conv.id).eq('role','assistant').order('created_at', { ascending: false }).limit(1).maybeSingle());
     const ideaRef = latest?.sources?.find(s => s.tool === 'marketingFeedback')?.data?.idea_id || latest?.client_message_id;
     const idea = ideaRef ? await rows(marketingScoped(ctx, 'ideas').eq('id', ideaRef).maybeSingle()) : null;

@@ -566,21 +566,45 @@ export async function handleSentinelStateChange(ctx, sentinelaBot, { resolvedInc
 }
 
 /**
+ * Converte data para chave de slot de pesquisa editorial do Marketing (19:00 Brasília)
+ */
+export function getMarketingEditorialSlotKey(date = new Date()) {
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+  return `${day}-marketing-editorial`;
+}
+
+/**
  * BOT DE MARKETING: Sincronização após execução autônoma de pesquisa
  */
-export async function syncMarketingAutonomousResearch(ctx, marketingBot, { topic, summary, ideaProposal = null }) {
+export async function syncMarketingAutonomousResearch(ctx, marketingBot, { topic, summary, ideaProposal = null, alternatives = [] }) {
   await updateAgentOperationalState(ctx, marketingBot.id, {
     last_operational_at: new Date().toISOString(),
     last_operational_type: 'market_research',
     last_operational_summary: summary || 'Pesquisei tendências imobiliárias recentes e analisei fontes locais.',
     current_focus: topic ? `Analisando oportunidades de pauta sobre ${topic}` : 'Acompanhando tendências de mercado',
+    metadata: {
+      has_active_editorial: !!ideaProposal,
+      primary_idea: ideaProposal ? (ideaProposal.topic || topic) : null,
+      alternative_ideas: alternatives,
+      last_editorial_date: new Date().toISOString(),
+    },
   });
 
   await recordOperationalMemory(ctx, marketingBot.id, {
     kind: 'research',
     topic: topic || 'Pesquisa de Mercado',
     summary: summary || 'Pesquisa autônoma de tendências e notícias imobiliárias.',
-    data: { autonomous: true, at: new Date().toISOString() },
+    data: {
+      autonomous: true,
+      at: new Date().toISOString(),
+      primary_idea: ideaProposal,
+      alternatives,
+    },
     retentionDays: 7, // Respeita Freshness Policy
   });
 
@@ -591,8 +615,163 @@ export async function syncMarketingAutonomousResearch(ctx, marketingBot, { topic
       title: 'Bot de Marketing: oportunidade identificada',
       body: `Ronaldo, identifiquei uma pauta sobre ${topic} que combina bastante com o seu estoque e posicionamento.`,
       severity: 'medium',
-      cooldownHours: 12,
-      data: { idea_id: ideaProposal.id },
+      cooldownHours: 20,
+      data: { idea_id: ideaProposal.id, topic },
     });
+  }
+}
+
+/**
+ * BOT DE MARKETING: Execução autônoma única diária às 19:00 (ou slot diário)
+ * Política de Uma Ideia: 1 proposta principal bem desenvolvida e alternativas guardadas no estado.
+ * Silêncio Inteligente: sem pauta qualificada -> ZERO push!
+ */
+export async function executeMarketingEditorial(ctx, marketingBot, { slotKey, notify = true, force = false, ideas = [] } = {}) {
+  const currentSlot = slotKey || getMarketingEditorialSlotKey(new Date());
+
+  const claim = await claimAutonomousJob(ctx, {
+    botId: marketingBot.id,
+    jobType: 'marketing_daily_editorial',
+    slotKey: currentSlot,
+    leaseSeconds: 300,
+    maxAttempts: 3,
+  });
+
+  if (!force && !claim.shouldExecute) {
+    return {
+      skipped: true,
+      reason: claim.alreadyCompleted ? 'already_completed' : claim.concurrentLocked ? 'concurrent_lock' : 'retry_exhausted',
+    };
+  }
+
+  const runInsert = await ctx.db
+    .from('agent_runs')
+    .insert({
+      account_id: ctx.accountId,
+      bot_id: marketingBot.id,
+      trigger_type: 'schedule',
+    })
+    .select()
+    .single();
+
+  const run = runInsert.data || { id: null };
+
+  try {
+    const candidateList = Array.isArray(ideas) ? ideas : [];
+    const primaryCandidate = candidateList.find((i) => i.isHighRelevance !== false) || null;
+    const alternatives = candidateList.filter((i) => i !== primaryCandidate);
+
+    let notificationResult = { notified: false };
+
+    if (primaryCandidate && primaryCandidate.isHighRelevance) {
+      const conv = await rows(
+        ctx.db
+          .from('agent_conversations')
+          .select('id')
+          .eq('account_id', ctx.accountId)
+          .eq('bot_id', marketingBot.id)
+          .maybeSingle(),
+      );
+
+      const messageContent = `Ronaldo, analisei as notícias e tendências de hoje em João Pessoa e selecionei uma pauta principal:
+
+📌 **${primaryCandidate.topic}**
+- **Gancho:** ${primaryCandidate.hook || primaryCandidate.why_now || 'Oportunidade local em destaque'}
+- **Formato sugerido:** ${primaryCandidate.format || 'Vídeo curto no Instagram Reels'}
+- **Por que agora:** ${primaryCandidate.why_now || 'Movimentação relevante no mercado regional'}
+
+Quer que eu desenvolva essa ou prefere explorar outra linha?`;
+
+      if (conv?.id) {
+        await ctx.db.from('agent_messages').insert({
+          account_id: ctx.accountId,
+          conversation_id: conv.id,
+          client_message_id: crypto.randomUUID(),
+          role: 'assistant',
+          content: messageContent,
+          sources: [
+            {
+              tool: 'researchMarketTrends',
+              observed_at: new Date().toISOString(),
+              data: { primary: primaryCandidate.topic, alternatives_count: alternatives.length },
+            },
+          ],
+        });
+      }
+
+      await syncMarketingAutonomousResearch(ctx, marketingBot, {
+        topic: primaryCandidate.topic,
+        summary: `Pesquisa editorial diária concluída. Pauta selecionada: ${primaryCandidate.topic}.`,
+        ideaProposal: primaryCandidate,
+        alternatives,
+      });
+
+      if (notify) {
+        notificationResult = await dispatchAutonomousNotification(ctx, marketingBot, {
+          kind: 'opportunity',
+          dedupKey: `editorial:${currentSlot}`,
+          title: 'Bot de Marketing: pauta do dia',
+          body: `Ronaldo, selecionei a pauta de hoje sobre ${primaryCandidate.topic}. Confira a proposta na conversa.`,
+          severity: 'medium',
+          cooldownHours: 20,
+          data: { slot_key: currentSlot, topic: primaryCandidate.topic },
+        });
+      }
+    } else {
+      await syncMarketingAutonomousResearch(ctx, marketingBot, {
+        topic: 'Monitoramento de Tendências',
+        summary: 'Pesquisa realizada hoje nos canais oficiais; nenhuma pauta atingiu o limiar de relevância exigido.',
+        ideaProposal: null,
+        alternatives: [],
+      });
+    }
+
+    if (claim.job?.id) {
+      await completeAutonomousJob(ctx, claim.job.id, {
+        summary: primaryCandidate ? `Editorial diário gerado: ${primaryCandidate.topic}` : 'Pesquisa diária concluída sem pauta qualificada (silêncio inteligente).',
+        data: { slot_key: currentSlot, primary: primaryCandidate?.topic || null, alternatives: alternatives.length },
+        notified: notificationResult.notified,
+      });
+    }
+
+    if (run.id) {
+      await rows(
+        ctx.db
+          .from('agent_runs')
+          .update({
+            status: 'completed',
+            finished_at: new Date().toISOString(),
+            result: { editorial_slot: currentSlot, notified: notificationResult.notified },
+          })
+          .eq('account_id', ctx.accountId)
+          .eq('id', run.id),
+      );
+    }
+
+    return {
+      success: true,
+      slot_key: currentSlot,
+      primary_idea: primaryCandidate?.topic || null,
+      notified: notificationResult.notified,
+      alternatives_count: alternatives.length,
+    };
+  } catch (err) {
+    if (claim.job?.id) {
+      await failAutonomousJob(ctx, claim.job.id, err);
+    }
+    if (run.id) {
+      await rows(
+        ctx.db
+          .from('agent_runs')
+          .update({
+            status: 'failed',
+            finished_at: new Date().toISOString(),
+            error: err.message,
+          })
+          .eq('account_id', ctx.accountId)
+          .eq('id', run.id),
+      );
+    }
+    throw err;
   }
 }

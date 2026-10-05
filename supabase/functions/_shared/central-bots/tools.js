@@ -5,6 +5,7 @@ import * as capture from './captador-adapter.js';
 import { marketingStatus, memory as marketingMemory, settings as marketingSettings, scoped as marketingScoped } from '../bot-marketing/store.js';
 import { researchMarketTrends, searchMarketingWeb } from '../bot-marketing/sources.js';
 import { runLiveInspection, getComponentDiagnostics } from './sentinel.js';
+import { getAgentPreferences, updateAgentPreferences, rollbackAgentPreferences } from './preferences.js';
 
 const ranges = {
   type: 'object',
@@ -22,6 +23,114 @@ const ranges = {
       description: 'Janela retrospectiva em dias, somente para rolling.',
     },
     limit: { type: 'integer', minimum: 1, maximum: 30 },
+  },
+  additionalProperties: false,
+};
+
+const configureAgentBehaviorSchema = {
+  type: 'object',
+  properties: {
+    target_bot: {
+      type: 'string',
+      enum: ['gestor', 'captador', 'sentinela', 'marketing'],
+      description: 'Bot alvo da configuração.',
+    },
+    category: {
+      type: 'string',
+      enum: ['communication', 'behavior', 'research', 'notification', 'operational'],
+      description: 'Categoria da preferência a ser alterada.',
+    },
+    configuration: {
+      type: 'object',
+      description: 'Parâmetros de configuração a serem salvos (ex: { focus: "investidores", style: "direto" }).',
+    },
+    reason: {
+      type: 'string',
+      maxLength: 500,
+      description: 'Motivo ou instrução dada pelo usuário.',
+    },
+  },
+  required: ['target_bot', 'configuration'],
+  additionalProperties: false,
+};
+
+const rollbackAgentConfigSchema = {
+  type: 'object',
+  properties: {
+    target_bot: {
+      type: 'string',
+      enum: ['gestor', 'captador', 'sentinela', 'marketing'],
+      description: 'Bot alvo da reversão de configuração.',
+    },
+    category: {
+      type: 'string',
+      enum: ['all', 'communication', 'behavior', 'research', 'notification', 'operational'],
+      description: 'Categoria a reverter (padrão all).',
+    },
+  },
+  required: ['target_bot'],
+  additionalProperties: false,
+};
+
+const getAgentConversationContextSchema = {
+  type: 'object',
+  properties: {
+    target_bot: {
+      type: 'string',
+      enum: ['gestor', 'captador', 'sentinela', 'marketing'],
+      description: 'Bot cujo contexto de conversa ou estado recente deve ser consultado.',
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 20,
+      description: 'Número de mensagens recentes para recuperar.',
+    },
+  },
+  required: ['target_bot'],
+  additionalProperties: false,
+};
+
+const acknowledgeOrResolveIncidentSchema = {
+  type: 'object',
+  properties: {
+    incident_id: {
+      type: 'string',
+      description: 'ID da ocorrência (UUID) ou "latest" para a mais recente.',
+    },
+    action: {
+      type: 'string',
+      enum: ['resolve', 'acknowledge'],
+      description: 'Ação: resolve (marcar como resolvida) ou acknowledge (marcar como ciente).',
+    },
+    note: {
+      type: 'string',
+      maxLength: 500,
+      description: 'Nota explicativa da resolução.',
+    },
+  },
+  required: ['action'],
+  additionalProperties: false,
+};
+
+const updateMarketingPreferencesSchema = {
+  type: 'object',
+  properties: {
+    focus: {
+      type: 'string',
+      maxLength: 200,
+      description: 'Novo foco editorial (ex: investidores, famílias, alto padrão).',
+    },
+    style: {
+      type: 'string',
+      maxLength: 200,
+      description: 'Estilo ou tom de comunicação.',
+    },
+    excluded_topics: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Tópicos a excluir da pesquisa.',
+    },
   },
   additionalProperties: false,
 };
@@ -131,6 +240,11 @@ export const TOOL_CATALOG = [
     'getOperationalSummary',
     'Resumo correlacionado da operação, ocorrências e aprovações.',
   ],
+  ['configureAgentBehavior', 'Altera preferências persistentes de comportamento, foco, comunicação ou operação de um dos agentes (marketing, captador, sentinela, gestor). Registra em auditoria.'],
+  ['rollbackAgentConfiguration', 'Restaura a configuração anterior de um bot antes da última alteração de comportamento.'],
+  ['getAgentConversationContext', 'Consulta o contexto recente de conversa, estado ou ideias de outro bot (gestor, captador, sentinela, marketing) para atender o usuário sob demanda sem contaminação.'],
+  ['acknowledgeOrResolveIncident', 'Reconhece ou resolve formalmente uma ocorrência técnica aberta do Sentinela após correção ou verificação, sem exclusão destrutiva.'],
+  ['updateMarketingPreferences', 'Atualiza preferências de pesquisa, tópicos de interesse, tom e foco editorial do Marketing.'],
 ].map(([name, description]) => ({
   name,
   description,
@@ -154,7 +268,17 @@ export const TOOL_CATALOG = [
                 ? liveInspectionSchema
                 : name === 'getComponentDiagnostics'
                   ? componentDiagnosticsSchema
-                  : ranges,
+                  : name === 'configureAgentBehavior'
+                    ? configureAgentBehaviorSchema
+                    : name === 'rollbackAgentConfiguration'
+                      ? rollbackAgentConfigSchema
+                      : name === 'getAgentConversationContext'
+                        ? getAgentConversationContextSchema
+                        : name === 'acknowledgeOrResolveIncident'
+                          ? acknowledgeOrResolveIncidentSchema
+                          : name === 'updateMarketingPreferences'
+                            ? updateMarketingPreferencesSchema
+                            : ranges,
 }));
 
 export function allowedTools(bot) {
@@ -473,9 +597,252 @@ export async function dispatch(ctx, name, args) {
       return runLiveInspection(ctx, args);
     case 'getComponentDiagnostics':
       return getComponentDiagnostics(ctx, args);
+    case 'configureAgentBehavior':
+      return handleConfigureAgentBehavior(ctx, args);
+    case 'rollbackAgentConfiguration':
+      return handleRollbackAgentConfiguration(ctx, args);
+    case 'getAgentConversationContext':
+      return handleGetAgentConversationContext(ctx, args);
+    case 'acknowledgeOrResolveIncident':
+      return handleAcknowledgeOrResolveIncident(ctx, args);
+    case 'updateMarketingPreferences':
+      return handleUpdateMarketingPreferences(ctx, args);
     default:
       throw new AgentError('Ferramenta não permitida.', 403);
   }
+}
+
+async function resolveTargetBot(ctx, target_bot) {
+  if (!target_bot) throw new AgentError('Bot alvo não especificado.');
+  if (UUID.test(target_bot)) {
+    return rows(
+      ctx.db
+        .from('agent_bots')
+        .select('id, slug, name, mission')
+        .eq('account_id', ctx.accountId)
+        .eq('id', target_bot)
+        .maybeSingle(),
+    );
+  }
+  return rows(
+    ctx.db
+      .from('agent_bots')
+      .select('id, slug, name, mission')
+      .eq('account_id', ctx.accountId)
+      .eq('slug', target_bot)
+      .maybeSingle(),
+  );
+}
+
+export async function handleConfigureAgentBehavior(ctx, args) {
+  const { target_bot, category = 'behavior', configuration = {}, reason = '' } = args;
+  const botRow = await resolveTargetBot(ctx, target_bot);
+  if (!botRow) throw new AgentError(`Bot "${target_bot}" não encontrado nesta conta.`);
+
+  let infrastructure_warning = null;
+  const configStr = JSON.stringify(configuration).toLowerCase();
+  const reasonStr = (reason || '').toLowerCase();
+  const isCaptador = botRow.slug === 'captador';
+
+  if (isCaptador && (
+    configStr.includes('hora') || configStr.includes('frequencia') || configStr.includes('interval') ||
+    configStr.includes('cron') || configStr.includes('vm') || configStr.includes('scheduler') ||
+    reasonStr.includes('hora') || reasonStr.includes('cada 1 hora') || reasonStr.includes('agendamento') ||
+    reasonStr.includes('1 em 1 hora')
+  )) {
+    infrastructure_warning = 'A frequência e horários de execução do Bot Captador (09:00 e 19:00) são controlados pela VM Hyper-V e Task Scheduler do Windows e não podem ser alterados via configuração em tempo de execução para preservar a estabilidade da máquina virtual. As preferências de negócio solicitadas foram aplicadas.';
+  }
+
+  const patch = {};
+  const catKey = `${category}_preferences`;
+  patch[catKey] = configuration;
+
+  const updated = await updateAgentPreferences(ctx, botRow.id, patch, {
+    changedBy: 'gestor_orchestrator',
+    reason: reason || 'Comando de configuração do Gestor',
+    category,
+  });
+
+  return {
+    success: true,
+    bot_slug: botRow.slug,
+    bot_name: botRow.name,
+    category,
+    applied_configuration: configuration,
+    infrastructure_warning,
+    message: infrastructure_warning
+      ? `Preferência de negócio atualizada para ${botRow.name}. Aviso de infraestrutura: ${infrastructure_warning}`
+      : `Configuração atualizada com sucesso para ${botRow.name}.`,
+  };
+}
+
+export async function handleRollbackAgentConfiguration(ctx, args) {
+  const { target_bot, category = 'all' } = args;
+  const botRow = await resolveTargetBot(ctx, target_bot);
+  if (!botRow) throw new AgentError(`Bot "${target_bot}" não encontrado nesta conta.`);
+
+  const res = await rollbackAgentPreferences(ctx, botRow.id, { category });
+  if (!res.success) {
+    return {
+      success: false,
+      bot_slug: botRow.slug,
+      message: res.reason,
+    };
+  }
+
+  return {
+    success: true,
+    bot_slug: botRow.slug,
+    bot_name: botRow.name,
+    message: `Configuração anterior de ${botRow.name} restaurada com sucesso.`,
+    restored: res.preferences,
+  };
+}
+
+export async function handleGetAgentConversationContext(ctx, args) {
+  const { target_bot, limit = 5 } = args;
+  const botRow = await resolveTargetBot(ctx, target_bot);
+  if (!botRow) throw new AgentError(`Bot "${target_bot}" não encontrado nesta conta.`);
+
+  const conv = await rows(
+    ctx.db
+      .from('agent_conversations')
+      .select('id')
+      .eq('account_id', ctx.accountId)
+      .eq('bot_id', botRow.id)
+      .maybeSingle(),
+  );
+
+  let recentMessages = [];
+  if (conv?.id) {
+    recentMessages = (await rows(
+      ctx.db
+        .from('agent_messages')
+        .select('role, content, created_at')
+        .eq('account_id', ctx.accountId)
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(limit),
+    )) || [];
+  }
+
+  const state = await rows(
+    ctx.db
+      .from('agent_operational_state')
+      .select('*')
+      .eq('account_id', ctx.accountId)
+      .eq('bot_id', botRow.id)
+      .maybeSingle(),
+  );
+
+  return {
+    bot_slug: botRow.slug,
+    bot_name: botRow.name,
+    mission: botRow.mission,
+    operational_status: state?.operational_status || 'normal',
+    current_focus: state?.current_focus || null,
+    last_operational_summary: state?.last_operational_summary || null,
+    recent_messages: (recentMessages || []).reverse(),
+  };
+}
+
+export async function handleAcknowledgeOrResolveIncident(ctx, args) {
+  const { incident_id, action = 'resolve', note = '' } = args;
+
+  let targetIncident;
+  if (incident_id && incident_id !== 'latest') {
+    if (!UUID.test(incident_id)) throw new AgentError('ID de ocorrência inválido.');
+    targetIncident = await rows(
+      ctx.db
+        .from('agent_incidents')
+        .select('*')
+        .eq('account_id', ctx.accountId)
+        .eq('id', incident_id)
+        .maybeSingle(),
+    );
+  } else {
+    targetIncident = await rows(
+      ctx.db
+        .from('agent_incidents')
+        .select('*')
+        .eq('account_id', ctx.accountId)
+        .eq('status', 'open')
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    );
+  }
+
+  if (!targetIncident) {
+    return {
+      success: false,
+      message: 'Nenhuma ocorrência aberta encontrada para atualizar.',
+    };
+  }
+
+  const newStatus = 'resolved';
+  const now = new Date().toISOString();
+  const updateData = {
+    status: newStatus,
+    resolved_at: now,
+    last_seen_at: now,
+  };
+  const dossier = { ...(targetIncident.dossier || {}) };
+  if (note) dossier.resolution_note = note;
+  dossier.resolved_by = 'user_chat_action';
+  dossier.action = action;
+  updateData.dossier = dossier;
+
+  await rows(
+    ctx.db
+      .from('agent_incidents')
+      .update(updateData)
+      .eq('account_id', ctx.accountId)
+      .eq('id', targetIncident.id),
+  );
+
+  return {
+    success: true,
+    incident_id: targetIncident.id,
+    component: targetIncident.component,
+    expected: targetIncident.expected,
+    observed: targetIncident.observed,
+    previous_status: targetIncident.status,
+    new_status: newStatus,
+    message: `Ocorrência no componente "${targetIncident.component}" (${targetIncident.observed}) marcada formalmente como resolvida. O registro foi preservado no histórico de auditoria e não consta mais como pendência aberta.`,
+  };
+}
+
+export async function handleUpdateMarketingPreferences(ctx, args) {
+  const { focus, style, excluded_topics } = args;
+
+  const marketingBot = await rows(
+    ctx.db
+      .from('agent_bots')
+      .select('id')
+      .eq('account_id', ctx.accountId)
+      .eq('slug', 'marketing')
+      .maybeSingle(),
+  );
+
+  if (!marketingBot) throw new AgentError('Bot de Marketing não encontrado.');
+
+  const patch = {};
+  if (focus) patch.behavior_preferences = { focus };
+  if (style) patch.communication_preferences = { style };
+  if (excluded_topics) patch.research_preferences = { excluded_topics };
+
+  const updated = await updateAgentPreferences(ctx, marketingBot.id, patch, {
+    changedBy: 'marketing_chat',
+    reason: 'Preferências editoriais atualizadas pelo usuário no chat do Marketing',
+    category: 'editorial',
+  });
+
+  return {
+    success: true,
+    applied: { focus, style, excluded_topics },
+    message: 'Preferências editoriais do Marketing atualizadas com sucesso.',
+  };
 }
 
 export async function executeTool(ctx, bot, runId, name, args = {}) {
@@ -511,6 +878,11 @@ export async function executeTool(ctx, bot, runId, name, args = {}) {
     searchMarketingWeb: ['query'],
     runLiveInspection: ['deep'],
     getComponentDiagnostics: ['component'],
+    configureAgentBehavior: ['target_bot', 'category', 'configuration', 'reason'],
+    rollbackAgentConfiguration: ['target_bot', 'category'],
+    getAgentConversationContext: ['target_bot', 'limit'],
+    acknowledgeOrResolveIncident: ['incident_id', 'action', 'note'],
+    updateMarketingPreferences: ['focus', 'style', 'excluded_topics'],
   };
   const keys = customKeys[name] || ['days', 'limit', 'period'];
   if (Object.keys(args).some((k) => !keys.includes(k)))

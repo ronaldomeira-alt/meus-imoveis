@@ -16,7 +16,7 @@ export async function database(path, snapshot) {
     create table inventory_properties(account_id uuid,property_id text,property_data jsonb,updated_at timestamptz default now());
     create table marketing_posts(id uuid primary key,caption text,media_urls jsonb,post_type text,channel text,status text,created_by uuid);
   `);
-  for (const name of ['20261003170150_central_bots.sql','20261004171533_bot_marketing.sql','20261005010000_central_bots_camada4_state_memory.sql','20261005020000_central_bots_camada5_autonomy.sql']) await pg.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace(/^create extension[^;]+;/gm,''));
+  for (const name of ['20261003170150_central_bots.sql','20261004171533_bot_marketing.sql','20261005010000_central_bots_camada4_state_memory.sql','20261005020000_central_bots_camada5_autonomy.sql','20261005030000_central_bots_preferences.sql']) await pg.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace(/^create extension[^;]+;/gm,''));
   return pg;
 }
 const ident = s => { if (!/^[a-z_][a-z0-9_]*$/.test(s)) throw new Error('Invalid test identifier'); return `"${s}"`; };
@@ -73,7 +73,7 @@ class Query {
   async execute() {
     try {
       const params=[...this.args];
-      let sql, fields=this.fields==='*'?'*':this.fields.split(',').map(ident).join(',');
+      let sql, fields=this.fields==='*'?'*':this.fields.split(',').map(s=>ident(s.trim())).join(',');
       const where=this.where.length?' where '+this.where.join(' and '):'';
       if(this.mode==='insert') {
         // Match PostgREST's batch behavior: union columns, NULL for missing fields.
