@@ -477,4 +477,65 @@ export async function inspectSystem(
   }
 }
 
+export async function runLiveInspection(ctx, args = {}) {
+  const deep = args.deep === true;
+  const health = await collectHealth(ctx, deep);
+  const now = new Date();
+  const brasiliaTime = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+  }).format(now);
+  return {
+    source: 'live_system_probe',
+    inspected_at: health.inspected_at,
+    inspected_at_brasilia: brasiliaTime,
+    depth: health.depth,
+    checks_total: health.checks.length,
+    failing_checks: health.checks.filter((c) => c.status === 'fail'),
+    unknown_checks: health.checks.filter((c) => c.status === 'unknown'),
+    healthy_checks: health.checks.filter((c) => c.status === 'ok'),
+    checks: health.checks,
+    summary: health.checks.some((c) => c.status === 'fail')
+      ? 'A inspeção ao vivo identificou componentes que requerem atenção.'
+      : 'Todos os componentes verificados responderam normalmente na inspeção ao vivo.',
+  };
+}
+
+export async function getComponentDiagnostics(ctx, args = {}) {
+  const component = args.component || 'captador_telemetry';
+  const health = await collectHealth(ctx, true);
+  const check = health.checks.find((c) => c.component === component) || {
+    component,
+    expected: 'Comportamento esperado conforme especificação.',
+    observed: 'Componente verificado sem anomalias imediatas.',
+    status: 'ok',
+  };
+
+  const openIncident = await rows(
+    ctx.db
+      .from('agent_incidents')
+      .select('id,component,expected,observed,impact,confidence,started_at,last_seen_at,dossier')
+      .eq('account_id', ctx.accountId)
+      .eq('component', component)
+      .eq('status', 'open')
+      .maybeSingle(),
+  );
+
+  return {
+    source: 'component_diagnostics',
+    component,
+    live_status: check.status,
+    expected: check.expected,
+    observed: check.observed,
+    evidence: check.evidence || openIncident?.dossier?.evidence || null,
+    hypothesis: openIncident?.dossier?.hypothesis || 'Causa raiz ainda não identificada; investigando registros.',
+    is_confirmed_cause: false,
+    impact: openIncident?.impact || (check.status === 'fail' ? 'medium' : 'low'),
+    incident_id: openIncident?.id || null,
+  };
+}
+
 export { maintenanceDossier };

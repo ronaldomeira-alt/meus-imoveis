@@ -46,6 +46,9 @@ class Query {
   gt(k,v) { return this.filter(k,'>',v); }
   gte(k,v) { return this.filter(k,'>=',v); }
   lt(k,v) { return this.filter(k,'<',v); }
+  lte(k,v) { return this.filter(k,'<=',v); }
+  is(k,v) { if (v === null) { this.where.push(`${ident(k)} is null`); return this; } return this.filter(k,'is',v); }
+  not(k,op,v) { if (op === 'is' && v === null) { this.where.push(`${ident(k)} is not null`); return this; } return this.filter(k,'<>',v); }
   ilike(k,v) { return this.filter(k,'ilike',v); }
   contains(k,v) { return this.filter(k,'@>',v); }
   order(k,o={}) { this.orders.push(`${ident(k)} ${o.ascending===false?'desc':'asc'} ${o.nullsFirst?'nulls first':'nulls last'}`); return this; }

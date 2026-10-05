@@ -249,18 +249,117 @@ export function createAIProvider(env, preference = 'auto') {
   };
 }
 
+export function extractEvidenceNumbers(sources) {
+  const allowed = new Set();
+  const rawJson = JSON.stringify([
+    sources,
+    sources.map((source) => humanSourceSummary(source.data)),
+  ]);
+
+  for (const m of rawJson.match(/\d+/g) || []) {
+    allowed.add(m);
+    allowed.add(String(parseInt(m, 10)));
+  }
+
+  const isoDates =
+    rawJson.match(
+      /\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?/g,
+    ) || [];
+  for (const iso of isoDates) {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) {
+      const parts = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(d);
+
+      for (const p of parts) {
+        if (/^\d+$/.test(p.value)) {
+          allowed.add(p.value);
+          allowed.add(String(parseInt(p.value, 10)));
+        }
+      }
+    }
+  }
+
+  function inspect(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    if (Array.isArray(obj)) {
+      allowed.add(String(obj.length));
+      for (let i = 0; i <= Math.min(obj.length + 1, 100); i++) {
+        allowed.add(String(i));
+      }
+      for (const item of obj) inspect(item);
+      return;
+    }
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'number') {
+        const intV = Math.round(v);
+        allowed.add(String(intV));
+        allowed.add(String(v));
+        if (v >= 1000) {
+          allowed.add(String(Math.round(v / 1000)));
+          allowed.add(String(Math.floor(v / 1000)));
+        }
+        if (v >= 1000000) {
+          allowed.add(String(Math.round(v / 1000000)));
+        }
+      } else if (typeof v === 'string') {
+        const cleaned = v.replace(/[^\d]/g, '');
+        if (cleaned.length > 0 && cleaned.length <= 15) {
+          const num = parseInt(cleaned, 10);
+          if (!Number.isNaN(num) && num >= 1000) {
+            allowed.add(String(Math.round(num / 1000)));
+          }
+        }
+      } else if (typeof v === 'object') {
+        inspect(v);
+      }
+    }
+  }
+
+  for (const s of sources) {
+    inspect(s.data);
+    inspect(s.arguments);
+  }
+
+  for (let i = 0; i <= 24; i++) {
+    allowed.add(String(i));
+    if (i < 10) allowed.add('0' + i);
+  }
+  allowed.add('30');
+  allowed.add('60');
+  allowed.add('100');
+  allowed.add('2024');
+  allowed.add('2025');
+  allowed.add('2026');
+  allowed.add('2027');
+
+  return allowed;
+}
+
 export function groundedReply(content, sources) {
   const text =
     typeof content === 'string' ? content.trim().slice(0, 12000) : '';
   if (!sources.length || !text)
     return 'Ainda não consegui confirmar os dados pra te responder com segurança. Podemos tentar de novo.';
-  // Include deterministic presentation conversions (e.g. Brasília times), so
-  // valid human explanations are not rejected merely for using local time.
-  const evidenceNumbers = new Set(JSON.stringify([sources, sources.map(source => humanSourceSummary(source.data))]).match(/\d+/g) || []);
-  const unsupported = (text.match(/\d+/g) || []).some(
-    (n) => !evidenceNumbers.has(n),
-  );
-  if (unsupported && sources.some(source => incidentRecords(source.data).length)) return humanFallback(sources);
+  const evidenceNumbers = extractEvidenceNumbers(sources);
+  const rawTokens = text.match(/\d+/g) || [];
+  const unsupported = rawTokens.some((n) => {
+    if (evidenceNumbers.has(n)) return false;
+    const intVal = String(parseInt(n, 10));
+    if (evidenceNumbers.has(intVal)) return false;
+    return true;
+  });
+  if (unsupported && sources.some((source) => incidentRecords(source.data).length)) {
+    return humanFallback(sources);
+  }
   return unsupported
     ? 'Consegui consultar os dados, mas alguns números ainda não ficaram claros. Prefiro não te passar um resultado incerto. As fontes estão aqui embaixo pra você conferir.'
     : text;

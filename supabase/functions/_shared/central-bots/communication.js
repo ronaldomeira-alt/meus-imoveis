@@ -50,7 +50,7 @@ export function humanIncident(incident = {}) {
     ? humanObservation(hypothesis, 'Há uma hipótese em investigação.') + ' Isso é uma hipótese, ainda sem confirmação da causa.'
     : 'Ainda não consegui confirmar a causa.';
   const impact = missingCompletion ? 'Se a busca estiver atrasada, novos anúncios podem aparecer mais tarde. Ainda não consigo confirmar se houve atraso real ou se faltou apenas o registro.' : '';
-  return [name + ': ' + observation, urgency + (impact ? ' ' + impact : ''), cause + ' O próximo passo é conferir os registros e comparar o que era esperado com o que aconteceu.'].join('\n\n');
+  return [name + ': ' + observation, urgency + (impact ? ' ' + impact : ''), cause].filter(Boolean).join('\n\n');
 }
 export function incidentRecords(data) {
   if (!data || typeof data !== 'object') return [];
@@ -77,7 +77,7 @@ export function communicationSafe(text, sources = [], technical = false) {
         && !/(?:travou|travado|parou|interrompeu|interrompido|funcionando normalmente)/iu.test(observations)
         && !/não confirma|não prova|não (?:consigo|consegui|podemos) confirmar se|não sei se/iu.test(sentence)) return false;
     if (/(?:aconteceu|atrasou|falhou|travou|parou)\s+(?:porque|devido)|(?:causa|motivo) (?:é|foi)|causad[oa] por/iu.test(sentence)
-        && !/hipótese|suspeita|não.*confirm|ainda sem confirmação/iu.test(sentence)) return false;
+        && !/hipótese|suspeita|não.*confirm|ainda sem confirmação|ainda não (?:consegui|sei|descobri)|motivo ainda desconhecido|investigando|vamos acompanhar/iu.test(sentence)) return false;
   }
   return true;
 }

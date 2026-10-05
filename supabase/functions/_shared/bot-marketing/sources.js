@@ -1,5 +1,5 @@
 import { AgentError, rows } from '../central-bots/core.js';
-import { safeSourceUrl } from './core.js';
+import { safeSourceUrl, SEEDS } from './core.js';
 
 export function plainText(text) {
   return String(text || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -135,3 +135,97 @@ export async function readInventory(ctx) {
   const allowed = ['title', 'purpose', 'type', 'neighborhood', 'bedrooms', 'area_m2', 'price', 'stage', 'source_type', 'status'];
   return { source: 'inventory_properties', observed_at: new Date().toISOString(), limit: 100, properties: list.filter(r => r.property_data.status === 'Ativo').map(r => ({ id: r.property_id, ...Object.fromEntries(allowed.map(k => [k, r.property_data[k] ?? null])) })), limits: 'Amostra recente de até 100 fichas. Contatos, endereços privados e observações excluídos.' };
 }
+
+export async function researchMarketTrends(ctx, args = {}) {
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
+  const now = new Date();
+  const brasiliaTime = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(now);
+
+  const findings = [];
+  const sourcesChecked = [];
+
+  for (const seed of SEEDS) {
+    try {
+      const feed = await readSource(seed.url, ctx.env);
+      sourcesChecked.push(seed.identity);
+      if (feed.entries && Array.isArray(feed.entries)) {
+        const recent = feed.entries.slice(0, 4);
+        for (const entry of recent) {
+          findings.push({
+            source: seed.identity,
+            title: entry.title,
+            url: entry.url,
+            published_at: entry.published_at,
+            summary: entry.description || entry.title,
+            kind: 'news',
+          });
+        }
+      }
+    } catch {
+      // Falha em um feed individual não interrompe a pesquisa geral
+    }
+  }
+
+  if (ctx.env.MARKETING_BRAVE_API_KEY && (query || args.search_web === true)) {
+    try {
+      const searchQuery = query || 'mercado imobiliário João Pessoa tendências';
+      const web = await searchWeb(searchQuery, ctx.env);
+      const webResults = (web.results || []).slice(0, 4);
+      for (const res of webResults) {
+        findings.push({
+          source: 'Pesquisa Web',
+          title: res.title,
+          url: res.url,
+          summary: res.title,
+          kind: 'web_search',
+        });
+      }
+    } catch {
+      // Pesquisa web opcional
+    }
+  }
+
+  let activeNeighborhoods = [];
+  try {
+    const inv = await readInventory(ctx);
+    activeNeighborhoods = [...new Set((inv.properties || []).map(p => p.neighborhood).filter(Boolean))].slice(0, 10);
+  } catch {
+    // Leitura opcional
+  }
+
+  return {
+    source: 'live_market_research',
+    observed_at: now.toISOString(),
+    observed_at_brasilia: brasiliaTime,
+    query_used: query || 'feeds_oficiais_joao_pessoa',
+    total_findings: findings.length,
+    sources_checked: sourcesChecked,
+    findings: findings.slice(0, 8),
+    neighborhoods_in_portfolio: activeNeighborhoods,
+    freshness: 'live_research_completed_now',
+    guidance: 'Notícias e tendências recentes obtidas diretamente dos canais oficiais e pesquisas. Utilize estas evidências reais para sugerir pautas de conteúdo.',
+  };
+}
+
+export async function searchMarketingWeb(ctx, args = {}) {
+  const query = typeof args.query === 'string' ? args.query.trim() : 'mercado imobiliario joao pessoa tendências';
+  if (!query) throw new AgentError('Informe o termo de pesquisa.');
+  const web = await searchWeb(query, ctx.env);
+  const now = new Date();
+  return {
+    source: 'web_search',
+    query,
+    observed_at: now.toISOString(),
+    observed_at_brasilia: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }).format(now),
+    results: web.results || [],
+    limits: web.limits || 'Resultados de busca pública.',
+  };
+}
+

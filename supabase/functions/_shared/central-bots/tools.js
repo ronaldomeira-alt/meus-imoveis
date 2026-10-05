@@ -1,6 +1,8 @@
 import { rows, rangeArgs, AgentError, UUID, BUILTINS, event } from './core.js';
 import * as capture from './captador-adapter.js';
 import { marketingStatus, memory as marketingMemory, settings as marketingSettings, scoped as marketingScoped } from '../bot-marketing/store.js';
+import { researchMarketTrends, searchMarketingWeb } from '../bot-marketing/sources.js';
+import { runLiveInspection, getComponentDiagnostics } from './sentinel.js';
 
 const ranges = {
   type: 'object',
@@ -21,10 +23,77 @@ const ranges = {
   },
   additionalProperties: false,
 };
+const searchCapturedPropertiesSchema = {
+  type: 'object',
+  properties: {
+    neighborhood: { type: 'string', description: 'Nome do bairro para filtrar (ex: Bessa, Manaíra)' },
+    bedrooms: { type: 'integer', minimum: 1, maximum: 10, description: 'Número exato de quartos' },
+    min_bedrooms: { type: 'integer', minimum: 1, maximum: 10 },
+    max_bedrooms: { type: 'integer', minimum: 1, maximum: 10 },
+    min_price: { type: 'number', minimum: 0, description: 'Preço mínimo em reais' },
+    max_price: { type: 'number', minimum: 0, description: 'Preço máximo em reais' },
+    min_area: { type: 'number', minimum: 0 },
+    max_area: { type: 'number', minimum: 0 },
+    status: {
+      type: 'string',
+      enum: ['DISCOVERED', 'QUEUED', 'RESERVED', 'CONTACTED', 'WAITING_RESPONSE', 'RESPONDED', 'IMPORTED', 'ARCHIVED', 'EXPIRED', 'FAILED'],
+      description: 'Status do imóvel no funil de captação',
+    },
+    approached: { type: 'boolean', description: 'true para imóveis já contatados/abordados, false para não contatados' },
+    responded: { type: 'boolean', description: 'true para imóveis com resposta, false para sem resposta' },
+    waiting_response: { type: 'boolean', description: 'true para imóveis aguardando resposta do proprietário' },
+    period: { type: 'string', enum: ['rolling', 'today'] },
+    days: { type: 'integer', minimum: 1, maximum: 90 },
+    limit: { type: 'integer', minimum: 1, maximum: 30 },
+    sort_by: { type: 'string', enum: ['recent', 'price_asc', 'price_desc', 'area_desc'] },
+  },
+  additionalProperties: false,
+};
+
+const researchTrendsSchema = {
+  type: 'object',
+  properties: {
+    query: { type: 'string', maxLength: 200, description: 'Termo de pesquisa ou tema desejado' },
+    search_web: { type: 'boolean', description: 'Habilitar busca na web ampla' },
+  },
+  additionalProperties: false,
+};
+
+const searchWebSchema = {
+  type: 'object',
+  properties: {
+    query: { type: 'string', maxLength: 200, description: 'Termo de pesquisa' },
+  },
+  required: ['query'],
+  additionalProperties: false,
+};
+
+const liveInspectionSchema = {
+  type: 'object',
+  properties: {
+    deep: { type: 'boolean', description: 'Executar verificação aprofundada incluindo assets e manifesto' },
+  },
+  additionalProperties: false,
+};
+
+const componentDiagnosticsSchema = {
+  type: 'object',
+  properties: {
+    component: {
+      type: 'string',
+      enum: ['captador_telemetry', 'captador_queue', 'marketing_worker', 'marketing_queue', 'app_http', 'match_api', 'crm_automations', 'pwa_manifest', 'pwa_push_worker', 'frontend_assets'],
+      description: 'Nome do componente a ser diagnosticado',
+    },
+  },
+  additionalProperties: false,
+};
+
 export const TOOL_CATALOG = [
   ['getMarketingStatus', 'Estado real, pesquisas recentes, propostas e acesso às fontes do Marketing.'],
   ['getMarketingMemory', 'Memória editorial persistente, fatos e preferências confirmadas.'],
   ['getMarketingIdeas', 'Propostas, ganchos, orientações e evidências para desenvolver conteúdo quando o usuário demonstrar interesse.'],
+  ['researchMarketTrends', 'Pesquisa notícias e tendências em tempo real nos canais oficiais de João Pessoa e região para identificar pautas e oportunidades de conteúdo.'],
+  ['searchMarketingWeb', 'Realiza pesquisa web sobre mercado imobiliário e tendências.'],
   [
     'getCaptureSummary',
     'Resumo do Captador, contagens reais e próximas rodadas.',
@@ -32,6 +101,7 @@ export const TOOL_CATALOG = [
   ['getRecentRounds', 'Histórico real das últimas rodadas do Captador.'],
   ['getRecentResponses', 'Respostas recebidas pelo Captador no período.'],
   ['getCaptureMetrics', 'Conversão da coorte de contatos por bairro.'],
+  ['searchCapturedProperties', 'Consulta e filtra os imóveis captados (bairro, quartos, faixa de preço, área, status, abordados ou aguardando resposta).'],
   [
     'getSystemHealth',
     'Resultado da última inspeção do Sentinela e limites de cobertura.',
@@ -43,6 +113,8 @@ export const TOOL_CATALOG = [
     'getRecentFailures',
     'Falhas registradas em execuções da Central e do Captador.',
   ],
+  ['runLiveInspection', 'Executa uma inspeção ativa ao vivo do sistema no exato momento da consulta, verificando saúde de APIs, workers, telemetria e PWA.'],
+  ['getComponentDiagnostics', 'Diagnostica um componente específico em profundidade, comparando comportamento esperado versus observado e evidências disponíveis.'],
   [
     'getBotsStatus',
     'Bots existentes, missão, atividade, última execução e próximos horários.',
@@ -64,7 +136,19 @@ export const TOOL_CATALOG = [
           required: ['incident_id'],
           additionalProperties: false,
         }
-      : name === 'getMarketingMemory' ? { type:'object',properties:{topic:{type:'string',maxLength:150},kind:{type:'string',enum:['fact','content','research','investigation','preference','relation']},state:{type:'string',enum:['active','corrected','needs_review','closed']}},additionalProperties:false } : ranges,
+      : name === 'getMarketingMemory'
+        ? { type:'object',properties:{topic:{type:'string',maxLength:150},kind:{type:'string',enum:['fact','content','research','investigation','preference','relation']},state:{type:'string',enum:['active','corrected','needs_review','closed']}},additionalProperties:false }
+        : name === 'searchCapturedProperties'
+          ? searchCapturedPropertiesSchema
+          : name === 'researchMarketTrends'
+            ? researchTrendsSchema
+            : name === 'searchMarketingWeb'
+              ? searchWebSchema
+              : name === 'runLiveInspection'
+                ? liveInspectionSchema
+                : name === 'getComponentDiagnostics'
+                  ? componentDiagnosticsSchema
+                  : ranges,
 }));
 
 export function allowedTools(bot) {
@@ -249,6 +333,14 @@ async function dispatch(ctx, name, args) {
       );
       return { bots, activity, approvals, incidents, capture: summary, marketing: await marketingStatus(ctx) };
     }
+    case 'researchMarketTrends':
+      return researchMarketTrends(ctx, args);
+    case 'searchMarketingWeb':
+      return searchMarketingWeb(ctx, args);
+    case 'runLiveInspection':
+      return runLiveInspection(ctx, args);
+    case 'getComponentDiagnostics':
+      return getComponentDiagnostics(ctx, args);
     default:
       throw new AgentError('Ferramenta não permitida.', 403);
   }
@@ -262,10 +354,33 @@ export async function executeTool(ctx, bot, runId, name, args = {}) {
     );
   if (!args || typeof args !== 'object' || Array.isArray(args))
     throw new AgentError('Argumentos inválidos.');
-  const keys =
-    name === 'getIncidentDetails'
-      ? ['incident_id']
-      : name === 'getMarketingMemory' ? ['topic','kind','state'] : ['days', 'limit', 'period'];
+  const customKeys = {
+    getIncidentDetails: ['incident_id'],
+    getMarketingMemory: ['topic', 'kind', 'state'],
+    searchCapturedProperties: [
+      'neighborhood',
+      'bedrooms',
+      'min_bedrooms',
+      'max_bedrooms',
+      'min_price',
+      'max_price',
+      'min_area',
+      'max_area',
+      'status',
+      'approached',
+      'responded',
+      'waiting_response',
+      'period',
+      'days',
+      'limit',
+      'sort_by',
+    ],
+    researchMarketTrends: ['query', 'search_web'],
+    searchMarketingWeb: ['query'],
+    runLiveInspection: ['deep'],
+    getComponentDiagnostics: ['component'],
+  };
+  const keys = customKeys[name] || ['days', 'limit', 'period'];
   if (Object.keys(args).some((k) => !keys.includes(k)))
     throw new AgentError('Parâmetro não permitido na ferramenta.');
   const start = Date.now();
