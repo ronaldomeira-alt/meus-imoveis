@@ -56,6 +56,7 @@ const marketing = ${JSON.stringify({
   tasks: [], capabilities: { search: false, instagram_binding: false, media_analysis: false, server_enabled: true },
 })};
 const messages = {};
+const technical = {enabled:true,runners:[{id:'runner-fixture',enabled:true,state:'ready',last_seen_at:new Date().toISOString()}],jobs:[]};
 window.__agentActions = [];
 export const CENTRAL_BOTS_ENABLED = true;
 export async function audioBase64() { return 'test-audio'; }
@@ -63,6 +64,12 @@ export async function centralRequest(body,signal,onText) {
   window.__agentActions.push(body);
   if (window.__failCentral) throw new Error('Falha simulada de conexão');
   if (body.action === 'list') return structuredClone(data);
+  if (body.action === 'technical') {
+    if(body.operation==='list')return structuredClone(technical);
+    if(body.operation==='create')technical.jobs.push({id:'job-fixture',incident_id:body.incident_id,status:'queued',created_at:new Date().toISOString(),progress:'Aguardando o Antigravity conectado.'});
+    if(body.operation==='cancel')Object.assign(technical.jobs.find(j=>j.id===body.job_id),{status:'cancelled',progress:'Investigação cancelada por você.'});
+    return {};
+  }
   if (body.action === 'marketing') {
     if(body.operation==='panel') return structuredClone(marketing);
     if(body.operation==='feedback') marketing.ideas.find(i=>i.id===body.idea_id).status=body.status||'saved';
@@ -278,6 +285,17 @@ test(
           ),
         ),
       );
+      await page.click('.agent-tabs button:nth-child(5)');
+      await page.waitForFunction(()=>document.querySelector('.agent-records')?.textContent.includes('Antigravity conectado e disponível'));
+      assert.equal(await page.$('.agent-composer'),null,'Investigation does not open the chat composer');
+      await page.click('.agent-records .agent-primary');
+      await page.waitForFunction(()=>document.querySelector('.agent-incident')?.textContent.includes('Na fila'));
+      assert.equal(await page.$eval('.agent-records .agent-primary',button=>button.disabled),true,'Duplicate human dispatch disabled');
+      assert.ok(await page.evaluate(()=>window.__agentActions.some(a=>a.action==='technical'&&a.operation==='create'&&a.incident_id==='incident-fixture'&&a.request_id)));
+      const investigationOverflow=await page.evaluate(()=>[...document.querySelectorAll('.agent-main,.agent-records,.agent-incident')].some(e=>e.scrollWidth>e.clientWidth+2));
+      assert.equal(investigationOverflow,false,'Investigation fits mobile');
+      await page.click('.agent-incident button');
+      await page.waitForFunction(()=>document.querySelector('.agent-incident')?.textContent.includes('Cancelada'));
       await page.click('.agent-tabs button:first-child');
       await page.click('[aria-label="Gravar áudio"]');
       await page.waitForSelector('[aria-label="Concluir gravação"]');

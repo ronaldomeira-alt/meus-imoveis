@@ -30,6 +30,7 @@ import { ProgressiveReply } from './ProgressiveReply';
 import { BotAvatar } from './BotAvatar';
 import { CreateBotModal } from './CreateBotModal';
 import { MarketingPanel } from './MarketingPanel';
+import {TechnicalInvestigations} from './TechnicalInvestigations';
 import { isIPhonePWA } from '../../lib/ios-pwa';
 import { friendlyComponent, humanIncident, humanSourceSummary, hasTechnicalLanguage, technicalDetailsRequested, communicationSafe, humanFallback } from '../../../supabase/functions/_shared/central-bots/communication.js';
 import './central-bots.css';
@@ -591,6 +592,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
                 'approvals',
                 `Aprovações${approvals.length ? ` (${approvals.length})` : ''}`,
               ],
+              ...(bot.kind==='sentinela' ? [['technical','Investigação técnica']] : []),
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -639,6 +641,7 @@ export default function CentralBotsView({ onOpenMenu, onOpenCaptador }: Props) {
             </div>
           )}
           {bot?.kind === 'marketing' && ['ideas','memory','sources','marketing-settings'].includes(tab) && <MarketingPanel botId={bot.id} tab={tab} onChange={async () => { await refresh(); await loadConversation(bot.id); }} />}
+          {bot?.kind === 'sentinela' && tab === 'technical' && <TechnicalInvestigations incidents={incidents}/>}
           {loading && (
             <p className="agent-empty" role="status">
               Conectando à Central...

@@ -22,6 +22,7 @@ import { inspectSystem } from './sentinel.js';
 import { createAIProvider } from './ai-provider.js';
 import { marketingAction } from '../bot-marketing/store.js';
 import { globalAIContext } from '../system-ai/config.js';
+import {technicalAction} from './technical-bridge.js';
 
 function secretsEqual(a, b) {
   const left = Buffer.from(a || ''),
@@ -164,7 +165,8 @@ export function createAgentHandler(
       const body = await boundedBody(req);
       if (!body || typeof body !== 'object' || Array.isArray(body))
         throw new AgentError('Requisição inválida.');
-      const ctx = await globalAIContext(await authorize(req, body, env, factory));
+      const authorized = await authorize(req, body, env, factory);
+      const ctx = body.action==='technical' ? authorized : await globalAIContext(authorized);
       ctx.marketingSendPush = sendPush;
       ctx.crmAccountId =
         ctx.accountId === env.MEUS_IMOVEIS_ACCOUNT_ID
@@ -191,6 +193,8 @@ export function createAgentHandler(
         }
       };
       switch (body.action) {
+        case 'technical':
+          return json(await technicalAction(ctx,body));
         case 'marketing': {
           if (env.MARKETING_BOT_ENABLED !== 'true') throw new AgentError('Marketing desativado no servidor.', 503);
           const bot = await getBot(ctx, body.bot_id);

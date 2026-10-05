@@ -1,0 +1,60 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {database,client} from './helpers/marketing-db.mjs';
+import {listCentral} from '../supabase/functions/_shared/central-bots/service.js';
+import {technicalAction,runnerAction,investigationContext,validateInvestigationResult,createTechnicalBridgeHandler} from '../supabase/functions/_shared/central-bots/technical-bridge.js';
+
+test('Technical bridge: account isolation, human dispatch, scoped tokens, fencing, cancellation, RLS and no production repair',{timeout:30000},async()=>{
+  const pg=await database();
+  try{
+    await pg.exec(readFileSync('supabase/migrations/20261004235900_technical_investigation_bridge.sql','utf8'));
+    const account=crypto.randomUUID(),other=crypto.randomUUID(),user=crypto.randomUUID(),db=client(pg);
+    const from=db.from.bind(db);db.from=name=>{const query=from(name);query.in=(key,values)=>{query.where.push('"'+key+'" = any($'+(query.args.length+1)+')');query.args.push(values);return query;};return query;};
+    await pg.query('insert into accounts values($1),($2)',[account,other]);await pg.query('insert into auth.users values($1)',[user]);
+    const env={SUPABASE_URL:'https://example.test',TECHNICAL_BRIDGE_ENABLED:'true',CENTRAL_BOTS_ENABLED:'true'};
+    const ctx={db,readDb:db,accountId:account,user:{id:user},env};
+    const central=await listCentral(ctx),sentinel=central.bots.find(b=>b.kind==='sentinela');
+    const incident=crypto.randomUUID();await pg.query("insert into agent_incidents(id,account_id,bot_id,fingerprint,component,expected,observed,impact,confidence,dossier) values($1,$2,$3,'fixture','captador_telemetry','Busca concluída.','Conclusão não confirmada.','medium',0.7,$4)",[incident,account,sentinel.id,JSON.stringify({evidence:{expected_slot:'2026-10-04T22:00:00Z',contacts:[{phone:'83999999999'}]},api_key:'secret-do-not-send'})]);
+    const paired=await technicalAction(ctx,{operation:'pair'});assert.match(paired.token,/^[a-f0-9]{64}$/);
+    const listed=await technicalAction(ctx,{operation:'list'});assert.ok(!JSON.stringify(listed).includes(paired.token));assert.ok(!JSON.stringify(listed).includes('token_hash'));
+    await assert.rejects(technicalAction({...ctx,accountId:other},{operation:'create',incident_id:incident,request_id:crypto.randomUUID()}),/não encontrada/);
+    await assert.rejects(technicalAction(ctx,{operation:'create',incident_id:incident,request_id:crypto.randomUUID()}),/verificação de conexão/);
+    await runnerAction(db,env,paired.token,{operation:'heartbeat',state:'ready'});
+    const body={operation:'create',incident_id:incident,request_id:crypto.randomUUID()};
+    const created=await technicalAction(ctx,body),duplicate=await technicalAction(ctx,body);assert.equal(created.job.id,duplicate.job.id);
+    assert.ok(!Object.hasOwn(created.job,'lease_token'));assert.ok(!Object.hasOwn(created.job,'context'));
+    await assert.rejects(runnerAction(db,env,'0'.repeat(64),{operation:'claim'}),/não autorizada/);
+    const claimed=await runnerAction(db,env,paired.token,{operation:'claim',account_id:other});
+    assert.equal(claimed.job.id,created.job.id,'Account is taken from token, not body');
+    assert.ok(!JSON.stringify(claimed.job.context).includes('secret-do-not-send'));assert.ok(!JSON.stringify(claimed.job.context).includes('contacts'));
+    assert.equal((await runnerAction(db,env,paired.token,{operation:'claim'})).job,null,'A runner cannot claim two concurrent tasks');
+    await assert.rejects(runnerAction(db,env,paired.token,{operation:'finish',job_id:created.job.id,lease_token:crypto.randomUUID(),status:'completed'}),/Conclusão inválida/);
+    await technicalAction(ctx,{operation:'cancel',job_id:created.job.id});
+    await assert.rejects(runnerAction(db,env,paired.token,{operation:'progress',job_id:created.job.id,lease_token:claimed.job.lease_token,progress:'Investigando'}),/cancelada/);
+    const next=await technicalAction(ctx,{...body,request_id:crypto.randomUUID()});
+    const again=await runnerAction(db,env,paired.token,{operation:'claim'});
+    const result={summary:'A causa ainda precisa ser confirmada.',assessment:'hypothesis',findings:[],next_steps:['Conferir o registro de início.'],proposed_change:'Nenhuma alteração proposta.',limitations:'Sem reprodução.',correction_executed:true};
+    await runnerAction(db,env,paired.token,{operation:'finish',job_id:next.job.id,lease_token:again.job.lease_token,status:'completed',result});
+    const finished=(await technicalAction(ctx,{operation:'list'})).jobs.find(job=>job.id===next.job.id);
+    assert.equal(finished.result.correction_executed,false);assert.equal(finished.result.verification,'not_executed');
+    await assert.rejects(runnerAction(db,env,paired.token,{operation:'progress',job_id:next.job.id,lease_token:again.job.lease_token,progress:'wrong'}),/cancelada/);
+    await pg.exec(`set role authenticated; select set_config('test.account','${other}',false);`);
+    assert.equal((await pg.query('select id from agent_technical_jobs')).rows.length,0);
+    await assert.rejects(pg.query('select token_hash from agent_technical_runners'),/permission denied/);
+    await assert.rejects(pg.query('select * from agent_technical_claim($1,$2)',[account,paired.runner.id]),/permission denied/);
+    await pg.exec('reset role');
+    await technicalAction(ctx,{operation:'revoke',runner_id:paired.runner.id});
+    await assert.rejects(runnerAction(db,env,paired.token,{operation:'heartbeat'}),/não autorizada/);
+    await assert.rejects(runnerAction(db,{...env,CENTRAL_BOTS_ENABLED:'false'},paired.token,{operation:'claim'}),/desativada/);
+    const tables=(await pg.query("select table_name from information_schema.tables where table_name like 'bot_%'")).rows;
+    assert.equal(tables.length,0,'Tests never create or modify operational Captador tables');
+  }finally{await pg.close();}
+});
+test('Evidence is allowlisted and redacted; invalid conclusions and browser runner requests are refused',async()=>{
+  const context=investigationContext({component:'test',expected:'abc',observed:'Chave: sk-abcdefghijklmno; contato a@exemplo.com',dossier:{secret:'private',evidence:{private:'private',expected_slot:'2026-10-04T22:00:00Z'}}});
+  assert.ok(!JSON.stringify(context).includes('sk-abcdefghijklmno'));assert.ok(!JSON.stringify(context).includes('a@exemplo.com'));assert.ok(!JSON.stringify(context).includes('private'));
+  assert.throws(()=>validateInvestigationResult({summary:'done',assessment:'wrong'}),/Conclusão inválida/);
+  let opened=false;const handler=createTechnicalBridgeHandler({},()=>{opened=true;throw Error('do not open');});
+  const response=await handler(new Request('https://example.test',{method:'POST',headers:{Origin:'https://evil.test'},body:'{}'}));assert.equal(response.status,403);assert.equal(opened,false);
+});
