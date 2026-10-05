@@ -6,6 +6,7 @@ import {listCentral,chat} from '../supabase/functions/_shared/central-bots/servi
 for (const provider of ['groq','deepinfra']) test(`${provider}: all bot greetings call the same AI, store answers, keep Marketing budgets and operational grounding`,{timeout:30000},async()=>{
   const pg=await database(),nativeFetch=globalThis.fetch;
   try {
+    await pg.exec('create table bot_settings(account_id uuid, last_round_at timestamptz, next_round_at timestamptz, is_active boolean, health_status text)');
     const account=crypto.randomUUID(),user=crypto.randomUUID();
     await pg.query('insert into accounts values($1)',[account]);await pg.query('insert into auth.users values($1)',[user]);
     const db=client(pg),from=db.from.bind(db);

@@ -60,13 +60,13 @@ export function calculateNextOfficialRound(now = new Date()) {
 
 // Deliberately separate from the operational database/runner: SELECT only, no RPC.
 export async function getCaptureSummary(ctx, args) {
-  const { since, days, period } = rangeArgs(args);
+  const { since, until, days, period } = rangeArgs(args);
   async function count(column, predicate = null) {
     let query = ctx.readDb
       .from('bot_captures')
       .select('id', { count: 'exact', head: true })
       .eq('account_id', ctx.accountId);
-    if (column) query = query.gte(column, since);
+    if (column) query = query.gte(column, since).lt(column, until);
     if (predicate) query = predicate(query);
     const result = await query;
     if (result.error || result.count == null)
@@ -156,6 +156,7 @@ export async function getCaptureSummary(ctx, args) {
     days,
     period,
     since,
+    until,
     rodadas_hoje_count: roundsToday.length,
     rodadas_hoje_resumo: roundsToday.length === 0
       ? 'Hoje ainda não houve nenhuma rodada registrada.'
@@ -191,7 +192,7 @@ export async function getCaptureSummary(ctx, args) {
 }
 
 export async function getRecentRounds(ctx, args) {
-  const { since, limit } = rangeArgs(args);
+  const { since, until, limit } = rangeArgs(args);
   const rawRounds = await rows(
     ctx.readDb
       .from('bot_execution_rounds')
@@ -200,6 +201,7 @@ export async function getRecentRounds(ctx, args) {
       )
       .eq('account_id', ctx.accountId)
       .gte('started_at', since)
+      .lt('started_at', until)
       .order('started_at', { ascending: false })
       .limit(limit),
   );
@@ -225,6 +227,10 @@ export async function getRecentRounds(ctx, args) {
   return {
     source: 'bot_execution_rounds',
     since,
+    until,
+    limit,
+    possibly_truncated: rawRounds.length === limit,
+    coverage: 'Contagem dos registros retornados. Se possibly_truncated=true, não afirme o total do período; amplie o limite até 30 ou explique que o resumo é parcial.',
     rounds_count: rawRounds.length,
     rounds_today_count: roundsToday.length,
     rounds_today_resumo: roundsToday.length === 0
@@ -283,16 +289,9 @@ export async function searchCapturedProperties(ctx, args = {}) {
   if (args.responded === true) query = query.not('responded_at', 'is', null);
   else if (args.responded === false) query = query.is('responded_at', null);
   if (args.waiting_response === true) query = query.eq('status', 'WAITING_RESPONSE');
-  if (args.period === 'today') {
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Sao_Paulo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
-    query = query.gte('created_at', `${today}T00:00:00-03:00`);
-  } else if (args.days && Number.isInteger(args.days)) {
-    query = query.gte('created_at', new Date(Date.now() - args.days * 86400000).toISOString());
+  if (args.period || args.days !== undefined) {
+    const { since, until } = rangeArgs(args);
+    query = query.gte('created_at', since).lt('created_at', until);
   }
 
   if (args.sort_by === 'price_asc') query = query.order('price', { ascending: true, nullsFirst: false });
@@ -307,6 +306,8 @@ export async function searchCapturedProperties(ctx, args = {}) {
   return {
     source: 'bot_captures',
     total_found: raw.length,
+    possibly_truncated: raw.length === limit,
+    coverage: 'Imóveis retornados nesta consulta, não um total geral quando o limite foi atingido.',
     filters_applied: args,
     properties: raw.map(p => {
       const priceNum = p.price != null ? Number(p.price) : null;
@@ -322,10 +323,11 @@ export async function searchCapturedProperties(ctx, args = {}) {
 }
 
 export async function getRecentResponses(ctx, args) {
-  const { since, limit } = rangeArgs(args);
+  const { since, until, limit } = rangeArgs(args);
   return {
     source: 'bot_captures',
     since,
+    until,
     responses: await rows(
       ctx.readDb
         .from('bot_captures')
@@ -334,6 +336,7 @@ export async function getRecentResponses(ctx, args) {
         )
         .eq('account_id', ctx.accountId)
         .gte('responded_at', since)
+        .lt('responded_at', until)
         .order('responded_at', { ascending: false })
         .limit(limit),
     ),
@@ -341,7 +344,7 @@ export async function getRecentResponses(ctx, args) {
 }
 
 export async function getCaptureMetrics(ctx, args) {
-  const { since, days, period } = rangeArgs(args);
+  const { since, until, days, period } = rangeArgs(args);
   const groups = new Map();
   let scanned = 0,
     complete = false;
@@ -353,6 +356,7 @@ export async function getCaptureMetrics(ctx, args) {
         .select('id,neighborhood,responded_at,imported_property_id')
         .eq('account_id', ctx.accountId)
         .gte('contacted_at', since)
+        .lt('contacted_at', until)
         .order('id')
         .range(start, start + 499),
     );
@@ -380,6 +384,7 @@ export async function getCaptureMetrics(ctx, args) {
     days,
     period,
     since,
+    until,
     scanned,
     complete,
     cohort:

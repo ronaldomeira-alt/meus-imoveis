@@ -1,3 +1,5 @@
+import { PERIODS, calendarRange } from './conversation.js';
+
 export class AgentError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -40,12 +42,12 @@ export function requiredText(value, name, min = 1, max = 4000) {
   return value.trim();
 }
 
-export function rangeArgs(args = {}) {
+export function rangeArgs(args = {}, now = new Date()) {
   const period = args.period ?? 'rolling';
   const days = args.days ?? (period === 'today' ? 1 : 30);
   const limit = args.limit ?? 10;
   if (
-    !['rolling', 'today'].includes(period) ||
+    !PERIODS.includes(period) ||
     !Number.isInteger(days) ||
     days < 1 ||
     days > 90 ||
@@ -55,20 +57,13 @@ export function rangeArgs(args = {}) {
   ) {
     throw new AgentError('Período ou limite de consulta inválido.');
   }
-  const today = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const calendar = calendarRange(period, now);
   return {
-    days: period === 'today' ? 1 : days,
+    days: calendar?.days ?? days,
     period,
     limit,
-    since:
-      period === 'today'
-        ? new Date(`${today}T00:00:00-03:00`).toISOString()
-        : new Date(Date.now() - days * 86400000).toISOString(),
+    since: calendar?.since ?? new Date(now.getTime() - days * 86400000).toISOString(),
+    until: calendar?.until ?? now.toISOString(),
   };
 }
 

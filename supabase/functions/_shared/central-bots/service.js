@@ -18,12 +18,19 @@ import {
   botsStatus,
 } from './tools.js';
 import { createAIProvider, groundedReply } from './ai-provider.js';
+import { identityPolicy, conversationRoute, ROUTING_POLICY, parseRoute, requestedPeriod, hasExplicitPeriod, temporalPolicy } from './conversation.js';
 import { BOT_COMMUNICATION_POLICY, technicalDetailsRequested, communicationSafe, humanFallback, humanSourceSummary } from './communication.js';
 import { inspectSystem, isDailyInspectionDue } from './sentinel.js';
 import { setupMarketing, scoped as marketingScoped, feedback as marketingFeedback } from '../bot-marketing/store.js';
 import { parseFeedback } from '../bot-marketing/core.js';
 import { marketingTick } from '../bot-marketing/worker.js';
 import { costEnvelope, marketingModel } from '../bot-marketing/ai.js';
+import {
+  updateAgentOperationalState,
+  recordOperationalMemory,
+  buildAgentOperationalContext,
+  syncToolExecutionToState,
+} from './state-memory.js';
 
 export async function bootstrap(ctx) {
   await rows(
@@ -37,7 +44,7 @@ export async function bootstrap(ctx) {
         { onConflict: 'account_id', ignoreDuplicates: true },
       ),
   );
-  await rows(
+  const insertedBots = await rows(
     ctx.db.from('agent_bots').upsert(
       BUILTINS.filter(bot => bot.kind !== 'marketing' || ctx.env.MARKETING_BOT_ENABLED === 'true').map((bot) => ({
         ...bot,
@@ -49,8 +56,16 @@ export async function bootstrap(ctx) {
         created_by: ctx.user.id,
       })),
       { onConflict: 'account_id,slug', ignoreDuplicates: true },
-    ),
+    ).select('id'),
   );
+  if (Array.isArray(insertedBots) && insertedBots.length > 0) {
+    await rows(
+      ctx.db.from('agent_operational_state').upsert(
+        insertedBots.map((b) => ({ account_id: ctx.accountId, bot_id: b.id })),
+        { onConflict: 'account_id,bot_id', ignoreDuplicates: true },
+      ),
+    );
+  }
   const sentinel = await rows(
     ctx.db
       .from('agent_bots')
@@ -243,27 +258,34 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
   const sources = [];
   const technical = technicalDetailsRequested(prompt);
   try {
-    // Greetings do not assert operational facts and must not force an unrelated
-    // tool call. Keep the normal grounded path for every other user request.
-    const greeting = /^(?:ol[aá]|oi|oie|bom dia|boa tarde|boa noite|obrigad[oa]|valeu)[\s!?.]*$/iu.test(prompt.trim());
-    if (greeting) {
-      const messages = [{ role: 'system', content: `Você é ${bot.name}. ${BOT_COMMUNICATION_POLICY}\nResponda a esta saudação em uma ou duas frases naturais. Não afirme dados, status, números ou ações operacionais. Não consulte ferramentas.` }, { role: 'user', content: prompt }];
+    let route = trigger === 'chat' ? conversationRoute(prompt) : 'operational';
+    if (route === 'classify') {
+      const routingMessages = [{role:'system',content:ROUTING_POLICY}, ...history.slice(-4), {role:'user',content:prompt}];
+      if (bot.kind === 'marketing') {
+        const cost = costEnvelope(ctx.env,routingMessages,marketingModel(ctx.env,bot.provider));
+        if (!await rows(ctx.db.rpc('agent_marketing_reserve_chat',{p_account_id:ctx.accountId,p_run_id:run.id,p_cost:cost.estimate_usd}))) throw new AgentError('Limite de orçamento do Marketing atingido.',429);
+      }
+      const decision = await provider.complete({messages:routingMessages,tools:[],maxOutputTokens:64,reasoningEffort:'low'});
+      route = parseRoute(decision.content);
+    }
+    if (route === 'conversation') {
+      const messages = [{ role: 'system', content: `Você é ${bot.name}. ${BOT_COMMUNICATION_POLICY}\n${identityPolicy(bot)}\nCONVERSA DIRETA: responda ao que foi dito usando o histórico, sem ferramentas. Não afirme resultados, status, horários nem lembranças operacionais. Se a pergunta depender desses dados, peça uma breve clarificação; não invente uma resposta factual. Não diga que faltam dados quando a pessoa só está discutindo seu jeito de falar. Não repita jargões que ela pediu para evitar.` }, ...history, { role: 'user', content: prompt }];
       if (bot.kind === 'marketing') {
         const cost = costEnvelope(ctx.env,messages,marketingModel(ctx.env,bot.provider));
         if (!await rows(ctx.db.rpc('agent_marketing_reserve_chat',{p_account_id:ctx.accountId,p_run_id:run.id,p_cost:cost.estimate_usd}))) throw new AgentError('Limite de orçamento do Marketing atingido.',429);
       }
       const reply = await provider.complete({
         messages,
-        tools: [], maxOutputTokens: 512, reasoningEffort: 'low',
+        tools: [], maxOutputTokens: 1024, reasoningEffort: 'low',
         onText: ctx.onText ? text => {
           const safe=redactOperationalData(text,ctx.env).replace(/\*\*/g,'');
           if(communicationSafe(safe)) ctx.onText(safe);
         } : undefined,
       });
       const greetingText = redactOperationalData(reply.content?.trim() || '',ctx.env).replace(/\*\*([^*\n]+)\*\*/g,'$1');
-      const content = communicationSafe(greetingText) ? greetingText : 'Oi, Ronaldo! Como posso ajudar você hoje?';
+      const content = communicationSafe(greetingText) ? greetingText : 'Vou explicar de um jeito mais simples. Qual parte você quer que eu esclareça?';
       if (!content) throw new AgentError('A IA não retornou uma resposta válida.',503);
-      const auditResult={provider:provider.name,model:provider.model,tool_count:0};
+      const auditResult={provider:provider.name,model:provider.model,tool_count:0,conversation_route:route};
       if (bot.kind === 'marketing') {
         const budget=await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());
         Object.assign(auditResult,budget.result);
@@ -278,11 +300,17 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
       timeStyle: 'medium',
     }).format(new Date());
 
+    const operationalContext = redactOperationalData(await buildAgentOperationalContext(ctx, bot, prompt).catch(() => 'A memória de continuidade está indisponível. Consulte as ferramentas factuais; não invente lembranças.'),ctx.env);
+
     const messages = [
       {
         role: 'system',
         content: `Você é ${bot.name}, da Central de Bots do Meus Imóveis. ${BOT_COMMUNICATION_POLICY}
+${identityPolicy(bot)}
+${temporalPolicy(prompt)}
 Data/hora atual: ${nowBrasilia} (Fuso America/Sao_Paulo).
+
+${operationalContext}
 
 DIRETRIZES CRÍTICAS DE AUTONOMIA E VERACIDADE:
 
@@ -365,6 +393,10 @@ Missão declarada pelo usuário: ${bot.mission}`,
         let result;
         try {
           const args = JSON.parse(call.function.arguments || '{}');
+          const period = requestedPeriod(prompt);
+          const schema = tools.find(tool => tool.name === call.function.name)?.parameters;
+          if (period && schema?.properties?.period) { args.period = period; delete args.days; }
+          if (call.function.name === 'searchCapturedProperties' && !hasExplicitPeriod(prompt)) { delete args.period; delete args.days; }
           result = redactOperationalData(
             await executeTool(ctx, bot, run.id, call.function.name, args),
             ctx.env,
@@ -375,12 +407,14 @@ Missão declarada pelo usuário: ${bot.mission}`,
             observed_at: new Date().toISOString(),
             data: result,
           });
+          await syncToolExecutionToState(ctx, bot, call.function.name, args, result);
         } catch {
           result = {
             unavailable: true,
             message:
               'Consulta indisponível ou não autorizada. Não infira números nem status.',
           };
+          sources.push({tool:call.function.name,observed_at:new Date().toISOString(),data:result});
         }
         // Keep complete redacted evidence and tool references for investigation;
         // the human explanation guides presentation, not operational decisions.
@@ -403,7 +437,7 @@ Missão declarada pelo usuário: ${bot.mission}`,
     const content = communicationSafe(grounded,sources,technical) ? grounded : humanFallback(sources);
     const auditResult =
       trigger === 'chat'
-        ? { provider: provider.name, model: provider.model, tool_count: sources.length }
+        ? { provider: provider.name, model: provider.model, tool_count: sources.length, conversation_route:route }
         : { content, sources, provider: provider.name };
     if (bot.kind === 'marketing') {
       const budget = await rows(ctx.db.from('agent_runs').select('result').eq('account_id',ctx.accountId).eq('id',run.id).single());
@@ -524,6 +558,21 @@ export async function chat(ctx, body) {
       .select()
       .single(),
   );
+
+  await updateAgentOperationalState(ctx, bot.id, {
+    last_interaction_at: new Date().toISOString(),
+  }).catch(() => {}); // Continuity must never discard an already saved answer.
+
+  if (bot.kind === 'marketing' && result.sources?.some(source => ['researchMarketTrends','searchMarketingWeb','getMarketingIdeas'].includes(source.tool)) && result.content && !result.content.includes('Ainda não consegui confirmar')) {
+    await recordOperationalMemory(ctx, bot.id, {
+      kind: 'editorial',
+      topic: 'Pauta e Ideias Apresentadas',
+      summary: result.content.slice(0, 350),
+      data: { client_message_id: body.request_id },
+      retentionDays: 30,
+    }).catch(() => {});
+  }
+
   return { message, run_id: result.run_id };
 }
 

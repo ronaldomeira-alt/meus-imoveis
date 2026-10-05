@@ -16,7 +16,7 @@ export async function database(path, snapshot) {
     create table inventory_properties(account_id uuid,property_id text,property_data jsonb,updated_at timestamptz default now());
     create table marketing_posts(id uuid primary key,caption text,media_urls jsonb,post_type text,channel text,status text,created_by uuid);
   `);
-  for (const name of ['20261003170150_central_bots.sql','20261004171533_bot_marketing.sql']) await pg.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace(/^create extension[^;]+;/gm,''));
+  for (const name of ['20261003170150_central_bots.sql','20261004171533_bot_marketing.sql','20261005010000_central_bots_camada4_state_memory.sql']) await pg.exec(readFileSync(`supabase/migrations/${name}`,'utf8').replace(/^create extension[^;]+;/gm,''));
   return pg;
 }
 const ident = s => { if (!/^[a-z_][a-z0-9_]*$/.test(s)) throw new Error('Invalid test identifier'); return `"${s}"`; };
@@ -51,6 +51,20 @@ class Query {
   not(k,op,v) { if (op === 'is' && v === null) { this.where.push(`${ident(k)} is not null`); return this; } return this.filter(k,'<>',v); }
   ilike(k,v) { return this.filter(k,'ilike',v); }
   contains(k,v) { return this.filter(k,'@>',v); }
+  or(clause) {
+    const parts = clause.split(',').map(part => {
+      const segs = part.split('.');
+      if (segs.length >= 3 && segs[1] === 'is' && segs[2] === 'null') return `"${segs[0]}" is null`;
+      if (segs.length >= 3 && segs[1] === 'gt') {
+        const val = segs.slice(2).join('.');
+        this.args.push(val);
+        return `"${segs[0]}" > $${this.args.length}`;
+      }
+      return null;
+    }).filter(Boolean);
+    if (parts.length) this.where.push(`(${parts.join(' or ')})`);
+    return this;
+  }
   order(k,o={}) { this.orders.push(`${ident(k)} ${o.ascending===false?'desc':'asc'} ${o.nullsFirst?'nulls first':'nulls last'}`); return this; }
   limit(n) { this.limitValue=n; return this; }
   single() { this.singleMode=true; return this; }
@@ -66,7 +80,11 @@ class Query {
         const cols=[...new Set(this.payload.flatMap(p=>Object.keys(p)))];
         const vals=this.payload.map(p=>'('+cols.map(k=>{const v=Object.hasOwn(p,k)?p[k]:null;params.push(typeof v==='object'&&v!==null&&!['tools','notification_events','topics'].includes(k)?JSON.stringify(v):v);return '$'+params.length;}).join(',')+')').join(',');
         sql=`insert into public.${ident(this.name)}(${cols.map(ident).join(',')}) values ${vals}`;
-        if(this.conflict) sql+=` on conflict (${this.conflict.onConflict.split(',').map(ident).join(',')}) ${this.conflict.ignoreDuplicates?'do nothing':'do update set '+cols.map(c=>`${ident(c)}=excluded.${ident(c)}`).join(',')}`;
+        if(this.conflict) {
+          const conflictKeys = new Set(this.conflict.onConflict.split(',').map(s=>s.trim()));
+          const updateCols = cols.filter(c => !conflictKeys.has(c));
+          sql+=` on conflict (${this.conflict.onConflict.split(',').map(ident).join(',')}) ${this.conflict.ignoreDuplicates || updateCols.length === 0 ? 'do nothing' : 'do update set '+updateCols.map(c=>`${ident(c)}=excluded.${ident(c)}`).join(',')}`;
+        }
         sql+=' returning '+fields;
       } else if(this.mode==='update') {
         const set=Object.keys(this.payload).map(k=>{const v=this.payload[k];params.push(typeof v==='object'&&v!==null?JSON.stringify(v):v);return `${ident(k)}=$${params.length}`;});
