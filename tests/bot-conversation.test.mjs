@@ -52,13 +52,13 @@ test('all bots use the shared AI for identity, history, semantic routing, stream
     await pg.query('insert into accounts values($1)',[account]);await pg.query('insert into auth.users values($1)',[user]);
     const db=client(pg),ctx={db,readDb:db,accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true',DEEPINFRA_API_KEY:'fixture',SYSTEM_AI_PROVIDER:'deepinfra',SYSTEM_AI_MODEL:'openai/gpt-oss-120b',MARKETING_MODEL_PRICES:'{"openai/gpt-oss-120b":{"input":0.037,"output":0.17}}'}};
     const bots=(await listCentral(ctx)).bots,calls=[];
-    let classifier='conversation';
+    let classifier='conversation',directAnswer='Você tem razão. Eu vou falar do meu trabalho em primeira pessoa.';
     globalThis.fetch=async(url,options)=>{
       assert.equal(url,'https://api.deepinfra.com/v1/openai/chat/completions');
       const body=JSON.parse(options.body);calls.push(body);assert.equal(body.model,'openai/gpt-oss-120b');
       const system=body.messages[0].content;
       const routing=system.includes('Classifique a intenção');
-      const content=routing?JSON.stringify({route:classifier}):'Você tem razão. Eu vou falar do meu trabalho em primeira pessoa.';
+      const content=routing?JSON.stringify({route:classifier}):directAnswer;
       if(body.tool_choice==='required') return Response.json({choices:[{message:{role:'assistant',content:null,tool_calls:[{id:'tool-fixture',type:'function',function:{name:'getBotsRecentActivity',arguments:'{"period":"today"}'}}]}}]});
       if(body.stream){const enc=new TextEncoder();return new Response(new ReadableStream({start(controller){for(const part of ['Você tem razão. ','Eu vou falar do meu trabalho em primeira pessoa.'])controller.enqueue(enc.encode('data: '+JSON.stringify({choices:[{delta:{content:part}}]})+'\n\n'));controller.enqueue(enc.encode('data: [DONE]\n\n'));controller.close();}}));}
       return Response.json({choices:[{message:{role:'assistant',content}}]});
@@ -89,6 +89,9 @@ test('all bots use the shared AI for identity, history, semantic routing, stream
     assert.match(withoutMemory.message.content,/Eu vou falar/);
     await chat(ctx,{bot_id:gestor.id,content:'Consulte atividades hoje',request_id:crypto.randomUUID()});
     assert.match(calls.at(-1).messages[0].content,/memória de continuidade está indisponível/);
+    classifier='conversation';directAnswer='Uma API permite que dois sistemas conversem.';
+    const technical=await chat(ctx,{bot_id:gestor.id,content:'Explique API, quero os detalhes técnicos do conceito.',request_id:crypto.randomUUID()});
+    assert.equal(technical.message.content,directAnswer,'Explicit technical explanations are allowed without requiring operational data');
   }finally{globalThis.fetch=nativeFetch;await pg.close();}
 });
 

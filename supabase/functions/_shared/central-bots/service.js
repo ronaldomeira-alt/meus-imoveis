@@ -279,11 +279,11 @@ async function analyze(ctx, bot, prompt, trigger, requestId, history = []) {
         tools: [], maxOutputTokens: 1024, reasoningEffort: 'low',
         onText: ctx.onText ? text => {
           const safe=redactOperationalData(text,ctx.env).replace(/\*\*/g,'');
-          if(communicationSafe(safe)) ctx.onText(safe);
+          if(communicationSafe(safe,[],technical)) ctx.onText(safe);
         } : undefined,
       });
       const greetingText = redactOperationalData(reply.content?.trim() || '',ctx.env).replace(/\*\*([^*\n]+)\*\*/g,'$1');
-      const content = communicationSafe(greetingText) ? greetingText : 'Vou explicar de um jeito mais simples. Qual parte você quer que eu esclareça?';
+      const content = communicationSafe(greetingText,[],technical) ? greetingText : 'Vou explicar de um jeito mais simples. Qual parte você quer que eu esclareça?';
       if (!content) throw new AgentError('A IA não retornou uma resposta válida.',503);
       const auditResult={provider:provider.name,model:provider.model,tool_count:0,conversation_route:route};
       if (bot.kind === 'marketing') {
