@@ -3,7 +3,7 @@ import { PERIODS } from './conversation.js';
 import { getRelevantMemories } from './state-memory.js';
 import * as capture from './captador-adapter.js';
 import { marketingStatus, memory as marketingMemory, settings as marketingSettings, scoped as marketingScoped } from '../bot-marketing/store.js';
-import { researchMarketTrends, searchMarketingWeb } from '../bot-marketing/sources.js';
+import { researchMarketTrends, searchMarketingWeb, readInstagram } from '../bot-marketing/sources.js';
 import { runLiveInspection, getComponentDiagnostics } from './sentinel.js';
 import { getAgentPreferences, updateAgentPreferences, rollbackAgentPreferences } from './preferences.js';
 
@@ -204,6 +204,7 @@ const componentDiagnosticsSchema = {
 };
 
 export const TOOL_CATALOG = [
+  ['getInstagramContext', 'Consulta a identidade real do Instagram vinculado a esta conta, conteúdos acessíveis e limites de métricas. Não publica, não analisa imagens/vídeos e não pesquisa tendências globais no Instagram.'],
   ['getMarketingStatus', 'Estado real, pesquisas recentes, propostas e acesso às fontes do Marketing.'],
   ['getMarketingMemory', 'Memória editorial persistente, fatos e preferências confirmadas.'],
   ['getMarketingIdeas', 'Propostas, ganchos, orientações e evidências para desenvolver conteúdo quando o usuário demonstrar interesse.'],
@@ -249,7 +250,9 @@ export const TOOL_CATALOG = [
   name,
   description,
   parameters:
-    name === 'getIncidentDetails'
+    name === 'getInstagramContext'
+      ? { type: 'object', properties: {}, additionalProperties: false }
+      : name === 'getIncidentDetails'
       ? {
           type: 'object',
           properties: { incident_id: { type: 'string', format: 'uuid' } },
@@ -463,6 +466,7 @@ export async function dispatch(ctx, name, args) {
   if (Object.hasOwn(capture, name)) return capture[name](ctx, args);
   const { since, until, limit } = rangeArgs(args);
   switch (name) {
+    case 'getInstagramContext': return readInstagram(ctx);
     case 'getMarketingStatus': return marketingStatus(ctx);
     case 'getMarketingMemory': {
       if (ctx.env.MARKETING_BOT_ENABLED !== 'true') return { unavailable: true, reason: 'Marketing desativado.' };
@@ -639,6 +643,20 @@ export async function handleConfigureAgentBehavior(ctx, args) {
   const botRow = await resolveTargetBot(ctx, target_bot);
   if (!botRow) throw new AgentError(`Bot "${target_bot}" não encontrado nesta conta.`);
 
+  let instagram_context = null;
+  if (botRow.slug === 'marketing' && /instagram/i.test(JSON.stringify(configuration) + reason)) {
+    instagram_context = await readInstagram(ctx);
+    if (instagram_context.unavailable || !instagram_context.media_read) {
+      return { success: false, configuration_saved: false, bot_slug: botRow.slug, bot_name: botRow.name,
+        message: 'Não consegui confirmar o acesso ao Instagram desta conta. A diretriz não foi aplicada.',
+        instagram_context: { status: instagram_context.status, limits: instagram_context.limits } };
+    }
+  }
+  if (!['communication', 'behavior', 'research', 'notification', 'operational'].includes(category))
+    throw new AgentError('Categoria de preferência inválida.');
+  if (!configuration || Array.isArray(configuration) || typeof configuration !== 'object' || !Object.keys(configuration).length)
+    throw new AgentError('Informe uma preferência concreta.');
+
   let infrastructure_warning = null;
   const configStr = JSON.stringify(configuration).toLowerCase();
   const reasonStr = (reason || '').toLowerCase();
@@ -669,6 +687,9 @@ export async function handleConfigureAgentBehavior(ctx, args) {
     bot_name: botRow.name,
     category,
     applied_configuration: configuration,
+    configuration_saved: true,
+    execution_verified: false,
+    instagram_context: instagram_context ? { username: instagram_context.username, media_read: instagram_context.media_read, insights_read: instagram_context.insights_read, limits: instagram_context.limits, business_discovery: instagram_context.business_discovery } : null,
     infrastructure_warning,
     message: infrastructure_warning
       ? `Preferência de negócio atualizada para ${botRow.name}. Aviso de infraestrutura: ${infrastructure_warning}`
@@ -696,6 +717,8 @@ export async function handleRollbackAgentConfiguration(ctx, args) {
     bot_name: botRow.name,
     message: `Configuração anterior de ${botRow.name} restaurada com sucesso.`,
     restored: res.preferences,
+    configuration_saved: true,
+    execution_verified: false,
   };
 }
 
@@ -827,6 +850,12 @@ export async function handleUpdateMarketingPreferences(ctx, args) {
 
   if (!marketingBot) throw new AgentError('Bot de Marketing não encontrado.');
 
+  if (!focus && !style && !excluded_topics?.length) throw new AgentError('Informe uma preferência concreta.');
+  let instagram_context = null;
+  if (/instagram/i.test(focus || '')) {
+    instagram_context = await readInstagram(ctx);
+    if (instagram_context.unavailable || !instagram_context.media_read) return { success: false, configuration_saved: false, message: 'Não consegui confirmar o acesso ao Instagram. A diretriz não foi aplicada.' };
+  }
   const patch = {};
   if (focus) patch.behavior_preferences = { focus };
   if (style) patch.communication_preferences = { style };
@@ -841,6 +870,9 @@ export async function handleUpdateMarketingPreferences(ctx, args) {
   return {
     success: true,
     applied: { focus, style, excluded_topics },
+    configuration_saved: true,
+    execution_verified: false,
+    instagram_context: instagram_context ? { username: instagram_context.username, media_read: instagram_context.media_read, insights_read: instagram_context.insights_read, limits: instagram_context.limits } : null,
     message: 'Preferências editoriais do Marketing atualizadas com sucesso.',
   };
 }
@@ -854,6 +886,7 @@ export async function executeTool(ctx, bot, runId, name, args = {}) {
   if (!args || typeof args !== 'object' || Array.isArray(args))
     throw new AgentError('Argumentos inválidos.');
   const customKeys = {
+    getInstagramContext: [],
     getIncidentDetails: ['incident_id'],
     getMarketingMemory: ['topic', 'kind', 'state'],
     searchCapturedProperties: [

@@ -67,8 +67,32 @@ export function humanSourceSummary(data) {
   if (Array.isArray(data?.incidents)) return 'Esta consulta não encontrou ocorrências abertas. Isso, por si só, não confirma o funcionamento de todas as funções.';
   return 'Registro usado nesta consulta. Os dados completos estão em Detalhes técnicos.';
 }
+export function configurationReceipt(sources = []) {
+  const changes = sources.filter(s => ['configureAgentBehavior', 'updateMarketingPreferences', 'rollbackAgentConfiguration'].includes(s.tool));
+  if (!changes.length) return null;
+  return changes.map(source => {
+    const data = source.data || {};
+    if (data.unavailable || data.success !== true || data.configuration_saved !== true) return 'Não consegui aplicar a alteração solicitada. Não vou confirmar uma mudança que não foi salva.';
+    const name = data.bot_name || 'Bot de Marketing';
+    const prefs = data.applied_configuration || data.applied || {};
+    const summary = Object.values(prefs).filter(v => typeof v === 'string' || Array.isArray(v)).map(v => Array.isArray(v) ? v.join(', ') : v).filter(v => !hasTechnicalLanguage(v)).join('; ');
+    const saved = source.tool === 'rollbackAgentConfiguration' ? 'Restaurei a preferência anterior' : 'Salvei a diretriz';
+    const instagram = data.instagram_context;
+    return saved + ' para ' + name + (summary ? ': ' + summary : '.')
+      + (data.infrastructure_warning ? '\n\n' + data.infrastructure_warning : '')
+      + (instagram ? '\n\nConferi a conexão de @' + instagram.username + ' e consegui ler os conteúdos disponíveis. Isso não significa que a análise de desempenho ou a pesquisa de tendências já foi feita. A pesquisa ampla dentro do Instagram e a análise visual de vídeos/imagens não estão disponíveis.' : '')
+      + '\n\nSalvar uma preferência não confirma que uma nova tarefa foi executada, nem altera permissões, publicação ou horários operacionais.';
+  }).join('\n\n');
+}
+
 export function communicationSafe(text, sources = [], technical = false) {
   if (!technical && hasTechnicalLanguage(text)) return false;
+  if (!sources.some(source => source.data && !source.data.unavailable)) {
+    for (const sentence of text.split(/[.!?\n]+/u)) {
+      if (/\b(?:pesquisei|analisei|consultei|acessei|verifiquei|publiquei|configurei|implementei|registrei|salvei|compilei|criei)\b|a partir de (?:agora|hoje).*(?:vai|vou|inclui)|(?:ja|já).*(?:apliquei|configurei|alterei)/iu.test(sentence)
+        && !/\b(?:não|nao)\b[^,;]{0,65}(?:pesquisei|analisei|consultei|acessei|verifiquei|publiquei|configurei|implementei|registrei|salvei|compilei|criei|confirma|confirmar)/iu.test(sentence)) return false;
+    }
+  }
   if (sources.some(source => source.data?.unavailable || source.data?.bots?.some(bot => bot.operational_data_unavailable))) {
     for (const sentence of text.split(/[.!?\n]+/u)) {
       if (/(?:tudo (?:bem|normal|funcionando)|nenhum (?:problema|erro)|todos.*(?:funcionando|sem erros))/iu.test(sentence)
@@ -91,4 +115,18 @@ export function communicationSafe(text, sources = [], technical = false) {
 export function humanFallback(sources = []) {
   const incidents = sources.flatMap(source => incidentRecords(source.data));
   return incidents.length ? incidents.map(humanIncident).join('\n\n') : 'Ainda não consegui confirmar os dados pra te responder com segurança. Podemos tentar de novo.';
+}
+
+export function instagramAccessReceipt(prompt, sources = []) {
+  const question = String(prompt).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (!/instagram/.test(question) || !/(?:qual|sabe).{0,55}instagram|instagram.{0,55}(?:conectado|consegue ler|consegue acessar)/.test(question)
+      || /analise|analisa|pesquise|pesquisa|melhoria|tendencia|salve|salvar|diretriz|configure/.test(question)) return null;
+  const source = sources.find(s => s.tool === 'getInstagramContext');
+  if (!source) return null;
+  const data = source.data;
+  if (!data || data.unavailable || !data.identity_verified || !/^[a-z0-9._]{1,30}$/i.test(data.username || ''))
+    return 'Não consegui verificar a conexão do Instagram nesta consulta. Isso não confirma que a conta foi desconectada.';
+  const reading = data.media_read ? 'Nesta consulta consegui ler as legendas e os dados disponíveis de ' + (data.contents || []).length + ' publicações. Legendas não são uma análise das imagens ou dos vídeos.' : 'Não consegui ler as publicações nesta consulta.';
+  const insights = data.insights_read ? 'A consulta também retornou os indicadores de desempenho disponíveis.' : 'Não obtive os indicadores detalhados de desempenho nesta consulta; não confirmei a causa dessa ausência.';
+  return 'Conferi a conexão: seu Instagram é @' + data.username + '.\n\n' + reading + '\n\n' + insights + ' O acesso desta conversa é de leitura; não executei nenhuma publicação nem uma pesquisa ampla de tendências no Instagram.';
 }

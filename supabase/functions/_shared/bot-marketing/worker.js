@@ -1,3 +1,4 @@
+import { getAgentPreferences } from '../central-bots/preferences.js';
 import { AgentError, rows, event, redactOperationalData } from '../central-bots/core.js';
 import { syncMarketingAutonomousResearch } from '../central-bots/autonomy.js';
 import { fingerprint, assessIdea, safeSourceUrl, normalize, localDay } from './core.js';
@@ -25,6 +26,12 @@ export async function marketingTick(ctx, bot, dependencies = {}) {
     return result.output;
   };
   try {
+    const preferences = await getAgentPreferences(ctx, bot.id);
+    s.profile = { ...s.profile, editorial_preferences: {
+      communication: preferences.communication_preferences,
+      behavior: preferences.behavior_preferences,
+      research: preferences.research_preferences,
+    } };
     switch (phase) {
       case 'context': {
         // No CRM Leads, Match or operational Captador sources are used.
@@ -45,7 +52,7 @@ export async function marketingTick(ctx, bot, dependencies = {}) {
         phase = 'plan'; break;
       }
       case 'plan': {
-        const plan = await call('Planeje pesquisa exploratória baseada em estoque, perfil, feedback e investigações anteriores. {"hypothesis":"...", "queries":["até duas buscas opcionais"], "source_urls":["até 3 URLs das fontes disponíveis"], "why":"..."}. Priorize fontes locais, novidade e fonte original; não exija um tema fornecido pelo usuário.', { profile: s.profile, inventory: cp.stock, instagram: cp.instagram, memory: cp.memory, previous: cp.previous, sources: cp.sources, search_available: !!ctx.env.MARKETING_BRAVE_API_KEY });
+        const plan = await call('Planeje pesquisa exploratória baseada em estoque, perfil, feedback e investigações anteriores. {"hypothesis":"...", "queries":["até duas buscas opcionais"], "source_urls":["até 3 URLs das fontes disponíveis"], "why":"..."}. Respeite as preferências editoriais persistentes do perfil (foco, tom, fontes e tópicos excluídos) dentro das fontes e permissões disponíveis. Uma preferência não concede acesso a uma nova fonte ou rede. Priorize fontes locais, novidade e fonte original; não exija um tema fornecido pelo usuário.', { profile: s.profile, inventory: cp.stock, instagram: cp.instagram, memory: cp.memory, previous: cp.previous, sources: cp.sources, search_available: !!ctx.env.MARKETING_BRAVE_API_KEY });
         cp.plan = plan;
         const selected = [...new Set((Array.isArray(plan.source_urls) ? plan.source_urls : []).filter(u => cp.sources.some(s => s.url === u)).slice(0, 3))];
         cp.queue = (selected.length ? selected : cp.sources.slice(0, 2).map(s => s.url)).map(url => ({ url, kind: 'discovery' }));

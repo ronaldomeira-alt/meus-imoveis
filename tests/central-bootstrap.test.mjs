@@ -9,7 +9,7 @@ test('Central list with Marketing uses valid batch columns and preserves existin
   try {
     const account=crypto.randomUUID(),user=crypto.randomUUID();
     await pg.query('insert into accounts values($1)',[account]);await pg.query('insert into auth.users values($1)',[user]);
-    const ctx={db:client(pg),accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true'}};
+    const ctx={db:client(pg),readDb:client(pg),accountId:account,user:{id:user},env:{SUPABASE_URL:'https://example.test',MARKETING_BOT_ENABLED:'true'}};
     // The pre-fix mixed batch fails even before conflict handling: existing rows
     // do not protect an INSERT against a NOT NULL violation.
     const mixed=await ctx.db.from('agent_bots').upsert(BUILTINS.map(bot=>({...bot,account_id:account,created_by:user})),{onConflict:'account_id,slug',ignoreDuplicates:true});

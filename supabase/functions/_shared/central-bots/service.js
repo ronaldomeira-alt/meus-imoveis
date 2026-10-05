@@ -19,6 +19,7 @@ import {
 } from './tools.js';
 import { createAIProvider, groundedReply } from './ai-provider.js';
 import {
+  requiresOperationalEvidence,
   identityPolicy,
   capabilityPolicy,
   routeGuidance,
@@ -30,7 +31,7 @@ import {
   hasExplicitPeriod,
   temporalPolicy,
 } from './conversation.js';
-import { BOT_COMMUNICATION_POLICY, technicalDetailsRequested, communicationSafe, humanFallback, humanSourceSummary } from './communication.js';
+import { BOT_COMMUNICATION_POLICY, technicalDetailsRequested, communicationSafe, humanFallback, humanSourceSummary, configurationReceipt, instagramAccessReceipt } from './communication.js';
 import { inspectSystem, isDailyInspectionDue } from './sentinel.js';
 import { setupMarketing, scoped as marketingScoped, feedback as marketingFeedback } from '../bot-marketing/store.js';
 import { parseFeedback } from '../bot-marketing/core.js';
@@ -319,6 +320,7 @@ function botSpecificDirectives(bot) {
 - FONTES PRÓPRIAS E ISOLAMENTO: Você é o Bot de Marketing. Suas fontes são canais e feeds oficiais da nossa região (portais de João Pessoa/Cabedelo, IBGE, Agência Brasil) e tendências web sobre mercado imobiliário. Você NÃO executa nem acompanha rodadas de captação imobiliária (essas pertencem exclusivamente ao Bot Captador às 09h e 19h). NUNCA mencione horários do Captador, VM Hyper-V ou captação de proprietários como se fossem pesquisas suas!
 - POLÍTICA DE UMA IDEIA: Ao sugerir pautas ou ideias de conteúdo, apresente SEMPRE UMA ÚNICA IDEIA PRINCIPAL por vez, bem desenvolvida e estruturada (gancho, formato, canal, por que faz sentido agora). Não despeje listas genéricas de 5 ideias. Guarde as alternativas no estado. Finalize com um convite natural: "Quer que eu desenvolva essa ou prefere explorar outra linha?".
 - ALTERNATIVAS SOB DEMANDA: Se o usuário disser "não gostei", "tem outra opção?" ou "que mais você pensou?", NÃO refaça a pesquisa web do zero: consulte e proponha uma das ideias alternativas já existentes no seu estado/memória!
+- Quando a pergunta mencionar o Instagram conectado, consulte getInstagramContext. Consulte getMarketingStatus para saber o que foi executado. Legendas não são análise visual, e leitura de conteúdos não comprova análise de tendências.
 - Se o usuário pedir ideias ou tendências e não houver registros para o dia de hoje, chame a ferramenta researchMarketTrends nesta conversa para buscar notícias frescas antes de responder.
 - Se o usuário pedir para você mudar seu próprio tom ou foco no chat, chame a ferramenta updateMarketingPreferences.`);
   }
@@ -337,6 +339,8 @@ function botSpecificDirectives(bot) {
   if (bot.kind === 'gestor') {
     sections.push(`COMANDO MASTER, ORQUESTRAÇÃO E RESUMO FACTUAL (BOT GESTOR):
 - VOCÊ É O LÍDER E ORQUESTRADOR CENTRAL: A regra antiga de que você não reprograma bots foi revogada por Ronaldo. Você AGORA TEM autorização explícita para interpretar comandos em linguagem natural e configurar o comportamento, estilo, foco, prioridades e regras dos outros bots (Marketing, Captador, Sentinela e Gestor)!
+- PROVA DE EXECUÇÃO: Confirme uma alteração somente se configureAgentBehavior retornar success=true e configuration_saved=true. Falha, indisponibilidade ou permissão negada significam que a alteração NÃO foi aplicada. Preferência salva não é rotina executada. Nunca prometa publicação, pesquisa global no Instagram, análise visual ou mudança de agendamento a partir de uma diretriz textual.
+- INSTAGRAM: Consulte getInstagramContext antes de afirmar qual conta está conectada, se pode acessá-la ou se a conexão está indisponível. Explique os limites retornados.
 - CONFIGURAÇÃO DE BOTS: Quando Ronaldo pedir para alterar foco ou comportamento de um bot (ex: "mude o estilo do Marketing para focar em investidores", "Captador priorizando apartamentos de 3 quartos no Bessa", "Sentinela alertando só erros críticos"): chame a ferramenta configureAgentBehavior com os parâmetros correspondentes!
 - COMANDOS COMPOSTOS OU DE ÁUDIO (DECOMPOSIÇÃO): Quando Ronaldo enviar uma instrução contendo diretivas para múltiplos bots numa única mensagem (ex: Marketing focado em alto padrão, Captador em 3 quartos no Bessa/Manaíra e Sentinela em erros críticos), decomponha o pedido e chame configureAgentBehavior para cada bot individualmente, respondendo de forma clara, estruturada e sem misturar as diretivas entre os bots.
 - REVERSÃO (ROLLBACK): Se Ronaldo pedir para reverter uma configuração ("volta como era antes", "desfaz a última alteração"), chame rollbackAgentConfiguration para restaurar o estado anterior.
@@ -358,7 +362,9 @@ function botSpecificDirectives(bot) {
       const decision = await provider.complete({messages:routingMessages,tools:[],maxOutputTokens:64,reasoningEffort:'low'});
       route = parseRoute(decision.content);
     }
+    if (requiresOperationalEvidence(prompt)) route = 'operational';
     if (isDirectRoute(route)) {
+      const directPreferences = redactOperationalData(await buildAgentPreferencesContext(ctx, bot).catch(() => ''), ctx.env);
       const messages = [
         {
           role: 'system',
@@ -366,7 +372,8 @@ function botSpecificDirectives(bot) {
 ${identityPolicy(bot)}
 ${capabilityPolicy(bot)}
 
-${routeGuidance(route, bot)}`,
+${routeGuidance(route, bot)}
+${directPreferences}`,
         },
         ...history,
         { role: 'user', content: prompt },
@@ -453,7 +460,7 @@ Missão declarada pelo usuário: ${bot.mission}`,
           const boundary=text.search(/\S+$/u);
           const prefix=boundary<0?text:text.slice(0,boundary);
           const safe=redactOperationalData(prefix,ctx.env).replace(/\*\*/g,'');
-          if(safe.trim() && groundedReply(safe,sources)===safe.trim() && communicationSafe(safe,sources,technical)) ctx.onText(safe);
+          if(!instagramAccessReceipt(prompt,sources) && !sources.some(source => ['configureAgentBehavior','updateMarketingPreferences','rollbackAgentConfiguration'].includes(source.tool)) && safe.trim() && groundedReply(safe,sources)===safe.trim() && communicationSafe(safe,sources,technical)) ctx.onText(safe);
         } : undefined,
       });
       if (!reply.tool_calls?.length) break;
@@ -508,7 +515,7 @@ Missão declarada pelo usuário: ${bot.mission}`,
         });
       }
     }
-    const grounded = groundedReply(reply?.content, sources).replace(/\*\*([^*\n]+)\*\*/g,'$1');
+    const grounded = (configurationReceipt(sources) || instagramAccessReceipt(prompt, sources) || groundedReply(reply?.content, sources)).replace(/\*\*([^*\n]+)\*\*/g,'$1');
     const content = communicationSafe(grounded,sources,technical) ? grounded : humanFallback(sources);
     const auditResult =
       trigger === 'chat'

@@ -15,13 +15,13 @@ export const AGENT_CAPABILITIES = {
   },
   marketing: {
     role: 'Parceiro criativo e editorial imobiliário.',
-    sources: 'Canais e feeds oficiais da região (Prefeituras de João Pessoa e Cabedelo, Agência Brasil), portais oficiais e de dados (IBGE, Banco Central), pesquisa web focada em mercado imobiliário regional e acontecimentos de bairros como Bessa, Manaíra, Cabo Branco, Jardim Oceania, etc.',
-    boundaries: 'Meu foco é editorial e de conteúdo. Não acompanho o status operacional contínuo nem os horários dos outros bots (como Captador ou Sentinela); o Bot Gestor é quem possui a visão consolidada da equipe. Não publico nas redes sociais sem confirmação ou aprovação humana.',
+    sources: 'Instagram conectado à conta, com identidade, legendas e métricas disponíveis verificadas pela ferramenta getInstagramContext; canais e feeds oficiais da região (Prefeituras de João Pessoa e Cabedelo, Agência Brasil), portais oficiais e de dados (IBGE, Banco Central), pesquisa web focada em mercado imobiliário regional e acontecimentos de bairros como Bessa, Manaíra, Cabo Branco, Jardim Oceania, etc.',
+    boundaries: 'Meu foco é editorial e de conteúdo. Não acompanho o status operacional contínuo nem os horários dos outros bots (como Captador ou Sentinela); o Bot Gestor é quem possui a visão consolidada da equipe. Não publico nas redes sociais sem confirmação ou aprovação humana. Conexão não comprova pesquisa realizada. Não afirmo acesso indisponível sem consultar a conexão. Não analiso os pixels de imagens nem o áudio de vídeos, e não tenho pesquisa ampla de tendências dentro do Instagram.',
   },
   sentinela: {
     role: 'Observabilidade, integridade e diagnóstico técnico do ecossistema.',
     sources: 'APIs do sistema, workers, telemetria operacional, componentes, PWA e conectividade.',
-    boundaries: 'Sou estritamente voltado à observação, diagnóstico e investigação. Não realizo reparos em produção, não altero código e não tenho permissão para zerar ou apagar ocorrências do sistema pelo chat. Quando o usuário informa que um ajuste já foi feito, reconheço a atualização e me coloco à disposição para conferir se o problema normalizou ou se ainda persiste.',
+    boundaries: 'Sou estritamente voltado à observação, diagnóstico e investigação. Não realizo reparos em produção, não altero código e posso registrar a resolução ou ciência de uma ocorrência com auditoria quando autorizado pelo usuário; não apago o histórico. Quando o usuário informa que um ajuste já foi feito, reconheço a atualização e me coloco à disposição para conferir se o problema normalizou ou se ainda persiste.',
   },
   gestor: {
     role: 'Liderança, coordenação, visão consolidada da equipe e comando das diretrizes dos bots.',
@@ -83,8 +83,14 @@ export function isDirectRoute(route) {
 
 const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+export function requiresOperationalEvidence(prompt) {
+  const text = normalize(prompt);
+  return /instagram|(?:meu|minha)\s+(?:perfil|rede social)|(?:o que|que)\s+(?:voce|vc)\s+(?:tem feito|fez|pesquisou|analisou)|(?:olhe|olha|acesse|confira|consulte|pesquise)\b|quando.*(?:pesquisa|pesquisar|trabalhar)|(?:quero|peco|faca|inclua|incluir|adicione|acrescente).*(?:bot|rotina|diretriz|comportamento|preferencia)|(?:configure|configura|ajuste|altere|mude).*bot/.test(text);
+}
+
 export function conversationRoute(prompt) {
   const text = normalize(prompt.trim());
+  if (requiresOperationalEvidence(prompt)) return 'operational';
 
   // 1. Saudações puras e amenidades sociais (incluindo checagens coloquiais como "como estamos?")
   if (/^(?:ola|oi|oie|bom dia|boa tarde|boa noite|boa madrugada|obrigad[oa]|valeu)(?:[\s,]+(?:gestor|captador|sentinela|marketing|ronaldo|bot|amigo|equipe))?(?:[\s,!?.]+(?:como estamos|tudo bem|tudo bom|como vai|beleza|tranquilo|por ai)(?:\s+agora)?)?[\s!?.]*$/.test(text)) {
@@ -126,7 +132,7 @@ export function conversationRoute(prompt) {
 export const ROUTING_POLICY = `Classifique a intenção desta mensagem considerando o histórico recente. Retorne SOMENTE um JSON no formato {"route": "<rota>"}.
 Rotas válidas:
 - conversation: saudação, papo social, agradecimento, preferências de linguagem e tom.
-- self_or_capability: perguntas sobre identidade, canais/fontes pesquisadas, funções, limites, o que pode ser pedido ao bot, se ele comanda/controla/coordena outros bots, ou regras da equipe. Não requer fatos operacionais mutáveis.
+- self_or_capability: perguntas sobre identidade, canais/fontes pesquisadas, funções, limites, o que pode ser pedido ao bot, se ele comanda/controla/coordena outros bots, ou regras da equipe. Não requer fatos operacionais mutáveis. Pedidos de configuração, redes conectadas, perfil do usuário, trabalho realizado ou agendamentos são operational, mesmo quando escritos como perguntas de capacidade.
 - action_request: pedidos para executar ações, zerar/apagar ocorrências, mudar comportamento de bots, pausar, resolver.
 - follow_up: confirmações contextuais ("você entendeu minha pergunta?"), atualizações de status informadas pelo usuário ("já ajustamos isso"), correções ("não foi isso que perguntei") ou feedback. Se for continuação que pede mais dados de uma busca factual anterior (ex: "e aqueles?"), classifique como operational.
 - operational: perguntas sobre fatos operacionais reais e mutáveis que exigem consulta atual ao banco (contagens, imóveis captados, rodadas do dia, ocorrências abertas, status de alertas, pesquisas realizadas hoje, resumo dos bots).

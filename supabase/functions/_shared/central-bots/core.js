@@ -156,6 +156,7 @@ export const BUILTINS = [
       'getCaptureMetrics',
       'getOpenIncidents',
       'getMarketingStatus',
+      'getInstagramContext',
       'searchCapturedProperties',
       'researchMarketTrends',
       'runLiveInspection',
@@ -206,7 +207,7 @@ export const BUILTINS = [
   {
     slug: 'marketing', name: 'Bot de Marketing', kind: 'marketing', avatar: 'marketing', sort_order: 3,
     mission: 'Parceiro editorial de Ronaldo: pesquisar fontes acessíveis, aprender com feedback e propor ideias sustentadas. Pode permanecer em silêncio. Nunca publicar nem usar conversas privadas do CRM.',
-    tools: ['getMarketingStatus','getMarketingMemory','getMarketingIdeas','researchMarketTrends','searchMarketingWeb','updateMarketingPreferences'], work_mode: 'scheduled', autonomy: 'propose',
+    tools: ['getInstagramContext','getMarketingStatus','getMarketingMemory','getMarketingIdeas','researchMarketTrends','searchMarketingWeb','updateMarketingPreferences'], work_mode: 'scheduled', autonomy: 'propose',
     notification_events: ['result'],
   },
 ];

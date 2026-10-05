@@ -45,7 +45,7 @@ test('iPhone PWA: choose faces before chat, switch/re-enter, deep links, safe ar
     assert.equal(await page.$eval('.agent-workspace',e=>e.dataset.keyboard),'open');
     assert.equal(await page.$eval('.agent-workspace',e=>getComputedStyle(e).position),'fixed');
     assert.ok(await page.$eval('.agent-composer',e=>e.getBoundingClientRect().bottom<=511));
-    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'8px');
+    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'2px');
     // Safari can pan the page on focus and temporarily report zero top inset.
     // Fixed viewport anchoring must compensate without moving the bot header
     // under the status bar or leaving a second keyboard-sized gap below input.
@@ -60,7 +60,7 @@ test('iPhone PWA: choose faces before chat, switch/re-enter, deep links, safe ar
     assert.equal(await page.$eval('.agent-workspace',e=>e.dataset.keyboard),'closed');
     await page.evaluate(()=>{document.querySelector('.agent-workspace').style.setProperty('--agent-safe-top','59px');window.scrollTo(0,0);document.documentElement.style.overflow='';document.body.style.overflow='';document.body.style.height='';window.dispatchEvent(new Event('scroll'));});
     assert.ok(await page.$eval('.agent-topbar',e=>Math.abs(e.getBoundingClientRect().top-59)<2));
-    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'42px');
+    assert.equal(await page.$eval('.agent-composer',e=>getComputedStyle(e).paddingBottom),'38px');
     await page.click('[aria-label="Escolher outro bot"]');await page.waitForSelector('.agent-picker-card');assert.equal(await page.$('.agent-composer'),null);
     await page.click('.agent-picker-card:nth-child(3)');await page.waitForSelector('.agent-composer');
     await page.evaluate(()=>window.dispatchEvent(new Event('central-bots-enter')));await page.waitForSelector('.agent-picker-card');
