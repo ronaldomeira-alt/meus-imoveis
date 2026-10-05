@@ -26,23 +26,27 @@ const ranges = {
 const searchCapturedPropertiesSchema = {
   type: 'object',
   properties: {
-    neighborhood: { type: 'string', description: 'Nome do bairro para filtrar (ex: Bessa, Manaíra)' },
-    bedrooms: { type: 'integer', minimum: 1, maximum: 10, description: 'Número exato de quartos' },
+    neighborhood: { type: 'string', description: 'Nome do bairro para filtrar (ex: Bessa, Manaíra). Use apenas se o usuário pediu um bairro.' },
+    bedrooms: { type: 'integer', minimum: 1, maximum: 10, description: 'Número exato de quartos. Use apenas se o usuário pediu.' },
     min_bedrooms: { type: 'integer', minimum: 1, maximum: 10 },
     max_bedrooms: { type: 'integer', minimum: 1, maximum: 10 },
-    min_price: { type: 'number', minimum: 0, description: 'Preço mínimo em reais' },
-    max_price: { type: 'number', minimum: 0, description: 'Preço máximo em reais' },
+    min_price: { type: 'number', minimum: 0, description: 'Preço mínimo em reais. Use apenas se o usuário pediu.' },
+    max_price: { type: 'number', minimum: 0, description: 'Preço máximo em reais. Use apenas se o usuário pediu.' },
     min_area: { type: 'number', minimum: 0 },
     max_area: { type: 'number', minimum: 0 },
     status: {
       type: 'string',
       enum: ['DISCOVERED', 'QUEUED', 'RESERVED', 'CONTACTED', 'WAITING_RESPONSE', 'RESPONDED', 'IMPORTED', 'ARCHIVED', 'EXPIRED', 'FAILED'],
-      description: 'Status do imóvel no funil de captação',
+      description: 'ATENÇÃO (USER_QUERY_FIDELITY): Use SOMENTE se o usuário especificou expressamente um status exato. NUNCA assuma DISCOVERED ou outro status se o usuário não pediu.',
     },
-    approached: { type: 'boolean', description: 'true para imóveis já contatados/abordados, false para não contatados' },
-    responded: { type: 'boolean', description: 'true para imóveis com resposta, false para sem resposta' },
-    waiting_response: { type: 'boolean', description: 'true para imóveis aguardando resposta do proprietário' },
-    period: { type: 'string', enum: ['rolling', 'today'] },
+    approached: { type: 'boolean', description: 'true para imóveis já contatados/abordados, false para não contatados. Use apenas se solicitado.' },
+    responded: { type: 'boolean', description: 'true para imóveis com resposta, false para sem resposta. Use apenas se solicitado.' },
+    waiting_response: { type: 'boolean', description: 'true para imóveis aguardando resposta do anunciante/proprietário. Use apenas se solicitado.' },
+    period: {
+      type: 'string',
+      enum: ['rolling', 'today'],
+      description: 'ATENÇÃO (USER_QUERY_FIDELITY): Use SOMENTE se o usuário disse explicitamente "hoje" ou especificou um período. Se o usuário não mencionou período, DEIXE EM BRANCO para pesquisar todo o histórico disponível.',
+    },
     days: { type: 'integer', minimum: 1, maximum: 90 },
     limit: { type: 'integer', minimum: 1, maximum: 30 },
     sort_by: { type: 'string', enum: ['recent', 'price_asc', 'price_desc', 'area_desc'] },
@@ -162,7 +166,7 @@ export function allowedTools(bot) {
 }
 
 export async function botsStatus(ctx) {
-  const [bots, schedules, runs] = await Promise.all([
+  const [bots, schedules, runs, incidents] = await Promise.all([
     rows(
       ctx.db
         .from('agent_bots')
@@ -185,13 +189,45 @@ export async function botsStatus(ctx) {
         .order('started_at', { ascending: false })
         .limit(100),
     ),
+    rows(
+      ctx.db
+        .from('agent_incidents')
+        .select('id,bot_id,component,status,observed,impact')
+        .eq('account_id', ctx.accountId)
+        .eq('status', 'open'),
+    ),
   ]);
   const marketingTasks = ctx.env.MARKETING_BOT_ENABLED === 'true' ? await rows(ctx.db.from('agent_marketing_tasks').select('id,bot_id,status,created_at,finished_at,error').eq('account_id',ctx.accountId).order('created_at',{ascending:false}).limit(1)) : [];
-  return bots.filter(bot => bot.kind !== 'marketing' || ctx.env.MARKETING_BOT_ENABLED === 'true').map((bot) => ({
-    ...bot,
-    last_run: bot.kind === 'marketing' && marketingTasks[0] ? { ...marketingTasks[0], started_at: marketingTasks[0].created_at, trigger_type: 'schedule' } : runs.find((run) => run.bot_id === bot.id) || null,
-    schedule: schedules.find((s) => s.bot_id === bot.id) || null,
-  }));
+  
+  const activeBots = bots.filter(bot => bot.kind !== 'marketing' || ctx.env.MARKETING_BOT_ENABLED === 'true');
+
+  const formattedBots = activeBots.map((bot) => {
+    const lastRun = bot.kind === 'marketing' && marketingTasks[0] ? { ...marketingTasks[0], started_at: marketingTasks[0].created_at, trigger_type: 'schedule' } : runs.find((run) => run.bot_id === bot.id) || null;
+    const schedule = schedules.find((s) => s.bot_id === bot.id) || null;
+    const botIncidents = incidents.filter(i => i.bot_id === bot.id || (bot.kind === 'captador' && typeof i.component === 'string' && i.component.startsWith('captador')));
+
+    const lastRunDate = lastRun?.started_at ? new Date(lastRun.started_at) : null;
+    const lastRunBrasilia = lastRunDate ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(lastRunDate) : null;
+    const nextRunDate = schedule?.next_run_at ? new Date(schedule.next_run_at) : null;
+    const nextRunBrasilia = nextRunDate ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(nextRunDate) : null;
+
+    return {
+      bot_name: bot.name,
+      tipo: bot.kind,
+      status_humano: bot.active ? 'Ativo e disponível na Central' : 'Desativado',
+      ultima_atividade: lastRunBrasilia ? `Registrada em ${lastRunBrasilia} (horário de Brasília)` : 'Nenhuma atividade recente registrada',
+      ultima_execucao_brasilia: lastRunBrasilia,
+      proxima_execucao_brasilia: bot.kind === 'captador' ? `09:00 e 19:00 (próxima rodada: ${capture.calculateNextOfficialRound().resumo})` : nextRunBrasilia,
+      horarios_oficiais_brasilia: bot.kind === 'captador' ? ['09:00', '19:00'] : null,
+      alerta_atual: botIncidents.length ? `Atenção: ${botIncidents[0].observed}` : 'Nenhum alerta em aberto',
+      resumo_factual: `${bot.name}: ${bot.active ? 'Ativo' : 'Desativado'}. ${lastRunBrasilia ? `Última execução em ${lastRunBrasilia}.` : ''} ${botIncidents.length ? 'Possui ocorrência em observação.' : 'Sem ocorrências.'}`,
+      ...bot,
+      last_run: lastRun,
+      schedule: schedule,
+    };
+  });
+
+  return formattedBots;
 }
 
 async function lastInspection(ctx, deep = false) {
@@ -227,11 +263,17 @@ async function dispatch(ctx, name, args) {
     case 'getMarketingIdeas':
       if (ctx.env.MARKETING_BOT_ENABLED !== 'true') return { unavailable:true,reason:'Marketing desativado.' };
       return {source:'agent_marketing_ideas',ideas:await rows(marketingScoped(ctx,'ideas','id,topic,angle,status,proposal,created_at').order('created_at',{ascending:false}).limit(limit)),limits:'Aprovação não autoriza publicar. Evidências corrigidas requerem revisão.'};
-    case 'getBotsStatus':
+    case 'getBotsStatus': {
+      const bots = await botsStatus(ctx);
       return {
-        source: 'agent_bots, agent_runs, agent_schedules',
-        bots: await botsStatus(ctx),
+        source: 'agent_bots, agent_runs, agent_schedules, agent_incidents',
+        total_bots: bots.length,
+        total_ativos: bots.filter((b) => b.active).length,
+        nomes_bots_ativos: bots.filter((b) => b.active).map((b) => b.name).join(', '),
+        resumo_geral: `${bots.length} bots estão configurados na Central: ${bots.map((b) => b.name).join(', ')}. Todos com status ativo e prontos para consulta.`,
+        bots,
       };
+    }
     case 'getBotsRecentActivity':
       return {
         source: 'agent_events',

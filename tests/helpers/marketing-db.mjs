@@ -74,7 +74,7 @@ class Query {
       } else if(this.mode==='delete') sql=`delete from public.${ident(this.name)}${where} returning ${fields}`;
       else sql=`select ${fields} from public.${ident(this.name)}${where}${this.orders.length?' order by '+this.orders.join(','):''}${this.limitValue!==null?' limit '+Number(this.limitValue):''}`;
       const result=await this.pg.query(sql,params);
-      return {data:this.singleMode?result.rows[0]||null:result.rows,error:null};
+      return {data:this.singleMode?result.rows[0]||null:result.rows,count:result.rows.length,error:null};
     }catch(e){ return {data:null,error:{message:e.message,code:e.code}}; }
   }
 }

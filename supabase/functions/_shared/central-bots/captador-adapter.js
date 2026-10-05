@@ -1,5 +1,63 @@
 import { rows, rangeArgs, AgentError } from './core.js';
 
+export function calculateNextOfficialRound(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(now);
+
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const year = parseInt(get('year'), 10);
+  const month = parseInt(get('month'), 10);
+  const day = parseInt(get('day'), 10);
+  const hour = parseInt(get('hour'), 10);
+  const minute = parseInt(get('minute'), 10);
+  const nowMinutes = hour * 60 + minute;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const todayStr = `${pad(day)}/${pad(month)}/${year}`;
+
+  const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowParts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(tomorrowDate);
+
+  if (nowMinutes < 9 * 60) {
+    return {
+      horario: '09:00',
+      data: todayStr,
+      is_hoje: true,
+      resumo: `hoje (${todayStr}) às 09:00 (horário de Brasília)`,
+      proxima_rodada_texto: `A próxima rodada oficial está programada para hoje às 09:00 (horário de Brasília).`,
+    };
+  } else if (nowMinutes < 19 * 60) {
+    return {
+      horario: '19:00',
+      data: todayStr,
+      is_hoje: true,
+      resumo: `hoje (${todayStr}) às 19:00 (horário de Brasília)`,
+      proxima_rodada_texto: `A próxima rodada oficial está programada para hoje às 19:00 (horário de Brasília).`,
+    };
+  } else {
+    return {
+      horario: '09:00',
+      data: tomorrowParts,
+      is_hoje: false,
+      resumo: `amanhã (${tomorrowParts}) às 09:00 (horário de Brasília)`,
+      proxima_rodada_texto: `A próxima rodada oficial está programada para amanhã (${tomorrowParts}) às 09:00 (horário de Brasília).`,
+    };
+  }
+}
+
 // Deliberately separate from the operational database/runner: SELECT only, no RPC.
 export async function getCaptureSummary(ctx, args) {
   const { since, days, period } = rangeArgs(args);
@@ -15,7 +73,15 @@ export async function getCaptureSummary(ctx, args) {
       throw new AgentError('Dados de captação indisponíveis.', 503);
     return result.count;
   }
-  const [contacted, responded, imported, waiting, settings, campaigns] =
+  const todaySaoPaulo = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const todayMidnightIso = `${todaySaoPaulo}T00:00:00-03:00`;
+
+  const [contacted, responded, imported, waiting, settings, campaigns, roundsToday] =
     await Promise.all([
       count('contacted_at'),
       count('responded_at'),
@@ -36,18 +102,88 @@ export async function getCaptureSummary(ctx, args) {
           .select('type,is_active,schedule_times')
           .eq('account_id', ctx.accountId),
       ),
+      rows(
+        ctx.readDb
+          .from('bot_execution_rounds')
+          .select('id,started_at,finished_at,status,contacted_count')
+          .eq('account_id', ctx.accountId)
+          .gte('started_at', todayMidnightIso)
+          .order('started_at', { ascending: false }),
+      ),
     ]);
+
+  const lastRoundDate = settings?.last_round_at ? new Date(settings.last_round_at) : null;
+  const nextRoundDate = settings?.next_round_at ? new Date(settings.next_round_at) : null;
+
+  const lastRoundBrasiliaTime = lastRoundDate ? new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(lastRoundDate) : null;
+  const lastRoundBrasiliaDate = lastRoundDate ? new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(lastRoundDate) : null;
+
+  const nextRoundBrasiliaTime = nextRoundDate ? new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(nextRoundDate) : null;
+  const nextRoundBrasiliaDate = nextRoundDate ? new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(nextRoundDate) : null;
+
+  const todayBrasiliaDate = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date());
+
+  const lastRoundIsToday = lastRoundBrasiliaDate === todayBrasiliaDate;
+  const nextOfficial = calculateNextOfficialRound(new Date());
+
   return {
-    source: 'bot_captures, bot_settings, bot_campaigns',
+    source: 'bot_captures, bot_settings, bot_campaigns, bot_execution_rounds',
     observed_at: new Date().toISOString(),
+    data_brasilia: todayBrasiliaDate,
     days,
     period,
     since,
+    rodadas_hoje_count: roundsToday.length,
+    rodadas_hoje_resumo: roundsToday.length === 0
+      ? 'Hoje ainda não houve nenhuma rodada registrada.'
+      : `Hoje foram realizadas ${roundsToday.length} rodada(s).`,
+    ultima_rodada_data: lastRoundBrasiliaDate,
+    ultima_rodada_horario: lastRoundBrasiliaTime,
+    ultima_rodada_resumo: lastRoundDate
+      ? (lastRoundIsToday
+          ? `A última rodada foi hoje às ${lastRoundBrasiliaTime} (horário de Brasília).`
+          : `A última rodada registrada foi em ${lastRoundBrasiliaDate} às ${lastRoundBrasiliaTime} (horário de Brasília).`)
+      : 'Nenhuma rodada anterior registrada.',
+    proxima_rodada_horario: nextOfficial.horario,
+    proxima_rodada_data: nextOfficial.data,
+    proxima_rodada_is_hoje: nextOfficial.is_hoje,
+    proxima_rodada_resumo: nextOfficial.resumo,
+    proxima_rodada_texto: nextOfficial.proxima_rodada_texto,
+    horarios_oficiais_configurados: ['09:00', '19:00'],
     contacted,
     responded,
     imported_updated_in_period: imported,
     waiting_current: waiting,
-    settings,
+    settings: settings ? {
+      ...settings,
+      last_round_at_brasilia: lastRoundBrasiliaTime,
+      last_round_date_brasilia: lastRoundBrasiliaDate,
+      next_round_at_brasilia: nextRoundBrasiliaTime,
+      next_round_date_brasilia: nextRoundBrasiliaDate,
+    } : null,
     campaigns,
     caveat:
       'Importações usam updated_at: o schema operacional não possui imported_at. Respostas no período não são necessariamente contatos do mesmo período.',
@@ -67,10 +203,36 @@ export async function getRecentRounds(ctx, args) {
       .order('started_at', { ascending: false })
       .limit(limit),
   );
+
+  const todaySaoPaulo = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
+  const roundsToday = rawRounds.filter(r => {
+    if (!r.started_at) return false;
+    const roundDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(r.started_at));
+    return roundDate === todaySaoPaulo;
+  });
+
   return {
     source: 'bot_execution_rounds',
     since,
     rounds_count: rawRounds.length,
+    rounds_today_count: roundsToday.length,
+    rounds_today_resumo: roundsToday.length === 0
+      ? 'Hoje ainda não houve nenhuma rodada registrada.'
+      : `Hoje foram realizadas ${roundsToday.length} rodada(s).`,
+    proxima_rodada_resumo: calculateNextOfficialRound(new Date()).resumo,
+    proxima_rodada_texto: calculateNextOfficialRound(new Date()).proxima_rodada_texto,
+    horarios_oficiais_configurados: ['09:00', '19:00'],
     rounds: rawRounds.map(r => {
       const start = r.started_at ? new Date(r.started_at) : null;
       const finish = r.finished_at ? new Date(r.finished_at) : null;
