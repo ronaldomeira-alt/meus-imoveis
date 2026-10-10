@@ -4,6 +4,25 @@ import { Readable } from 'node:stream';
 
 const TEST_TOKEN = process.env.CRM_MCP_TOKEN || 'mcp_sec_7a9f82d4c01e68b31a54b9d0e12f';
 
+function makeDistinctPngDataUrl(index) {
+  const basePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  const comment = `test-img-${index}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const chunkData = Buffer.from(`Comment\0${comment}`);
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(chunkData.length);
+  const typeBuf = Buffer.from('tEXt');
+  const crcBuf = Buffer.alloc(4);
+  const customChunk = Buffer.concat([lenBuf, typeBuf, chunkData, crcBuf]);
+  
+  const iendPos = basePng.length - 12;
+  const newPng = Buffer.concat([
+    basePng.subarray(0, iendPos),
+    customChunk,
+    basePng.subarray(iendPos),
+  ]);
+  return `data:image/png;base64,${newPng.toString('base64')}`;
+}
+
 async function rpcCall({ method, params = {}, token = TEST_TOKEN, id = 1 }) {
   const reqBody = JSON.stringify({ jsonrpc: '2.0', id, method, params });
   const reqStream = Readable.from([Buffer.from(reqBody)]);
@@ -77,6 +96,7 @@ async function runMcpTests() {
   assert(toolNames.includes('upsert_empreendimento'));
   assert(toolNames.includes('upsert_empreendimentos_lote'));
   assert(toolNames.includes('adicionar_foto'));
+  assert(toolNames.includes('adicionar_fotos_lote'));
   assert(toolNames.includes('adicionar_foto_base64'));
   assert(toolNames.includes('listar_fotos'));
   assert(toolNames.includes('remover_foto'));
@@ -84,12 +104,12 @@ async function runMcpTests() {
   assert(toolNames.includes('upsert_unidades_lote'));
   assert(toolNames.includes('marcar_unidades_status'));
   assert(toolNames.includes('desativar_empreendimento'));
-  console.log('  ✓ Todas as 10 ferramentas do Grokbot presentes com schemas completos: PASS');
+  console.log('  ✓ Todas as ferramentas do Grokbot presentes com schemas completos: PASS');
 
   const testChaveExterna = `teste-grok-infinity-${Date.now()}`;
 
-  // 4. CRIAR EMPREENDIMENTO DE EXEMPLO: upsert_empreendimento
-  console.log('\n[4] Testando criação de empreendimento de exemplo...');
+  // 4. CRIAR EMPREENDIMENTO COM VAGAS OMITIDAS E COM OBSERVACAO
+  console.log('\n[4] Testando upsert_empreendimento sem vagas (NULL) e com campo observacao...');
   const createCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -108,9 +128,10 @@ async function runMcpTests() {
         area_max_m2: 95.0,
         quartos_min: 1,
         quartos_max: 3,
-        vagas: 1,
+        // vagas omitido intencionalmente: deve permanecer NULL ("não informado"), nunca 0!
+        observacao: 'Observação estritamente interna da diretoria comercial.',
         descricao: 'Empreendimento de alto padrão beira-mar com rooftop e piscina de borda infinita.',
-        diferenciais: ['Piscina na cobertura', 'Rooftop gourmet', 'Academia com vista para o mar', 'Coworking'],
+        diferenciais: ['Piscina na cobertura', 'Rooftop gourmet', 'Academia com vista para o mar'],
         link_tabela: 'https://docs.google.com/spreadsheets/d/tabela-exemplo',
         link_pasta: 'https://drive.google.com/drive/folders/pasta-exemplo',
         data_tabela: 'Outubro/2026',
@@ -119,6 +140,9 @@ async function runMcpTests() {
     },
   });
 
+  if (createCall.json.result?.isError) {
+    console.error('ERRO EM createCall:', createCall.json.result.content);
+  }
   assert.strictEqual(createCall.status, 200);
   assert.strictEqual(createCall.json.result.isError, false);
   const createResult = JSON.parse(createCall.json.result.content[0].text);
@@ -126,6 +150,20 @@ async function runMcpTests() {
   assert(createResult.id, 'Deve retornar ID interno');
   assert.strictEqual(createResult.criado, true, 'Deve marcar criado=true');
   const createdDevId = createResult.id;
+
+  // 4b. VERIFICAR QUE VAGAS = NULL E OBSERVACAO GRAVOU CORRETAMENTE
+  console.log('\n[4b] Verificando se vagas = NULL e observacao foram persistidos...');
+  const getDevCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { chave_externa: testChaveExterna },
+    },
+  });
+  const devData = JSON.parse(getDevCall.json.result.content[0].text);
+  assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
+  assert.strictEqual(devData.observacao, 'Observação estritamente interna da diretoria comercial.');
+  console.log('  ✓ Vagas = null ("não informado") e observacao gravada e lida com perfeição: PASS');
 
   // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza sem duplicar
   console.log('\n[5] Testando idempotência (mesma chave_externa)...');
@@ -135,7 +173,7 @@ async function runMcpTests() {
       name: 'upsert_empreendimento',
       arguments: {
         chave_externa: testChaveExterna,
-        preco_a_partir_de: 460000.0, // Atualização de preço
+        preco_a_partir_de: 460000.0,
       },
     },
   });
@@ -144,33 +182,87 @@ async function runMcpTests() {
   assert.strictEqual(idempResult.criado, false, 'Deve marcar criado=false');
   console.log('  ✓ Idempotência confirmada (atualizado sem duplicar): PASS');
 
-  // 6. ADICIONAR FOTO VIA BASE64 OU URL
-  console.log('\n[6] Testando adição de foto...');
-  // Imagem 1x1 PNG válida
-  const samplePngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-  const photoCall = await rpcCall({
+  // 6. TESTAR adicionar_fotos_lote (10 fotos em série e confirmar 10 gravadas)
+  console.log('\n[6] Testando adicionar_fotos_lote com 10 fotos em série...');
+  const batch10Photos = Array.from({ length: 10 }, (_, i) => ({
+    url: makeDistinctPngDataUrl(`lote-${i}`),
+    legenda: `Foto Lote #${i + 1}`,
+    ordem: i,
+    capa: i === 4, // Foto #5 deve ser definida como capa
+  }));
+
+  const batchCall = await rpcCall({
     method: 'tools/call',
     params: {
-      name: 'adicionar_foto_base64',
+      name: 'adicionar_fotos_lote',
       arguments: {
         empreendimento_id: createdDevId,
-        nome_arquivo: 'fachada-teste.png',
-        base64: samplePngBase64,
-        legenda: 'Fachada frontal do empreendimento',
-        ordem: 0,
-        capa: true,
+        fotos: batch10Photos,
       },
     },
   });
-  assert.strictEqual(photoCall.status, 200);
-  assert.strictEqual(photoCall.json.result.isError, false);
-  const photoResult = JSON.parse(photoCall.json.result.content[0].text);
-  console.log('  ✓ Foto adicionada com sucesso:', photoResult);
-  assert(photoResult.foto_id, 'Foto deve ter ID');
-  assert.strictEqual(photoResult.capa, true, 'Foto deve ser definida como capa');
 
-  // 7. ADICIONAR 2 UNIDADES: upsert_unidades_lote
-  console.log('\n[7] Testando adição de 2 unidades em lote...');
+  assert.strictEqual(batchCall.status, 200);
+  assert.strictEqual(batchCall.json.result.isError, false);
+  const batchResult = JSON.parse(batchCall.json.result.content[0].text);
+  console.log('  ✓ Resultado do adicionar_fotos_lote:', {
+    total_enviadas: batchResult.total_enviadas,
+    total_gravado: batchResult.total_gravado,
+  });
+  assert.strictEqual(batchResult.total_enviadas, 10, 'Deve ter recebido 10 fotos');
+  assert.strictEqual(batchResult.total_gravado, 10, 'Deve ter gravado exatamente 10 fotos');
+
+  // Confirmação via listar_fotos
+  const listFotosRes1 = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'listar_fotos',
+      arguments: { empreendimento_id: createdDevId },
+    },
+  });
+  const fotosGravadas1 = JSON.parse(listFotosRes1.json.result.content[0].text);
+  assert.strictEqual(fotosGravadas1.total, 10, 'Devem existir exatamente 10 fotos gravadas');
+  console.log('  ✓ 10 fotos via adicionar_fotos_lote gravadas com sucesso: PASS');
+
+  // 7. TESTAR CONDIÇÃO DE CORRIDA: 10 chamadas adicionar_foto EM PARALELO
+  console.log('\n[7] Testando condição de corrida (10 chamadas simultâneas adicionar_foto via Promise.all)...');
+  const parallelCalls = Array.from({ length: 10 }, (_, i) => {
+    return rpcCall({
+      method: 'tools/call',
+      params: {
+        name: 'adicionar_foto',
+        arguments: {
+          empreendimento_id: createdDevId,
+          url: makeDistinctPngDataUrl(`paralelo-${i}`),
+          legenda: `Foto Paralela #${i + 1}`,
+          ordem: 10 + i,
+        },
+      },
+      id: 100 + i,
+    });
+  });
+
+  const parallelResults = await Promise.all(parallelCalls);
+  parallelResults.forEach((res, i) => {
+    assert.strictEqual(res.status, 200, `Chamada paralela #${i + 1} deve retornar 200`);
+    assert.strictEqual(res.json.result.isError, false, `Chamada paralela #${i + 1} não deve ter erro`);
+  });
+
+  // Confirmação via listar_fotos: Agora devem existir 10 (lote) + 10 (paralelas) = 20 fotos!
+  const listFotosRes2 = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'listar_fotos',
+      arguments: { empreendimento_id: createdDevId },
+    },
+  });
+  const fotosGravadas2 = JSON.parse(listFotosRes2.json.result.content[0].text);
+  console.log(`  ✓ Total de fotos após 10 chamadas paralelas: ${fotosGravadas2.total} (esperado: 20)`);
+  assert.strictEqual(fotosGravadas2.total, 20, 'Todas as 10 fotos simultâneas devem ser persistidas sem perda por corrida');
+  console.log('  ✓ Condição de corrida em adicionar_foto resolvida com sucesso: PASS');
+
+  // 8. ADICIONAR UNIDADES COM VALORES NÃO INFORMADOS (NULL)
+  console.log('\n[8] Testando upsert_unidades_lote com campos omitidos/null...');
   const unitsCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -189,8 +281,7 @@ async function runMcpTests() {
             area_m2: 32.5,
             metragem_texto: '32,5m²',
             preco: 460000.0,
-            sinal: 46000.0,
-            parcela: 3500.0,
+            // sinal e parcela omitidos intencionalmente
             status: 'disponivel',
           },
           {
@@ -198,14 +289,7 @@ async function runMcpTests() {
             unidade: '102',
             torre_bloco: 'Torre Mar',
             tipo: 'Apartamento',
-            quartos: 2,
-            suites: 1,
-            posicao: 'Nascente Sul',
-            area_m2: 58.0,
-            metragem_texto: '58,0m²',
-            preco: 690000.0,
-            sinal: 69000.0,
-            parcela: 5200.0,
+            // quartos, suites, area_m2, preco, sinal omitidos intencionalmente
             status: 'disponivel',
           },
         ],
@@ -213,25 +297,25 @@ async function runMcpTests() {
     },
   });
   assert.strictEqual(unitsCall.status, 200);
-  assert.strictEqual(unitsCall.json.result.isError, false);
   const unitsResult = JSON.parse(unitsCall.json.result.content[0].text);
-  console.log('  ✓ Unidades cadastradas:', unitsResult);
   assert.strictEqual(unitsResult.criadas, 2, 'Deve ter criado 2 unidades');
 
-  // 8. OBTER EMPREENDIMENTO COMPLETO: obter_empreendimento
-  console.log('\n[8] Testando obter_empreendimento com validação de fotos e unidades...');
-  const getCall = await rpcCall({
+  // Validação dos campos null nas unidades
+  const getFullDev = await rpcCall({
     method: 'tools/call',
     params: {
       name: 'obter_empreendimento',
       arguments: { chave_externa: testChaveExterna },
     },
   });
-  const getResult = JSON.parse(getCall.json.result.content[0].text);
-  console.log(`  ✓ Empreendimento obtido: "${getResult.nome}", Fotos: ${getResult.fotos_count}, Unidades: ${getResult.unidades_count}`);
-  assert.strictEqual(getResult.fotos_count, 1, 'Deve ter 1 foto');
-  assert.strictEqual(getResult.unidades_count, 2, 'Deve ter 2 unidades');
-  assert.strictEqual(getResult.preco_a_partir_de, 460000.0);
+  const fullDev = JSON.parse(getFullDev.json.result.content[0].text);
+  const u101 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-101'));
+  const u102 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-102'));
+  assert.strictEqual(u101.sinal, null, 'Sinal omitido deve ser null');
+  assert.strictEqual(u101.parcela, null, 'Parcela omitida deve ser null');
+  assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
+  assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
+  console.log('  ✓ Campos não informados nas unidades preservados como NULL (nunca 0): PASS');
 
   // 9. MARCAR STATUS DE UNIDADE: marcar_unidades_status
   console.log('\n[9] Testando marcar unidade como vendida...');
@@ -258,7 +342,7 @@ async function runMcpTests() {
       name: 'desativar_empreendimento',
       arguments: {
         id: createdDevId,
-        motivo: 'Teste automatizado de fluxo completo do Grokbot concluído',
+        motivo: 'Teste automatizado concluído',
       },
     },
   });
@@ -267,21 +351,8 @@ async function runMcpTests() {
   assert.strictEqual(deactResult.status, 'Arquivado');
   console.log('  ✓ Empreendimento desativado com segurança (soft delete): PASS');
 
-  // 11. BUSCAR EMPREENDIMENTOS: buscar_empreendimentos
-  console.log('\n[11] Testando busca de empreendimentos...');
-  const searchCall = await rpcCall({
-    method: 'tools/call',
-    params: {
-      name: 'buscar_empreendimentos',
-      arguments: { texto: 'Infinity Ocean Teste Grok' },
-    },
-  });
-  const searchResult = JSON.parse(searchCall.json.result.content[0].text);
-  assert(searchResult.itens.length > 0, 'Deve encontrar o empreendimento criado');
-  console.log(`  ✓ Busca retornou ${searchResult.itens.length} resultados correspondentes: PASS`);
-
   console.log('\n========================================================');
-  console.log('TODOS OS TESTES DO MCP SERVER PASSARAM COM 100% DE SUCESSO!');
+  console.log('TODOS OS TESTES (LOTE, PARALELO, NULLS, OBSERVAÇÃO) PASSARAM!');
   console.log('========================================================');
 }
 

@@ -122,6 +122,10 @@ export const MCP_TOOLS_DEFINITIONS = [
           type: 'string',
           description: 'Texto descritivo completo do empreendimento, book ou memorial',
         },
+        observacao: {
+          type: 'string',
+          description: 'Observação ou notas de uso estritamente interno da imobiliária (NÃO exibido ao cliente)',
+        },
         diferenciais: {
           type: 'array',
           items: { type: 'string' },
@@ -176,6 +180,7 @@ export const MCP_TOOLS_DEFINITIONS = [
               quartos_max: { type: 'integer' },
               vagas: { type: 'integer' },
               descricao: { type: 'string' },
+              observacao: { type: 'string' },
               diferenciais: { type: 'array', items: { type: 'string' } },
               link_tabela: { type: 'string' },
               link_pasta: { type: 'string' },
@@ -220,6 +225,52 @@ export const MCP_TOOLS_DEFINITIONS = [
           type: 'boolean',
           default: false,
           description: 'Se true, define esta foto como a capa principal do empreendimento',
+        },
+      },
+    },
+  },
+  {
+    name: 'adicionar_fotos_lote',
+    description:
+      'Envia até 30 fotos em lote para um empreendimento. Processa em série no servidor com lock atômico por empreendimento, baixando cada URL (Google Drive e Dropbox convertidos para download direto), validando formato/tamanho, deduplicando por SHA-256 e gravando no R2. Se capa=true em alguma foto, define como capa ao final.',
+    inputSchema: {
+      type: 'object',
+      required: ['fotos'],
+      properties: {
+        empreendimento_id: {
+          type: 'string',
+          description: 'ID interno do empreendimento no CRM',
+        },
+        chave_externa: {
+          type: 'string',
+          description: 'Chave externa do empreendimento',
+        },
+        fotos: {
+          type: 'array',
+          description: 'Lista de fotos a processar (máximo 30 fotos)',
+          items: {
+            type: 'object',
+            required: ['url'],
+            properties: {
+              url: {
+                type: 'string',
+                description: 'URL pública da imagem (ou Drive, Dropbox, Data URI)',
+              },
+              legenda: {
+                type: 'string',
+                description: 'Legenda opcional da foto',
+              },
+              ordem: {
+                type: 'integer',
+                description: 'Ordem de exibição na galeria',
+              },
+              capa: {
+                type: 'boolean',
+                default: false,
+                description: 'Se true, define esta foto como capa',
+              },
+            },
+          },
         },
       },
     },
@@ -499,6 +550,8 @@ async function executeToolCall(toolName, args = {}) {
       return await tools.upsertEmpreendimentosLote(args);
     case 'adicionar_foto':
       return await tools.adicionarFoto(args);
+    case 'adicionar_fotos_lote':
+      return await tools.adicionarFotosLote(args);
     case 'adicionar_foto_base64':
       return await tools.adicionarFotoBase64(args);
     case 'listar_fotos':

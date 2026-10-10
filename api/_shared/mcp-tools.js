@@ -160,6 +160,31 @@ function generateDevelopmentId(chaveExterna) {
 }
 
 /**
+ * Fila de locks atômicos por empreendimento no processo Node.js.
+ * Garante que chamadas simultâneas ao mesmo empreendimento sejam serializadas de forma estrita.
+ */
+const devLocks = new Map();
+
+export async function withDevelopmentLock(key, fn) {
+  const lockKey = String(key || 'global');
+  const prev = devLocks.get(lockKey) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => {
+    release = resolve;
+  });
+  devLocks.set(lockKey, prev.then(() => current));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (devLocks.get(lockKey) === current) {
+      devLocks.delete(lockKey);
+    }
+  }
+}
+
+/**
  * 1. buscar_empreendimentos
  */
 export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0 } = {}) {
@@ -218,9 +243,11 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
     cidade: p.cidade || p.city || 'João Pessoa',
     status: p.stage || p.status || 'Ativo',
     ativo: p.status !== 'Arquivado' && p.ativo !== false,
-    preco_a_partir_de: p.price_from || p.price || null,
-    area_min_m2: p.area_range?.min || p.area_m2 || null,
-    area_max_m2: p.area_range?.max || null,
+    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined && p.price !== null ? p.price : null),
+    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined && p.area_m2 !== null ? p.area_m2 : null),
+    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null ? p.area_range.max : null,
+    vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
+    observacao: p.observacao || p.internal_notes || null,
     fotos_count: Array.isArray(p.photos) ? p.photos.length : 0,
     unidades_count: Array.isArray(p.units) ? p.units.length : 0,
     atualizado_em: p.updated_at || updated_at,
@@ -305,13 +332,14 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     status: p.stage || 'Lançamento',
     ativo: p.status !== 'Arquivado' && p.ativo !== false,
     entrega: p.delivery_date || p.entrega || '',
-    preco_a_partir_de: p.price_from || p.price || 0,
-    area_min_m2: p.area_range?.min || p.area_m2 || 0,
-    area_max_m2: p.area_range?.max || p.area_min_m2 || p.area_m2 || 0,
-    quartos_min: p.bedrooms_options?.length ? Math.min(...p.bedrooms_options) : p.bedrooms || 0,
-    quartos_max: p.bedrooms_options?.length ? Math.max(...p.bedrooms_options) : p.bedrooms || 0,
-    vagas: p.parking_spaces || 0,
+    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined && p.price !== null ? p.price : null),
+    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined && p.area_m2 !== null ? p.area_m2 : null),
+    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null ? p.area_range.max : null,
+    quartos_min: p.bedrooms_options?.length ? Math.min(...p.bedrooms_options) : (p.bedrooms !== undefined && p.bedrooms !== null ? p.bedrooms : null),
+    quartos_max: p.bedrooms_options?.length ? Math.max(...p.bedrooms_options) : (p.bedrooms !== undefined && p.bedrooms !== null ? p.bedrooms : null),
+    vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
     descricao: p.notes || p.descricao || '',
+    observacao: p.observacao || p.internal_notes || null,
     diferenciais: Array.isArray(p.building_features) ? p.building_features : (p.diferenciais || []),
     link_tabela: p.link_tabela || '',
     link_pasta: p.link_pasta || '',
@@ -344,6 +372,7 @@ export async function upsertEmpreendimento(params = {}) {
     quartos_max,
     vagas,
     descricao = '',
+    observacao = null,
     diferenciais = [],
     link_tabela = '',
     link_pasta = '',
@@ -374,24 +403,56 @@ export async function upsertEmpreendimento(params = {}) {
   const finalEndereco = endereco !== undefined ? String(endereco).trim() : (existingData.address || '');
   const finalStage = status !== undefined ? mapStatusToStage(status) : (existingData.stage || 'Lançamento');
   const finalEntrega = entrega !== undefined ? String(entrega).trim() : (existingData.delivery_date || '');
-  const finalPrecoFrom = preco_a_partir_de !== undefined ? Number(preco_a_partir_de) : (existingData.price_from || existingData.price || 0);
+  const finalPrecoFrom = preco_a_partir_de !== undefined
+    ? (preco_a_partir_de !== null ? Number(preco_a_partir_de) : null)
+    : (existingData.price_from !== undefined ? existingData.price_from : (existingData.price ?? null));
 
-  const finalAreaMin = area_min_m2 !== undefined ? Number(area_min_m2) : (existingData.area_range?.min || existingData.area_m2 || 0);
-  const finalAreaMax = area_max_m2 !== undefined ? Number(area_max_m2) : (existingData.area_range?.max || finalAreaMin);
+  let finalAreaMin = null;
+  let finalAreaMax = null;
+  if (area_min_m2 !== undefined) {
+    finalAreaMin = area_min_m2 !== null ? Number(area_min_m2) : null;
+  } else {
+    finalAreaMin = existingData.area_range?.min !== undefined ? existingData.area_range.min : (existingData.area_m2 ?? null);
+  }
+
+  if (area_max_m2 !== undefined) {
+    finalAreaMax = area_max_m2 !== null ? Number(area_max_m2) : null;
+  } else {
+    finalAreaMax = existingData.area_range?.max !== undefined ? existingData.area_range.max : finalAreaMin;
+  }
+
+  const finalAreaRange = (finalAreaMin !== null || finalAreaMax !== null)
+    ? { min: finalAreaMin ?? finalAreaMax, max: finalAreaMax ?? finalAreaMin }
+    : null;
 
   // Quartos options
   let finalBedroomsOptions = existingData.bedrooms_options || null;
   if (quartos_min !== undefined || quartos_max !== undefined) {
-    const qMin = Math.max(Number(quartos_min !== undefined ? quartos_min : (quartos_max || 1)), 0);
-    const qMax = Math.max(Number(quartos_max !== undefined ? quartos_max : qMin), qMin);
-    finalBedroomsOptions = [];
-    for (let i = qMin; i <= qMax; i++) {
-      finalBedroomsOptions.push(i);
+    if (quartos_min === null && quartos_max === null) {
+      finalBedroomsOptions = null;
+    } else {
+      const qMin = Math.max(Number(quartos_min !== undefined && quartos_min !== null ? quartos_min : (quartos_max || 1)), 0);
+      const qMax = Math.max(Number(quartos_max !== undefined && quartos_max !== null ? quartos_max : qMin), qMin);
+      finalBedroomsOptions = [];
+      for (let i = qMin; i <= qMax; i++) {
+        finalBedroomsOptions.push(i);
+      }
     }
   }
 
-  const finalVagas = vagas !== undefined ? Number(vagas) : (existingData.parking_spaces || 0);
+  // Vagas: preserva null se não informado
+  let finalVagas = null;
+  if (vagas !== undefined) {
+    finalVagas = vagas !== null ? Number(vagas) : null;
+  } else {
+    finalVagas = existingData.parking_spaces !== undefined ? existingData.parking_spaces : null;
+  }
+
   const finalDescricao = descricao !== undefined ? String(descricao).trim() : (existingData.notes || '');
+  const finalObservacao = observacao !== undefined
+    ? (observacao !== null ? String(observacao).trim() : null)
+    : (existingData.observacao || existingData.internal_notes || null);
+
   const finalDiferenciais = diferenciais !== undefined && Array.isArray(diferenciais) ? diferenciais : (existingData.building_features || []);
   const finalLinkTabela = link_tabela !== undefined ? String(link_tabela).trim() : (existingData.link_tabela || '');
   const finalLinkPasta = link_pasta !== undefined ? String(link_pasta).trim() : (existingData.link_pasta || '');
@@ -417,12 +478,14 @@ export async function upsertEmpreendimento(params = {}) {
     price_from: finalPrecoFrom,
     price: finalPrecoFrom,
     area_m2: finalAreaMin,
-    area_range: { min: finalAreaMin, max: finalAreaMax },
-    bedrooms: finalBedroomsOptions && finalBedroomsOptions.length > 0 ? finalBedroomsOptions[0] : (existingData.bedrooms || 1),
+    area_range: finalAreaRange,
+    bedrooms: finalBedroomsOptions && finalBedroomsOptions.length > 0 ? finalBedroomsOptions[0] : (existingData.bedrooms ?? null),
     bedrooms_options: finalBedroomsOptions,
     parking_spaces: finalVagas,
-    parking_options: [finalVagas],
+    parking_options: finalVagas !== null ? [finalVagas] : null,
     notes: finalDescricao,
+    observacao: finalObservacao,
+    internal_notes: finalObservacao,
     building_features: finalDiferenciais,
     apartment_features: existingData.apartment_features || [],
     link_tabela: finalLinkTabela,
@@ -514,6 +577,23 @@ export async function upsertEmpreendimentosLote({ itens = [] } = {}) {
  * Faz download de imagem e valida tipo e tamanho
  */
 async function downloadAndValidateImage(url) {
+  if (!url || typeof url !== 'string') {
+    throw new Error('URL da foto inválida ou vazia.');
+  }
+
+  // Suporte a data URIs (ex: testes automatizados ou imagens em base64 diretas)
+  if (url.startsWith('data:image/')) {
+    const cleanBase64 = url.replace(/^data:image\/[a-zA-Z]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    if (buffer.length > MAX_IMAGE_SIZE_BYTES) {
+      throw new Error(`Imagem excede o limite de 15 MB (${(buffer.length / (1024 * 1024)).toFixed(1)} MB).`);
+    }
+    let mimeType = 'image/jpeg';
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) mimeType = 'image/png';
+    else if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') mimeType = 'image/webp';
+    return { buffer, mimeType };
+  }
+
   const targetUrl = normalizeDownloadUrl(url);
 
   const res = await fetch(targetUrl, {
@@ -632,102 +712,297 @@ export async function adicionarFoto({
   }
 
   const propertyId = devRow.property_id;
-  const propertyData = devRow.property_data || {};
-  const currentPhotos = Array.isArray(propertyData.photos) ? [...propertyData.photos] : [];
 
-  // Baixa e valida
-  const { buffer, mimeType } = await downloadAndValidateImage(url);
-  const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
+  return await withDevelopmentLock(propertyId, async () => {
+    // 1. Rebusca o registro fresco do imóvel dentro do lock
+    const { data: freshRow, error: fetchErr } = await supabase
+      .from('inventory_properties')
+      .select('property_id, property_data')
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId)
+      .single();
 
-  // Deduplicação por hash
-  const existingPhoto = currentPhotos.find((p) => p.hash === imageHash);
-  if (existingPhoto) {
-    return {
-      foto_id: existingPhoto.id,
-      url_final: existingPhoto.url || existingPhoto.storage_path,
-      legenda: existingPhoto.legenda || legenda,
-      ordem: existingPhoto.sort_order,
-      capa: existingPhoto.is_cover,
-      duplicada: true,
-    };
-  }
+    if (fetchErr || !freshRow) {
+      throw new Error(`Empreendimento ${propertyId} não encontrado ao persistir foto: ${fetchErr?.message || 'registro ausente'}`);
+    }
 
-  // Upload
-  const uploadResult = await uploadImageBuffer({ propertyId, buffer, mimeType });
-  const photoId = crypto.randomUUID();
-  const isCover = Boolean(capa) || currentPhotos.length === 0;
-  const sortOrder = ordem !== null && Number.isFinite(Number(ordem)) ? Number(ordem) : currentPhotos.length;
+    const propertyData = freshRow.property_data || {};
+    const currentPhotos = Array.isArray(propertyData.photos) ? [...propertyData.photos] : [];
 
-  // Se esta foto for capa, remove is_cover das outras
-  if (isCover) {
-    currentPhotos.forEach((p) => {
-      p.is_cover = false;
-    });
-  }
+    // 2. Baixa e valida a imagem
+    const { buffer, mimeType } = await downloadAndValidateImage(url);
+    const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-  const newPhoto = {
-    id: photoId,
-    property_id: propertyId,
-    url: uploadResult.url,
-    storage_path: uploadResult.storage_path,
-    object_key: uploadResult.object_key,
-    storage_provider: uploadResult.storage_provider,
-    mime_type: mimeType,
-    size_bytes: buffer.length,
-    hash: imageHash,
-    legenda: String(legenda || '').trim(),
-    sort_order: sortOrder,
-    is_cover: isCover,
-    created_at: new Date().toISOString(),
-  };
+    // 3. Deduplicação por hash
+    const existingPhoto = currentPhotos.find((p) => p.hash === imageHash);
+    if (existingPhoto) {
+      return {
+        foto_id: existingPhoto.id,
+        url_final: existingPhoto.url || existingPhoto.storage_path,
+        legenda: existingPhoto.legenda || legenda,
+        ordem: existingPhoto.sort_order,
+        capa: existingPhoto.is_cover,
+        duplicada: true,
+      };
+    }
 
-  currentPhotos.push(newPhoto);
-  currentPhotos.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    // 4. Upload no R2 / Storage
+    const uploadResult = await uploadImageBuffer({ propertyId, buffer, mimeType });
+    const photoId = crypto.randomUUID();
+    const isCover = Boolean(capa) || currentPhotos.length === 0;
+    const sortOrder = ordem !== null && Number.isFinite(Number(ordem)) ? Number(ordem) : currentPhotos.length;
 
-  // Grava também na tabela property_media para redundância
-  try {
-    await supabase.from('property_media').insert({
+    // Se esta foto for capa, remove is_cover das outras
+    if (isCover) {
+      currentPhotos.forEach((p) => {
+        p.is_cover = false;
+      });
+    }
+
+    const newPhoto = {
       id: photoId,
       property_id: propertyId,
+      url: uploadResult.url,
+      storage_path: uploadResult.storage_path,
       object_key: uploadResult.object_key,
       storage_provider: uploadResult.storage_provider,
-      storage_path: uploadResult.storage_path,
-      media_type: 'photo',
       mime_type: mimeType,
       size_bytes: buffer.length,
+      hash: imageHash,
+      legenda: String(legenda || '').trim(),
       sort_order: sortOrder,
       is_cover: isCover,
-      metadata: { hash: imageHash, legenda },
+      created_at: new Date().toISOString(),
+    };
+
+    currentPhotos.push(newPhoto);
+    currentPhotos.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    // 5. Grava na tabela property_media para redundância
+    try {
+      await supabase.from('property_media').insert({
+        id: photoId,
+        property_id: propertyId,
+        object_key: uploadResult.object_key,
+        storage_provider: uploadResult.storage_provider,
+        storage_path: uploadResult.storage_path,
+        media_type: 'photo',
+        mime_type: mimeType,
+        size_bytes: buffer.length,
+        sort_order: sortOrder,
+        is_cover: isCover,
+        metadata: { hash: imageHash, legenda },
+      });
+    } catch (err) {
+      console.warn('[MCP] Aviso ao inserir em property_media:', err.message);
+    }
+
+    // 6. Atualiza o empreendimento no inventário
+    propertyData.photos = currentPhotos;
+    propertyData.updated_at = new Date().toISOString();
+
+    const { error: updateErr } = await supabase
+      .from('inventory_properties')
+      .update({ property_data: propertyData, updated_at: propertyData.updated_at })
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId);
+
+    if (updateErr) {
+      throw new Error(`Falha ao persistir foto no empreendimento: ${updateErr.message}`);
+    }
+
+    await logMcpAudit({
+      tool: 'adicionar_foto',
+      affected_ids: [propertyId, photoId],
+      payload: { propertyId, photoId, isCover, size_bytes: buffer.length },
+      result: { foto_id: photoId, url_final: uploadResult.url },
     });
-  } catch (err) {
-    console.warn('[MCP] Aviso ao inserir em property_media:', err.message);
+
+    return {
+      foto_id: photoId,
+      url_final: uploadResult.url,
+      legenda: newPhoto.legenda,
+      ordem: newPhoto.sort_order,
+      capa: newPhoto.is_cover,
+      duplicada: false,
+    };
+  });
+}
+
+/**
+ * 5b. adicionar_fotos_lote
+ * Processa fotos em SÉRIE no servidor sob lock atômico por empreendimento.
+ * Baixa cada imagem (Drive/Dropbox/Web/DataURI), valida, deduplica por SHA-256 e grava no R2.
+ */
+export async function adicionarFotosLote({
+  empreendimento_id = null,
+  chave_externa = null,
+  fotos = [],
+} = {}) {
+  if (!Array.isArray(fotos)) {
+    throw new Error('Parâmetro "fotos" deve ser uma lista.');
   }
 
-  // Atualiza o empreendimento no inventário
-  propertyData.photos = currentPhotos;
-  propertyData.updated_at = new Date().toISOString();
+  if (fotos.length > 30) {
+    throw new Error('Limite máximo de 30 fotos por lote excedido.');
+  }
 
-  await supabase
-    .from('inventory_properties')
-    .update({ property_data: propertyData, updated_at: propertyData.updated_at })
-    .eq('account_id', accountId)
-    .eq('property_id', propertyId);
+  const supabase = getSupabaseClient();
+  const accountId = getAccountId();
 
-  await logMcpAudit({
-    tool: 'adicionar_foto',
-    affected_ids: [propertyId, photoId],
-    payload: { propertyId, photoId, isCover, size_bytes: buffer.length },
-    result: { foto_id: photoId, url_final: uploadResult.url },
+  const devRow = await findDevelopment(supabase, accountId, { id: empreendimento_id, chave_externa });
+  if (!devRow) {
+    throw new Error('Empreendimento não encontrado para adicionar fotos em lote.');
+  }
+
+  const propertyId = devRow.property_id;
+
+  return await withDevelopmentLock(propertyId, async () => {
+    const { data: freshRow, error: fetchErr } = await supabase
+      .from('inventory_properties')
+      .select('property_id, property_data')
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId)
+      .single();
+
+    if (fetchErr || !freshRow) {
+      throw new Error(`Empreendimento ${propertyId} não encontrado: ${fetchErr?.message || 'registro ausente'}`);
+    }
+
+    const propertyData = freshRow.property_data || {};
+    const currentPhotos = Array.isArray(propertyData.photos) ? [...propertyData.photos] : [];
+
+    const resultados = [];
+    let totalGravado = 0;
+    let coverPhotoIdToSet = null;
+
+    // Processamento estritamente em SÉRIE
+    for (const item of fotos) {
+      if (!item || !item.url || typeof item.url !== 'string') {
+        resultados.push({ url: item?.url || '', ok: false, erro: 'Campo "url" inválido ou ausente.' });
+        continue;
+      }
+
+      try {
+        const { buffer, mimeType } = await downloadAndValidateImage(item.url);
+        const imageHash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+        // Deduplicação por hash SHA-256
+        const existingPhoto = currentPhotos.find((p) => p.hash === imageHash);
+        if (existingPhoto) {
+          if (item.capa) {
+            coverPhotoIdToSet = existingPhoto.id;
+          }
+          resultados.push({
+            url: item.url,
+            ok: true,
+            foto_id: existingPhoto.id,
+            duplicada: true,
+          });
+          continue;
+        }
+
+        const uploadResult = await uploadImageBuffer({ propertyId, buffer, mimeType });
+        const photoId = crypto.randomUUID();
+        const sortOrder = item.ordem !== null && item.ordem !== undefined && Number.isFinite(Number(item.ordem))
+          ? Number(item.ordem)
+          : currentPhotos.length;
+
+        if (item.capa) {
+          coverPhotoIdToSet = photoId;
+        }
+
+        const newPhoto = {
+          id: photoId,
+          property_id: propertyId,
+          url: uploadResult.url,
+          storage_path: uploadResult.storage_path,
+          object_key: uploadResult.object_key,
+          storage_provider: uploadResult.storage_provider,
+          mime_type: mimeType,
+          size_bytes: buffer.length,
+          hash: imageHash,
+          legenda: String(item.legenda || '').trim(),
+          sort_order: sortOrder,
+          is_cover: false,
+          created_at: new Date().toISOString(),
+        };
+
+        currentPhotos.push(newPhoto);
+        totalGravado++;
+
+        // Grava na tabela property_media
+        try {
+          await supabase.from('property_media').insert({
+            id: photoId,
+            property_id: propertyId,
+            object_key: uploadResult.object_key,
+            storage_provider: uploadResult.storage_provider,
+            storage_path: uploadResult.storage_path,
+            media_type: 'photo',
+            mime_type: mimeType,
+            size_bytes: buffer.length,
+            sort_order: sortOrder,
+            is_cover: false,
+            metadata: { hash: imageHash, legenda: item.legenda },
+          });
+        } catch (err) {
+          console.warn('[MCP] Aviso ao inserir em property_media:', err.message);
+        }
+
+        resultados.push({
+          url: item.url,
+          ok: true,
+          foto_id: photoId,
+          duplicada: false,
+        });
+      } catch (err) {
+        resultados.push({
+          url: item.url,
+          ok: false,
+          erro: err.message,
+        });
+      }
+    }
+
+    // Se capa=true em alguma, definir como capa ao final
+    if (coverPhotoIdToSet) {
+      currentPhotos.forEach((p) => {
+        p.is_cover = p.id === coverPhotoIdToSet;
+      });
+    } else if (currentPhotos.length > 0 && !currentPhotos.some((p) => p.is_cover)) {
+      currentPhotos[0].is_cover = true;
+    }
+
+    currentPhotos.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    propertyData.photos = currentPhotos;
+    propertyData.updated_at = new Date().toISOString();
+
+    const { error: updateErr } = await supabase
+      .from('inventory_properties')
+      .update({ property_data: propertyData, updated_at: propertyData.updated_at })
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId);
+
+    if (updateErr) {
+      throw new Error(`Falha ao persistir fotos do lote no empreendimento: ${updateErr.message}`);
+    }
+
+    await logMcpAudit({
+      tool: 'adicionar_fotos_lote',
+      affected_ids: [propertyId],
+      payload: { total_enviadas: fotos.length, total_gravado: totalGravado },
+      result: { total_gravado: totalGravado, cover_id: coverPhotoIdToSet },
+    });
+
+    return {
+      empreendimento_id: propertyId,
+      total_enviadas: fotos.length,
+      total_gravado: totalGravado,
+      resultados,
+    };
   });
-
-  return {
-    foto_id: photoId,
-    url_final: uploadResult.url,
-    legenda: newPhoto.legenda,
-    ordem: newPhoto.sort_order,
-    capa: newPhoto.is_cover,
-    duplicada: false,
-  };
 }
 
 /**
@@ -1009,75 +1284,114 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
   }
 
   const propertyId = devRow.property_id;
-  const propertyData = devRow.property_data || {};
-  const existingUnits = Array.isArray(propertyData.units) ? [...propertyData.units] : [];
 
-  let criadas = 0;
-  let atualizadas = 0;
-  let erros = 0;
-  const nowIso = new Date().toISOString();
+  return await withDevelopmentLock(propertyId, async () => {
+    const { data: freshRow, error: fetchErr } = await supabase
+      .from('inventory_properties')
+      .select('property_id, property_data')
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId)
+      .single();
 
-  for (const u of unidades) {
-    if (!u.chave_externa || typeof u.chave_externa !== 'string') {
-      erros++;
-      continue;
+    if (fetchErr || !freshRow) {
+      throw new Error(`Empreendimento ${propertyId} não encontrado: ${fetchErr?.message || 'registro ausente'}`);
     }
 
-    const idx = existingUnits.findIndex((eu) => eu.chave_externa === u.chave_externa);
-    const unitRecord = {
-      id: idx >= 0 ? existingUnits[idx].id : crypto.randomUUID(),
+    const propertyData = freshRow.property_data || {};
+    const existingUnits = Array.isArray(propertyData.units) ? [...propertyData.units] : [];
+
+    let criadas = 0;
+    let atualizadas = 0;
+    let erros = 0;
+    const nowIso = new Date().toISOString();
+
+    for (const u of unidades) {
+      if (!u.chave_externa || typeof u.chave_externa !== 'string') {
+        erros++;
+        continue;
+      }
+
+      const idx = existingUnits.findIndex((eu) => eu.chave_externa === u.chave_externa);
+      const existing = idx >= 0 ? existingUnits[idx] : null;
+
+      const unitRecord = {
+        id: existing ? existing.id : crypto.randomUUID(),
+        empreendimento_id: propertyId,
+        chave_externa: String(u.chave_externa).trim(),
+        unidade: u.unidade !== undefined ? String(u.unidade).trim() : (existing?.unidade || ''),
+        torre_bloco: u.torre_bloco !== undefined ? String(u.torre_bloco).trim() : (existing?.torre_bloco || ''),
+        tipo: u.tipo !== undefined ? String(u.tipo).trim() : (existing?.tipo || 'Apartamento'),
+        quartos: u.quartos !== undefined
+          ? (u.quartos !== null ? Number(u.quartos) : null)
+          : (existing?.quartos ?? null),
+        suites: u.suites !== undefined
+          ? (u.suites !== null ? Number(u.suites) : null)
+          : (existing?.suites ?? null),
+        banheiros: u.banheiros !== undefined
+          ? (u.banheiros !== null ? Number(u.banheiros) : null)
+          : (existing?.banheiros ?? null),
+        posicao: u.posicao !== undefined
+          ? (u.posicao !== null ? String(u.posicao).trim() : null)
+          : (existing?.posicao ?? null),
+        area_m2: u.area_m2 !== undefined
+          ? (u.area_m2 !== null ? Number(u.area_m2) : null)
+          : (existing?.area_m2 ?? null),
+        metragem_texto: u.metragem_texto !== undefined
+          ? (u.metragem_texto !== null ? String(u.metragem_texto).trim() : null)
+          : (existing?.metragem_texto ?? (u.area_m2 ? `${u.area_m2}m²` : null)),
+        preco: u.preco !== undefined
+          ? (u.preco !== null ? Number(u.preco) : null)
+          : (existing?.preco ?? null),
+        sinal: u.sinal !== undefined
+          ? (u.sinal !== null ? Number(u.sinal) : null)
+          : (existing?.sinal ?? null),
+        parcela: u.parcela !== undefined
+          ? (u.parcela !== null ? Number(u.parcela) : null)
+          : (existing?.parcela ?? null),
+        status: u.status !== undefined
+          ? (['disponivel', 'reservada', 'vendida'].includes(String(u.status).toLowerCase()) ? String(u.status).toLowerCase() : (existing?.status || 'disponivel'))
+          : (existing?.status || 'disponivel'),
+        atualizado_em: nowIso,
+      };
+
+      if (existing) {
+        existingUnits[idx] = unitRecord;
+        atualizadas++;
+      } else {
+        existingUnits.push(unitRecord);
+        criadas++;
+      }
+    }
+
+    propertyData.units = existingUnits;
+    propertyData.updated_at = nowIso;
+
+    const { error: updateErr } = await supabase
+      .from('inventory_properties')
+      .update({ property_data: propertyData, updated_at: nowIso })
+      .eq('account_id', accountId)
+      .eq('property_id', propertyId);
+
+    if (updateErr) {
+      throw new Error(`Falha ao persistir unidades: ${updateErr.message}`);
+    }
+
+    await logMcpAudit({
+      tool: 'upsert_unidades_lote',
+      affected_ids: [propertyId],
+      payload: { total_unidades: unidades.length },
+      result: { criadas, atualizadas, erros, total_atual: existingUnits.length },
+    });
+
+    return {
       empreendimento_id: propertyId,
-      chave_externa: String(u.chave_externa).trim(),
-      unidade: String(u.unidade || '').trim(),
-      torre_bloco: String(u.torre_bloco || '').trim(),
-      tipo: String(u.tipo || 'Apartamento').trim(),
-      quartos: u.quartos !== undefined ? Number(u.quartos) : 0,
-      suites: u.suites !== undefined ? Number(u.suites) : 0,
-      posicao: String(u.posicao || '').trim(),
-      area_m2: u.area_m2 !== undefined ? Number(u.area_m2) : 0,
-      metragem_texto: String(u.metragem_texto || (u.area_m2 ? `${u.area_m2}m²` : '')).trim(),
-      preco: u.preco !== undefined ? Number(u.preco) : 0,
-      sinal: u.sinal !== undefined ? Number(u.sinal) : 0,
-      parcela: u.parcela !== undefined ? Number(u.parcela) : 0,
-      status: ['disponivel', 'reservada', 'vendida'].includes(String(u.status).toLowerCase())
-        ? String(u.status).toLowerCase()
-        : 'disponivel',
-      atualizado_em: nowIso,
+      total_enviadas: unidades.length,
+      criadas,
+      atualizadas,
+      erros,
+      total_unidades: existingUnits.length,
     };
-
-    if (idx >= 0) {
-      existingUnits[idx] = { ...existingUnits[idx], ...unitRecord };
-      atualizadas++;
-    } else {
-      existingUnits.push(unitRecord);
-      criadas++;
-    }
-  }
-
-  propertyData.units = existingUnits;
-  propertyData.updated_at = nowIso;
-
-  await supabase
-    .from('inventory_properties')
-    .update({ property_data: propertyData, updated_at: nowIso })
-    .eq('account_id', accountId)
-    .eq('property_id', propertyId);
-
-  await logMcpAudit({
-    tool: 'upsert_unidades_lote',
-    affected_ids: [propertyId],
-    payload: { total_unidades: unidades.length },
-    result: { criadas, atualizadas, erros, total_atual: existingUnits.length },
   });
-
-  return {
-    empreendimento_id: propertyId,
-    total_enviadas: unidades.length,
-    criadas,
-    atualizadas,
-    erros,
-    total_unidades: existingUnits.length,
-  };
 }
 
 /**
