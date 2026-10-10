@@ -133,7 +133,7 @@ export async function readInstagram(ctx, fetcher = fetch) {
 export async function readInventory(ctx) {
   const list = await rows(ctx.db.from('inventory_properties').select('property_id,property_data,updated_at').eq('account_id', ctx.accountId).order('updated_at', { ascending: false }).limit(100));
   const allowed = ['title', 'purpose', 'type', 'neighborhood', 'bedrooms', 'area_m2', 'price', 'stage', 'source_type', 'status'];
-  return { source: 'inventory_properties', observed_at: new Date().toISOString(), limit: 100, properties: list.filter(r => r.property_data.status === 'Ativo').map(r => ({ id: r.property_id, ...Object.fromEntries(allowed.map(k => [k, r.property_data[k] ?? null])) })), limits: 'Amostra recente de até 100 fichas. Contatos, endereços privados e observações excluídos.' };
+  return { source: 'inventory_properties', observed_at: new Date().toISOString(), limit: 100, properties: list.filter(r => r.property_data.status === 'Ativo' && !r.property_data.is_teste).map(r => ({ id: r.property_id, ...Object.fromEntries(allowed.map(k => [k, r.property_data[k] ?? null])) })), limits: 'Amostra recente de até 100 fichas. Contatos, endereços privados e observações excluídos.' };
 }
 
 export async function researchMarketTrends(ctx, args = {}) {

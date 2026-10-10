@@ -187,7 +187,7 @@ export async function withDevelopmentLock(key, fn) {
 /**
  * 1. buscar_empreendimentos
  */
-export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0, incluir_internos = true } = {}) {
+export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0, incluir_internos = true, incluir_testes = false } = {}) {
   const supabase = getSupabaseClient();
   const accountId = getAccountId();
 
@@ -213,6 +213,9 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
       updated_at: row.updated_at,
     }))
     .filter(({ data: p }) => {
+      // Registros de teste nunca aparecem na busca normal a menos que incluir_testes=true
+      if (p.is_teste === true && !incluir_testes) return false;
+
       // Prioriza empreendimentos ou imóveis que tenham nome ou construtora
       const nome = normalizeText(p.condominium_name || p.title || p.nome || '');
       const constr = normalizeText(p.partner_name || p.construtora || '');
@@ -238,6 +241,7 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
     const item = {
       id,
       chave_externa: p.chave_externa || null,
+      is_teste: Boolean(p.is_teste),
       nome: p.condominium_name || p.title || p.nome || 'Sem nome',
       nome_publico: p.nome_publico || null,
       bairro: p.neighborhood || p.bairro || null,
@@ -344,6 +348,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
   return {
     id: found.property_id,
     chave_externa: p.chave_externa || null,
+    is_teste: Boolean(p.is_teste),
     nome: p.condominium_name || p.title || p.nome || 'Sem nome',
     nome_publico: p.nome_publico || null,
     origem: p.origem || (p.source_type === 'Construtora' ? 'construtora' : p.source_type === 'Parceiro' ? 'parceiro' : 'proprio'),
@@ -424,6 +429,14 @@ export async function upsertEmpreendimento(params = {}) {
   const isCreate = !existingRow;
   const existingData = isCreate ? {} : (existingRow.property_data || {});
   const propertyId = isCreate ? generateDevelopmentId(chave_externa) : existingRow.property_id;
+
+  // Determina se é registro de teste técnico (nunca exibido no estoque, site, compartilhamento ou redes)
+  let finalIsTeste = existingData.is_teste !== undefined ? Boolean(existingData.is_teste) : false;
+  if (params.is_teste !== undefined) {
+    finalIsTeste = Boolean(params.is_teste);
+  } else if (isCreate && String(chave_externa || '').startsWith('teste-')) {
+    finalIsTeste = true;
+  }
 
   if (isCreate && !params.nome) {
     throw new Error('Campo "nome" é obrigatório ao cadastrar um novo empreendimento.');
@@ -700,6 +713,7 @@ export async function upsertEmpreendimento(params = {}) {
     data_tabela: finalDataTabela,
     ativo: finalAtivo,
     status: finalAtivo ? 'Ativo' : 'Arquivado',
+    is_teste: finalIsTeste,
     photos: Array.isArray(existingData.photos) ? existingData.photos : [],
     units: Array.isArray(existingData.units) ? existingData.units : [],
     created_at: existingData.created_at || nowIso,
@@ -723,13 +737,14 @@ export async function upsertEmpreendimento(params = {}) {
   await logMcpAudit({
     tool: 'upsert_empreendimento',
     affected_ids: [propertyId, chave_externa],
-    payload: { chave_externa, nome: finalNome, construtora: finalConstrutora, isCreate },
+    payload: { chave_externa, nome: finalNome, construtora: finalConstrutora, isCreate, is_teste: finalIsTeste },
     result: { id: propertyId, criado: isCreate },
   });
 
   return {
     id: propertyId,
     chave_externa: String(chave_externa).trim(),
+    is_teste: finalIsTeste,
     criado: isCreate,
     atualizado_em: nowIso,
   };
@@ -781,6 +796,66 @@ export async function upsertEmpreendimentosLote({ itens = [] } = {}) {
 }
 
 /**
+ * Valida qualidade mínima da imagem:
+ * - Dimensões mínimas: 400x300 px (em qualquer orientação: lado maior >= 400 e lado menor >= 300)
+ * - Diversidade de cores: rejeita imagens praticamente monocromáticas (desvio padrão < 8)
+ * Lança erro "imagem inválida" caso não atenda aos critérios.
+ */
+async function validateImageQuality(buffer) {
+  try {
+    const { loadImage, createCanvas } = await import('@napi-rs/canvas');
+    const img = await loadImage(buffer);
+
+    const width = Number(img.width || 0);
+    const height = Number(img.height || 0);
+
+    const longSide = Math.max(width, height);
+    const shortSide = Math.min(width, height);
+
+    if (longSide < 400 || shortSide < 300) {
+      throw new Error('imagem inválida');
+    }
+
+    const sampleSize = 64;
+    const canvas = createCanvas(sampleSize, sampleSize);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+    const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+    const numPixels = sampleSize * sampleSize;
+
+    let sumR = 0, sumG = 0, sumB = 0;
+    for (let i = 0; i < imgData.length; i += 4) {
+      sumR += imgData[i];
+      sumG += imgData[i + 1];
+      sumB += imgData[i + 2];
+    }
+    const meanR = sumR / numPixels;
+    const meanG = sumG / numPixels;
+    const meanB = sumB / numPixels;
+
+    let varR = 0, varG = 0, varB = 0;
+    for (let i = 0; i < imgData.length; i += 4) {
+      varR += (imgData[i] - meanR) ** 2;
+      varG += (imgData[i + 1] - meanG) ** 2;
+      varB += (imgData[i + 2] - meanB) ** 2;
+    }
+    const stdR = Math.sqrt(varR / numPixels);
+    const stdG = Math.sqrt(varG / numPixels);
+    const stdB = Math.sqrt(varB / numPixels);
+    const totalStd = Math.sqrt((stdR ** 2 + stdG ** 2 + stdB ** 2) / 3);
+
+    if (totalStd < 8) {
+      throw new Error('imagem inválida');
+    }
+  } catch (err) {
+    if (err.message === 'imagem inválida') {
+      throw err;
+    }
+    throw new Error('imagem inválida');
+  }
+}
+
+/**
  * Faz download de imagem e valida tipo e tamanho
  */
 async function downloadAndValidateImage(url) {
@@ -798,6 +873,7 @@ async function downloadAndValidateImage(url) {
     let mimeType = 'image/jpeg';
     if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) mimeType = 'image/png';
     else if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') mimeType = 'image/webp';
+    await validateImageQuality(buffer);
     return { buffer, mimeType };
   }
 
@@ -836,6 +912,7 @@ async function downloadAndValidateImage(url) {
     throw new Error(`Formato de imagem inválido ou não suportado (${mimeType || 'desconhecido'}). Envie JPG, PNG ou WEBP.`);
   }
 
+  await validateImageQuality(buffer);
   return { buffer, mimeType };
 }
 
@@ -1237,6 +1314,8 @@ export async function adicionarFotoBase64({
   let mimeType = 'image/jpeg';
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) mimeType = 'image/png';
   else if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') mimeType = 'image/webp';
+
+  await validateImageQuality(buffer);
 
   const supabase = getSupabaseClient();
   const accountId = getAccountId();

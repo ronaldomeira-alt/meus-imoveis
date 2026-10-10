@@ -96,7 +96,7 @@ export const fetchInventorySnapshot = async (): Promise<InventorySnapshot> => {
   const { data, error } = await supabase.rpc('get_inventory_snapshot');
   if (error) throw error;
   const snapshot = data as Partial<InventorySnapshot> | null;
-  const rawProps = Array.isArray(snapshot?.properties) ? snapshot.properties : [];
+  const rawProps = (Array.isArray(snapshot?.properties) ? snapshot.properties : []).filter((p) => !p.is_teste);
   const withPhotos = await restoreMissingPropertyPhotos(rawProps);
   const withSocial = await reconcilePropertySocialStatus(withPhotos);
   return {
@@ -125,10 +125,10 @@ export const mergeInventoryProperties = (
   const merged = new Map<string, Property>();
 
   for (const property of snapshot.properties) {
-    if (property?.id && !deleted.has(property.id)) merged.set(property.id, property);
+    if (property?.id && !deleted.has(property.id) && !property.is_teste) merged.set(property.id, property);
   }
   for (const property of localProperties) {
-    if (!property?.id || deleted.has(property.id)) continue;
+    if (!property?.id || deleted.has(property.id) || property.is_teste) continue;
     const remote = merged.get(property.id);
     const localUpdatedAt = Date.parse(property.updated_at || property.created_at || '');
     const remoteUpdatedAt = Date.parse(remote?.updated_at || remote?.created_at || '');

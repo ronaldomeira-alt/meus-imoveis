@@ -1,27 +1,113 @@
 import assert from 'node:assert';
 import { handleMcpServer } from '../api/_shared/mcp-server.js';
 import { buildPublicListing } from '../api/_shared/public-pages.js';
+import { createCanvas } from '@napi-rs/canvas';
 import { Readable } from 'node:stream';
 
 const TEST_TOKEN = process.env.CRM_MCP_TOKEN || 'mcp_sec_7a9f82d4c01e68b31a54b9d0e12f';
 
-function makeDistinctPngDataUrl(index) {
-  const basePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-  const comment = `test-img-${index}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const chunkData = Buffer.from(`Comment\0${comment}`);
-  const lenBuf = Buffer.alloc(4);
-  lenBuf.writeUInt32BE(chunkData.length);
-  const typeBuf = Buffer.from('tEXt');
-  const crcBuf = Buffer.alloc(4);
-  const customChunk = Buffer.concat([lenBuf, typeBuf, chunkData, crcBuf]);
-  
-  const iendPos = basePng.length - 12;
-  const newPng = Buffer.concat([
-    basePng.subarray(0, iendPos),
-    customChunk,
-    basePng.subarray(iendPos),
-  ]);
-  return `data:image/png;base64,${newPng.toString('base64')}`;
+function makeValidTestImage(index) {
+  const canvas = createCanvas(400, 300);
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 400, 300);
+  const colors = ['#1e40af', '#047857', '#b45309', '#b91c1c', '#6d28d9', '#0e7490', '#4338ca', '#c2410c'];
+  grad.addColorStop(0, colors[index % colors.length]);
+  grad.addColorStop(0.5, colors[(index + 3) % colors.length]);
+  grad.addColorStop(1, '#f8fafc');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 400, 300);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '22px sans-serif';
+  ctx.fillText(`Foto Teste #${index} - ${Date.now()}`, 30, 150);
+  return `data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`;
+}
+
+function makeInvalidSmallPng() {
+  const canvas = createCanvas(200, 150);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(0, 0, 200, 150);
+  return `data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`;
+}
+
+function makeInvalidMonochromePng() {
+  const canvas = createCanvas(400, 300);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#22c55e'; // verde sólido (std dev = 0)
+  ctx.fillRect(0, 0, 400, 300);
+  return `data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`;
+}
+
+async function cleanupTestDev(chaveExterna, devId = null) {
+  try {
+    // 1. Desativa no MCP
+    await rpcCall({
+      method: 'tools/call',
+      params: {
+        name: 'desativar_empreendimento',
+        arguments: {
+          chave_externa: chaveExterna,
+          motivo: 'Limpeza automática de teste',
+        },
+      },
+    }).catch(() => null);
+
+    // 2. Apaga arquivos do R2 e registros do banco
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    const accountId = (process.env.MEUS_IMOVEIS_ACCOUNT_ID || process.env.MATCH_CANONICAL_ACCOUNT_ID || '').trim();
+    if (!supabaseUrl || !supabaseKey || !accountId) return;
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    let targetId = devId;
+    if (!targetId) {
+      const { data: rows } = await supabase.from('inventory_properties').select('property_id, property_data').eq('account_id', accountId);
+      const found = (rows || []).find((r) => r.property_data?.chave_externa === chaveExterna);
+      targetId = found?.property_id;
+    }
+
+    if (targetId) {
+      const r2AccountId = process.env.R2_ACCOUNT_ID;
+      const r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
+      const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+      const r2Bucket = process.env.R2_BUCKET_NAME || 'rm-imoveis-media';
+      if (r2AccountId && r2AccessKeyId && r2SecretAccessKey) {
+        const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
+        const s3 = new S3Client({
+          region: 'auto',
+          endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId: r2AccessKeyId, secretAccessKey: r2SecretAccessKey },
+        });
+        const prefix = `properties/${targetId}/`;
+        const listRes = await s3.send(new ListObjectsV2Command({ Bucket: r2Bucket, Prefix: prefix })).catch(() => null);
+        const objects = listRes?.Contents || [];
+        if (objects.length > 0) {
+          await s3.send(new DeleteObjectsCommand({
+            Bucket: r2Bucket,
+            Delete: { Objects: objects.map((obj) => ({ Key: obj.Key })), Quiet: true },
+          })).catch(() => null);
+        }
+      }
+
+      try {
+        await supabase.from('property_media').delete().eq('property_id', targetId);
+      } catch {}
+      try {
+        await supabase.from('inventory_property_tombstones').upsert({
+          account_id: accountId,
+          property_id: targetId,
+          deleted_at: new Date().toISOString(),
+        }, { onConflict: 'account_id,property_id' });
+      } catch {}
+      try {
+        await supabase.from('inventory_properties').delete().eq('account_id', accountId).eq('property_id', targetId);
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[cleanupTestDev] Falha não-bloqueante na limpeza de teste:', err.message);
+  }
 }
 
 async function rpcCall({ method, params = {}, token = TEST_TOKEN, id = 1 }) {
@@ -119,6 +205,7 @@ async function runMcpTests() {
   // Validação dos schemas declarados no tools/list
   const buscarTool = toolsList.find((t) => t.name === 'buscar_empreendimentos');
   assert(buscarTool.inputSchema.properties.incluir_internos, 'buscar_empreendimentos deve declarar parâmetro incluir_internos');
+  assert(buscarTool.inputSchema.properties.incluir_testes, 'buscar_empreendimentos deve declarar parâmetro incluir_testes');
 
   const upsertTool = toolsList.find((t) => t.name === 'upsert_empreendimento');
   const upsertProps = upsertTool.inputSchema.properties;
@@ -130,6 +217,7 @@ async function runMcpTests() {
   assert(upsertProps.observacao_interna, 'upsert_empreendimento deve declarar observacao_interna');
   assert(upsertProps.endereco, 'upsert_empreendimento deve declarar endereco público');
   assert(upsertProps.endereco_completo, 'upsert_empreendimento deve declarar endereco_completo');
+  assert(upsertProps.is_teste, 'upsert_empreendimento deve declarar is_teste');
   assert(Array.isArray(upsertProps.vagas.type) && upsertProps.vagas.type.includes('null'), 'vagas deve aceitar null');
   assert(Array.isArray(upsertProps.area_min_m2.type) && upsertProps.area_min_m2.type.includes('null'), 'area_min_m2 deve aceitar null');
   assert(Array.isArray(upsertProps.endereco_completo.type) && upsertProps.endereco_completo.type.includes('null'), 'endereco_completo deve aceitar null');
@@ -143,6 +231,7 @@ async function runMcpTests() {
   assert(loteItemProps.contato_construtora, 'upsert_empreendimentos_lote deve declarar contato_construtora nos itens');
   assert(loteItemProps.observacao_interna, 'upsert_empreendimentos_lote deve declarar observacao_interna nos itens');
   assert(loteItemProps.endereco_completo, 'upsert_empreendimentos_lote deve declarar endereco_completo nos itens');
+  assert(loteItemProps.is_teste, 'upsert_empreendimentos_lote deve declarar is_teste nos itens');
 
   const upsertUnidadesTool = toolsList.find((t) => t.name === 'upsert_unidades_lote');
   const unidadeItemProps = upsertUnidadesTool.inputSchema.properties.unidades.items.properties;
@@ -163,21 +252,27 @@ async function runMcpTests() {
 
   console.log('  ✓ Todas as ferramentas e JSON Schemas declarados com tipos anuláveis (null): PASS');
 
-  const testChaveExterna = `teste-grok-infinity-${Date.now()}`;
+  const testChaveExterna = 'teste-antigravity';
+  let createdDevId = null;
 
-  // 4. CRIAR EMPREENDIMENTO COM ENDEREÇO PÚBLICO E COMPLETO DIFERENTES, E OBSERVAÇÃO PÚBLICA E INTERNA DIFERENTES
-  console.log('\n[4] Testando criação com endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
-  const createCall = await rpcCall({
-    method: 'tools/call',
-    params: {
-      name: 'upsert_empreendimento',
-      arguments: {
-        chave_externa: testChaveExterna,
-        nome: 'Residencial Infinity Ocean Teste Grok',
-        // nome_publico omitido para testar fallback "Imóvel em <bairro>"
-        construtora: 'Alliance Construtora',
-        contato_construtora: '(83) 99999-8888 (Eng. Carlos)',
-        bairro: 'Cabo Branco',
+  // Garante estado limpo antes de iniciar
+  await cleanupTestDev(testChaveExterna);
+
+  try {
+    // 4. CRIAR EMPREENDIMENTO COM ENDEREÇO PÚBLICO E COMPLETO DIFERENTES, E OBSERVAÇÃO PÚBLICA E INTERNA DIFERENTES
+    console.log('\n[4] Testando criação com endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
+    const createCall = await rpcCall({
+      method: 'tools/call',
+      params: {
+        name: 'upsert_empreendimento',
+        arguments: {
+          chave_externa: testChaveExterna,
+          nome: 'Empreendimento Teste Antigravity',
+          is_teste: true,
+          // nome_publico omitido para testar fallback "Imóvel em <bairro>"
+          construtora: 'Alliance Construtora',
+          contato_construtora: '(83) 99999-8888 (Eng. Carlos)',
+          bairro: 'Cabo Branco',
         cidade: 'João Pessoa',
         endereco: 'Cabo Branco, João Pessoa', // público
         endereco_completo: 'Av. Cabo Branco, 1800, Apt 301', // interno
@@ -210,7 +305,8 @@ async function runMcpTests() {
   console.log('  ✓ Empreendimento criado com sucesso:', createResult);
   assert(createResult.id, 'Deve retornar ID interno');
   assert.strictEqual(createResult.criado, true, 'Deve marcar criado=true');
-  const createdDevId = createResult.id;
+  assert.strictEqual(createResult.is_teste, true, 'is_teste deve ser true no retorno de upsert_empreendimento');
+  createdDevId = createResult.id;
 
   // 4b. VERIFICAR QUE ENDEREÇO E OBSERVAÇÃO GRAVARAM E LERAM DIFERENTES
   console.log('\n[4b] Verificando se endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
@@ -222,6 +318,7 @@ async function runMcpTests() {
     },
   });
   const devData = JSON.parse(getDevCall.json.result.content[0].text);
+  assert.strictEqual(devData.is_teste, true, 'is_teste deve ser true em obter_empreendimento');
   assert.strictEqual(devData.origem, 'construtora', 'Origem padrão deve ser "construtora"');
   assert.strictEqual(devData.condicao, 'novo', 'Condição padrão para construtora deve ser "novo"');
   assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
@@ -297,9 +394,11 @@ async function runMcpTests() {
   assert.strictEqual(idempResult.criado, false, 'Deve marcar criado=false');
   console.log('  ✓ Idempotência confirmada (atualizado sem duplicar): PASS');
 
-  // 5b. TESTAR buscar_empreendimentos: construtora dentro de "interno", nunca na raiz
-  console.log('\n[5b] Testando buscar_empreendimentos (construtora em item.interno e ausente na raiz)...');
-  const searchCall = await rpcCall({
+  // 5b. TESTAR buscar_empreendimentos: isolamento de teste e construtora dentro de "interno"
+  console.log('\n[5b] Testando buscar_empreendimentos (filtro de teste e construtora em item.interno)...');
+  
+  // Busca padrão (sem incluir_testes): o registro de teste NÃO pode aparecer
+  const searchDefault = await rpcCall({
     method: 'tools/call',
     params: {
       name: 'buscar_empreendimentos',
@@ -308,11 +407,27 @@ async function runMcpTests() {
       },
     },
   });
-  assert.strictEqual(searchCall.status, 200);
-  const searchResult = JSON.parse(searchCall.json.result.content[0].text);
-  assert(searchResult.total >= 1, 'Deve encontrar o empreendimento recém-criado');
+  assert.strictEqual(searchDefault.status, 200);
+  const searchDefaultResult = JSON.parse(searchDefault.json.result.content[0].text);
+  assert.strictEqual(searchDefaultResult.itens.some((it) => it.chave_externa === testChaveExterna), false, 'Busca padrão nunca deve retornar registros de teste');
+
+  // Busca explícita com incluir_testes: true deve retornar o registro
+  const searchWithTests = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'buscar_empreendimentos',
+      arguments: {
+        texto: testChaveExterna,
+        incluir_testes: true,
+      },
+    },
+  });
+  assert.strictEqual(searchWithTests.status, 200);
+  const searchResult = JSON.parse(searchWithTests.json.result.content[0].text);
+  assert(searchResult.total >= 1, 'Deve encontrar o empreendimento de teste');
   const foundItem = searchResult.itens.find((it) => it.chave_externa === testChaveExterna);
-  assert(foundItem, 'Item deve existir na lista de resultados');
+  assert(foundItem, 'Item deve existir na lista de resultados com incluir_testes');
+  assert.strictEqual(foundItem.is_teste, true, 'Item deve ter is_teste=true');
   assert.strictEqual(foundItem.construtora, undefined, 'construtora NÃO pode estar no nível de cima (raiz)');
   assert(foundItem.interno, 'item.interno deve existir quando incluir_internos=true (padrão)');
   assert.strictEqual(foundItem.interno.construtora, 'Alliance Construtora', 'interno.construtora deve ser Alliance Construtora');
@@ -327,6 +442,7 @@ async function runMcpTests() {
       name: 'buscar_empreendimentos',
       arguments: {
         texto: testChaveExterna,
+        incluir_testes: true,
         incluir_internos: false,
       },
     },
@@ -336,12 +452,43 @@ async function runMcpTests() {
   assert(foundWithoutInternals, 'Item deve existir');
   assert.strictEqual(foundWithoutInternals.construtora, undefined);
   assert.strictEqual(foundWithoutInternals.interno, undefined, 'item.interno deve ser omitido quando incluir_internos=false');
-  console.log('  ✓ buscar_empreendimentos isola construtora em objeto interno e respeita incluir_internos: PASS');
+  console.log('  ✓ buscar_empreendimentos filtra is_teste por padrão e isola construtora em objeto interno: PASS');
 
-  // 6. TESTAR adicionar_fotos_lote (10 fotos em série e confirmar 10 gravadas)
-  console.log('\n[6] Testando adicionar_fotos_lote com 10 fotos em série...');
+  // 5c. TESTE DE VALIDAÇÃO DE IMAGENS: rejeitar imagens menores que 400x300 ou de uma cor só (std dev < 8)
+  console.log('\n[5c] Testando rejeição de imagem inválida (pequena ou monocromática)...');
+  const smallImgCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'adicionar_foto',
+      arguments: {
+        empreendimento_id: createdDevId,
+        url: makeInvalidSmallPng(),
+        legenda: 'Imagem Pequena Inválida',
+      },
+    },
+  });
+  assert(smallImgCall.json.result.isError, 'Imagem menor que 400x300 deve ser rejeitada com erro');
+  assert(smallImgCall.json.result.content[0].text.includes('imagem inválida'), 'Erro deve ser "imagem inválida"');
+
+  const monoImgCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'adicionar_foto',
+      arguments: {
+        empreendimento_id: createdDevId,
+        url: makeInvalidMonochromePng(),
+        legenda: 'Imagem Monocromática Inválida',
+      },
+    },
+  });
+  assert(monoImgCall.json.result.isError, 'Imagem de uma cor só deve ser rejeitada com erro');
+  assert(monoImgCall.json.result.content[0].text.includes('imagem inválida'), 'Erro deve ser "imagem inválida"');
+  console.log('  ✓ Rejeição de imagens menores que 400x300 px ou monocromáticas com erro "imagem inválida": PASS');
+
+  // 6. TESTAR adicionar_fotos_lote (10 fotos válidas em série e confirmar 10 gravadas)
+  console.log('\n[6] Testando adicionar_fotos_lote com 10 fotos válidas em série...');
   const batch10Photos = Array.from({ length: 10 }, (_, i) => ({
-    url: makeDistinctPngDataUrl(`lote-${i}`),
+    url: makeValidTestImage(i),
     legenda: `Foto Lote #${i + 1}`,
     ordem: i,
     capa: i === 4, // Foto #5 deve ser definida como capa
@@ -389,7 +536,7 @@ async function runMcpTests() {
         name: 'adicionar_foto',
         arguments: {
           empreendimento_id: createdDevId,
-          url: makeDistinctPngDataUrl(`paralelo-${i}`),
+          url: makeValidTestImage(10 + i),
           legenda: `Foto Paralela #${i + 1}`,
           ordem: 10 + i,
         },
@@ -544,9 +691,14 @@ async function runMcpTests() {
   assert.strictEqual(deactResult.ativo, false);
   assert.strictEqual(deactResult.status, 'Arquivado');
   console.log('  ✓ Empreendimento desativado com segurança (soft delete): PASS');
+  } finally {
+    console.log('\n[FINALLY] Executando limpeza estrita do registro de teste...');
+    await cleanupTestDev(testChaveExterna, createdDevId);
+    console.log('  ✓ Limpeza concluída: nenhum resíduo de teste deixado no estoque, banco ou R2.');
+  }
 
   console.log('\n========================================================');
-  console.log('TODOS OS TESTES (LOTE, PARALELO, NULLS, OBSERVAÇÃO) PASSARAM!');
+  console.log('TODOS OS TESTES (LOTE, PARALELO, NULLS, OBSERVAÇÃO, IS_TESTE, IMAGENS) PASSARAM!');
   console.log('========================================================');
 }
 

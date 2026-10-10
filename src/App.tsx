@@ -174,7 +174,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
             const hasUnsplash = p.photos?.some(
               (ph) => typeof ph?.storage_path === 'string' && ph.storage_path.includes('unsplash.com')
             );
-            return !isLegacySeedId && !hasUnsplash;
+            return !isLegacySeedId && !hasUnsplash && !p.is_teste;
           });
         }
       } catch (e) {
@@ -217,7 +217,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         if (disposed) return;
         snapshot.deletedIds = [...new Set([...snapshot.deletedIds, ...pendingDeletes])];
         inventorySnapshotRef.current = snapshot;
-        const local = JSON.parse(localStorage.getItem('meus_imoveis_data') || '[]') as Property[];
+        const local = (JSON.parse(localStorage.getItem('meus_imoveis_data') || '[]') as Property[]).filter((p) => !p.is_teste);
         const merged = mergeInventoryProperties(local, snapshot);
         setProperties(merged);
         await syncInventoryProperties(merged.filter((property) => !snapshot.deletedIds.includes(property.id)));

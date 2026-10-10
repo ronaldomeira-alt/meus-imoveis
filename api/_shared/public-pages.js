@@ -177,7 +177,7 @@ export function normalizeAndDeduplicateFeatures(rawList) {
  * NUNCA saiam no JSON ou no HTML.
  */
 export function buildPublicListing(prop) {
-  if (!prop || typeof prop !== 'object') return null;
+  if (!prop || typeof prop !== 'object' || prop.is_teste) return null;
 
   const id = safeText(prop.id, 64);
   const type = safeText(prop.type, 40) || 'Imóvel';
@@ -379,7 +379,7 @@ export async function getPublicRecord(id) {
 
   for (const row of invRows || []) {
     const raw = row.property_data;
-    if (!raw) continue;
+    if (!raw || raw.is_teste) continue;
     const propId = row.property_id || raw.id;
 
     // Se é o imóvel procurado

@@ -95,6 +95,7 @@ export interface Property {
   parking_spaces_type?: 'Rotativas';
   area_m2: number;
   is_development?: boolean;
+  is_teste?: boolean;
   area_range?: { min: number; max: number } | null;
   bedrooms_options?: number[] | null;
   stage?: DevelopmentStage;
