@@ -637,10 +637,6 @@ async function executeToolCall(toolName, args = {}) {
 }
 
 function sendJson(res, status, obj) {
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(status).json(obj);
-  }
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
@@ -658,9 +654,6 @@ export async function handleMcpServer(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
-    if (typeof res.status === 'function' && typeof res.end === 'function') {
-      return res.status(204).end();
-    }
     res.statusCode = 204;
     res.end();
     return;
