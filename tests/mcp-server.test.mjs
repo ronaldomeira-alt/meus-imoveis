@@ -170,6 +170,7 @@ async function runMcpTests() {
   });
   assert.strictEqual(initRes.status, 200);
   assert.strictEqual(initRes.json.result.serverInfo.name, 'meus-imoveis-mcp');
+  assert.strictEqual(initRes.json.result.serverInfo.version, '1.2.0');
   assert.strictEqual(initRes.json.result.capabilities?.tools?.listChanged, true, 'capabilities.tools.listChanged deve ser true para invalidar cache de clientes MCP');
   console.log('  ✓ Handshake initialize com listChanged=true: PASS');
 

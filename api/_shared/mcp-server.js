@@ -715,7 +715,7 @@ export async function handleMcpServer(req, res) {
 
     return sendJson(res, 200, {
       name: 'meus-imoveis-mcp',
-      version: '1.0.0',
+      version: '1.2.0',
       protocol: 'mcp-jsonrpc-2.0',
       status: 'online',
       tools_available: MCP_TOOLS_DEFINITIONS.length,
@@ -765,7 +765,7 @@ export async function handleMcpServer(req, res) {
             },
             serverInfo: {
               name: 'meus-imoveis-mcp',
-              version: '1.0.0',
+              version: '1.2.0',
             },
           },
         });
