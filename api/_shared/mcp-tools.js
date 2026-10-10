@@ -105,16 +105,38 @@ function normalizeText(text) {
 }
 
 /**
- * Converte status do Grok para o formato do CRM
+ * Converte status/fase do CRM ou do bot para o formato de enum padronizado da API:
+ * 'lancamento' | 'em_construcao' | 'pronto' | 'pre_lancamento' | null
+ */
+export function mapStatusToEnum(stageOrStatus) {
+  if (!stageOrStatus) return null;
+  const clean = normalizeText(stageOrStatus).replace(/[\s-]+/g, '_');
+  if (clean.includes('lancamento') && (clean.includes('pre') || clean.includes('breve'))) return 'pre_lancamento';
+  if (clean.includes('pre_lancamento') || clean.includes('prelancamento')) return 'pre_lancamento';
+  if (clean.includes('lancamento')) return 'lancamento';
+  if (clean.includes('construcao') || clean.includes('obra')) return 'em_construcao';
+  if (clean.includes('pronto')) return 'pronto';
+  return null;
+}
+
+/**
+ * Converte enum padronizado da API para o rótulo de exibição de stage do CRM
+ */
+export function mapEnumToStage(statusEnum) {
+  if (!statusEnum) return null;
+  const clean = normalizeText(statusEnum).replace(/[\s-]+/g, '_');
+  if (clean === 'pre_lancamento' || clean.includes('pre')) return 'Pré-lançamento';
+  if (clean === 'lancamento') return 'Lançamento';
+  if (clean === 'em_construcao' || clean.includes('construcao') || clean.includes('obra')) return 'Em construção';
+  if (clean === 'pronto') return 'Pronto para morar';
+  return null;
+}
+
+/**
+ * Converte status do Grok para o formato do CRM (compatibilidade legado)
  */
 function mapStatusToStage(status) {
-  if (!status) return 'Lançamento';
-  const clean = normalizeText(status).replace(/-/g, '_');
-  if (clean.includes('lancamento')) return 'Lançamento';
-  if (clean.includes('construcao') || clean.includes('obra')) return 'Em construção';
-  if (clean.includes('pronto')) return 'Pronto para morar';
-  if (clean.includes('pre') || clean.includes('breve')) return 'Pré-lançamento';
-  return 'Lançamento';
+  return mapEnumToStage(mapStatusToEnum(status));
 }
 
 /**
@@ -238,6 +260,18 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
   const paged = filtered.slice(skip, skip + take);
 
   const itens = paged.map(({ id, data: p, updated_at }) => {
+    const itemStatus = p.status_enum !== undefined
+      ? p.status_enum
+      : mapStatusToEnum(p.stage);
+
+    const fotosCount = p.fotos_count !== undefined && p.fotos_count !== null
+      ? Number(p.fotos_count)
+      : (Array.isArray(p.photos) ? p.photos.length : 0);
+
+    const unidadesCount = p.unidades_count !== undefined && p.unidades_count !== null
+      ? Number(p.unidades_count)
+      : (Array.isArray(p.units) ? p.units.length : 0);
+
     const item = {
       id,
       chave_externa: p.chave_externa || null,
@@ -246,15 +280,15 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
       nome_publico: p.nome_publico || null,
       bairro: p.neighborhood || p.bairro || null,
       cidade: p.cidade || p.city || 'João Pessoa',
-      status: p.stage || p.status || 'Ativo',
+      status: itemStatus,
       ativo: p.status !== 'Arquivado' && p.ativo !== false,
       preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
       area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
       area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
       vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
       observacao: p.observacao || null,
-      fotos_count: Array.isArray(p.photos) ? p.photos.length : 0,
-      unidades_count: Array.isArray(p.units) ? p.units.length : 0,
+      fotos_count: fotosCount,
+      unidades_count: unidadesCount,
       atualizado_em: p.updated_at || updated_at,
     };
 
@@ -304,7 +338,8 @@ async function findDevelopment(supabase, accountId, { id, chave_externa }) {
       .from('inventory_properties')
       .select('property_id, property_data, updated_at')
       .eq('account_id', accountId)
-      .filter('property_data->>chave_externa', 'eq', String(chave_externa));
+      .filter('property_data->>chave_externa', 'eq', String(chave_externa))
+      .order('updated_at', { ascending: false });
 
     if (rows && rows.length > 0) return rows[0];
 
@@ -356,7 +391,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     bairro: p.neighborhood || p.bairro || null,
     cidade: p.cidade || p.city || 'João Pessoa',
     endereco: p.endereco !== undefined ? p.endereco : ([p.neighborhood || p.bairro, p.cidade || p.city].filter(Boolean).join(', ') || null),
-    status: p.stage || p.status || 'Ativo',
+    status: p.status_enum !== undefined ? p.status_enum : mapStatusToEnum(p.stage),
     entrega: p.delivery_date || null,
     preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
     area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
@@ -372,9 +407,9 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     diferenciais: p.building_features || [],
     data_tabela: p.data_tabela || null,
     ativo: p.status !== 'Arquivado' && p.ativo !== false,
-    fotos_count: photos.length,
+    fotos_count: p.fotos_count !== undefined && p.fotos_count !== null ? Number(p.fotos_count) : photos.length,
     fotos: photos,
-    unidades_count: units.length,
+    unidades_count: p.unidades_count !== undefined && p.unidades_count !== null ? Number(p.unidades_count) : units.length,
     unidades: units.map((u) => ({
       id: u.id,
       empreendimento_id: u.empreendimento_id || found.property_id,
@@ -442,11 +477,19 @@ export async function upsertEmpreendimento(params = {}) {
     throw new Error('Campo "nome" é obrigatório ao cadastrar um novo empreendimento.');
   }
 
-  // 1. Origem do Imóvel: 'proprio' | 'parceiro' | 'construtora' (padrão MCP: 'construtora')
-  let finalOrigem = existingData.origem || 'construtora';
-  if (params.origem !== undefined) {
-    finalOrigem = params.origem !== null ? String(params.origem).trim().toLowerCase() : 'construtora';
-  } else if (isCreate) {
+  // 1. Origem do Imóvel: 'proprio' | 'parceiro' | 'construtora'
+  // Na criação: padrão 'construtora'. No update: mantém o valor existente intacto se omitido ou null.
+  const existingOrigem = existingData.origem || (
+    existingData.source_type === 'Construtora' ? 'construtora' :
+    existingData.source_type === 'Parceiro' ? 'parceiro' :
+    existingData.source_type === 'Próprio' ? 'proprio' : null
+  );
+  let finalOrigem;
+  if (params.origem !== undefined && params.origem !== null && String(params.origem).trim() !== '') {
+    finalOrigem = String(params.origem).trim().toLowerCase();
+  } else if (!isCreate && existingOrigem) {
+    finalOrigem = existingOrigem;
+  } else {
     finalOrigem = 'construtora';
   }
 
@@ -456,11 +499,15 @@ export async function upsertEmpreendimento(params = {}) {
       ? 'Parceiro'
       : 'Construtora';
 
-  // 2. Condição: 'novo' | 'usado' | 'na_planta' (padrão 'novo' para construtora)
-  let finalCondicao = existingData.condicao || (finalOrigem === 'construtora' ? 'novo' : 'usado');
-  if (params.condicao !== undefined) {
-    finalCondicao = params.condicao !== null ? String(params.condicao).trim().toLowerCase() : null;
-  } else if (isCreate) {
+  // 2. Condição: 'novo' | 'usado' | 'na_planta'
+  // Na criação: padrão 'novo' (quando origem='construtora'). No update: mantém o existente se omitido ou null.
+  const existingCondicao = existingData.condicao || existingData.condition?.toLowerCase() || null;
+  let finalCondicao;
+  if (params.condicao !== undefined && params.condicao !== null && String(params.condicao).trim() !== '') {
+    finalCondicao = String(params.condicao).trim().toLowerCase();
+  } else if (!isCreate && existingCondicao) {
+    finalCondicao = existingCondicao;
+  } else {
     finalCondicao = finalOrigem === 'construtora' ? 'novo' : 'usado';
   }
 
@@ -495,10 +542,13 @@ export async function upsertEmpreendimento(params = {}) {
     finalBairro = params.bairro !== null ? String(params.bairro).trim() : null;
   }
 
-  let finalCidade = existingData.cidade || existingData.city || (isCreate ? 'João Pessoa' : null);
-  if (params.cidade !== undefined) {
-    finalCidade = params.cidade !== null ? String(params.cidade).trim() : 'João Pessoa';
-  } else if (isCreate) {
+  const existingCidade = existingData.cidade || existingData.city || null;
+  let finalCidade;
+  if (params.cidade !== undefined && params.cidade !== null && String(params.cidade).trim() !== '') {
+    finalCidade = String(params.cidade).trim();
+  } else if (!isCreate && existingCidade) {
+    finalCidade = existingCidade;
+  } else {
     finalCidade = 'João Pessoa';
   }
 
@@ -516,13 +566,25 @@ export async function upsertEmpreendimento(params = {}) {
     finalEnderecoCompleto = params.endereco_completo !== null ? String(params.endereco_completo).trim() : null;
   }
 
-  // 7. Status (fase da obra)
-  let finalStage = existingData.stage || (isCreate ? 'Lançamento' : null);
+  // 7. Status (fase da obra): enum ('lancamento' | 'em_construcao' | 'pronto' | 'pre_lancamento' | null)
+  // - Na criação: se omitido ou null, grava null ("não informado").
+  // - No update: se omitido (undefined), mantém o valor existente sem sobrescrever. Se explicitamente null, grava null.
+  const existingStatusEnum = existingData.status_enum !== undefined
+    ? existingData.status_enum
+    : mapStatusToEnum(existingData.stage);
+
+  let finalStatusEnum;
   if (params.status !== undefined) {
-    finalStage = params.status !== null ? mapStatusToStage(params.status) : (isCreate ? 'Lançamento' : existingData.stage);
-  } else if (isCreate) {
-    finalStage = 'Lançamento';
+    finalStatusEnum = params.status !== null && String(params.status).trim() !== ''
+      ? mapStatusToEnum(params.status)
+      : null;
+  } else if (!isCreate) {
+    finalStatusEnum = existingStatusEnum;
+  } else {
+    finalStatusEnum = null;
   }
+
+  const finalStage = mapEnumToStage(finalStatusEnum);
 
   // 8. Previsão de entrega
   let finalEntrega = existingData.delivery_date !== undefined ? existingData.delivery_date : null;
@@ -687,6 +749,7 @@ export async function upsertEmpreendimento(params = {}) {
     endereco: finalEndereco,
     endereco_completo: finalEnderecoCompleto,
     stage: finalStage,
+    status_enum: finalStatusEnum,
     delivery_date: finalEntrega,
     price_from: finalPrecoFrom,
     price: finalPrecoFrom,
@@ -714,7 +777,9 @@ export async function upsertEmpreendimento(params = {}) {
     ativo: finalAtivo,
     status: finalAtivo ? 'Ativo' : 'Arquivado',
     is_teste: finalIsTeste,
+    photos_count: Array.isArray(existingData.photos) ? existingData.photos.length : 0,
     photos: Array.isArray(existingData.photos) ? existingData.photos : [],
+    unidades_count: Array.isArray(existingData.units) ? existingData.units.length : 0,
     units: Array.isArray(existingData.units) ? existingData.units : [],
     created_at: existingData.created_at || nowIso,
     updated_at: nowIso,
@@ -1083,6 +1148,7 @@ export async function adicionarFoto({
 
     // 6. Atualiza o empreendimento no inventário
     propertyData.photos = currentPhotos;
+    propertyData.fotos_count = currentPhotos.length;
     propertyData.updated_at = new Date().toISOString();
 
     const { error: updateErr } = await supabase
@@ -1259,6 +1325,7 @@ export async function adicionarFotosLote({
     currentPhotos.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
     propertyData.photos = currentPhotos;
+    propertyData.fotos_count = currentPhotos.length;
     propertyData.updated_at = new Date().toISOString();
 
     const { error: updateErr } = await supabase
@@ -1371,6 +1438,7 @@ export async function adicionarFotoBase64({
 
   currentPhotos.push(newPhoto);
   propertyData.photos = currentPhotos;
+  propertyData.fotos_count = currentPhotos.length;
   propertyData.updated_at = new Date().toISOString();
 
   await supabase
@@ -1463,6 +1531,7 @@ export async function removerFoto({ foto_id, empreendimento_id = null } = {}) {
   }
 
   propertyData.photos = nextPhotos;
+  propertyData.fotos_count = nextPhotos.length;
   propertyData.updated_at = new Date().toISOString();
 
   await supabase
@@ -1678,6 +1747,7 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
     }
 
     propertyData.units = existingUnits;
+    propertyData.unidades_count = existingUnits.length;
     propertyData.updated_at = nowIso;
 
     const { error: updateErr } = await supabase
@@ -1751,6 +1821,7 @@ export async function marcarUnidadesStatus({
   });
 
   propertyData.units = units;
+  propertyData.unidades_count = units.length;
   propertyData.updated_at = nowIso;
 
   await supabase

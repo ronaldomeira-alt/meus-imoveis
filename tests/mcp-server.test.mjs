@@ -127,6 +127,7 @@ async function rpcCall({ method, params = {}, token = TEST_TOKEN, id = 1 }) {
   const res = {
     statusCode: 200,
     setHeader(name, value) {
+      headers[name] = value;
       headers[name.toLowerCase()] = value;
     },
     getHeader(name) {
@@ -135,6 +136,9 @@ async function rpcCall({ method, params = {}, token = TEST_TOKEN, id = 1 }) {
     writeHead(code, h = {}) {
       this.statusCode = code;
       Object.assign(headers, h);
+      for (const [k, v] of Object.entries(h)) {
+        headers[k.toLowerCase()] = v;
+      }
     },
     end(chunk) {
       if (chunk) responseBody += chunk;
@@ -170,7 +174,7 @@ async function runMcpTests() {
   });
   assert.strictEqual(initRes.status, 200);
   assert.strictEqual(initRes.json.result.serverInfo.name, 'meus-imoveis-mcp');
-  assert.strictEqual(initRes.json.result.serverInfo.version, '1.2.1');
+  assert.strictEqual(initRes.json.result.serverInfo.version, '1.2.2');
   assert.strictEqual(initRes.json.result.capabilities?.tools?.listChanged, true, 'capabilities.tools.listChanged deve ser true para invalidar cache de clientes MCP');
   console.log('  ✓ Handshake initialize com listChanged=true: PASS');
 
@@ -277,7 +281,7 @@ async function runMcpTests() {
         cidade: 'João Pessoa',
         endereco: 'Cabo Branco, João Pessoa', // público
         endereco_completo: 'Av. Cabo Branco, 1800, Apt 301', // interno
-        status: 'lancamento',
+        // status omitido intencionalmente no cadastro: deve gravar null ("não informado"), NUNCA "Lançamento"!
         entrega: '2027-12',
         preco_a_partir_de: 450000.0,
         area_min_m2: 32.5,
@@ -309,8 +313,8 @@ async function runMcpTests() {
   assert.strictEqual(createResult.is_teste, true, 'is_teste deve ser true no retorno de upsert_empreendimento');
   createdDevId = createResult.id;
 
-  // 4b. VERIFICAR QUE ENDEREÇO E OBSERVAÇÃO GRAVARAM E LERAM DIFERENTES
-  console.log('\n[4b] Verificando se endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
+  // 4b. VERIFICAR QUE ENDEREÇO E OBSERVAÇÃO GRAVARAM E LERAM DIFERENTES E STATUS É NULL
+  console.log('\n[4b] Verificando se status é null, endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
   const getDevCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -320,6 +324,7 @@ async function runMcpTests() {
   });
   const devData = JSON.parse(getDevCall.json.result.content[0].text);
   assert.strictEqual(devData.is_teste, true, 'is_teste deve ser true em obter_empreendimento');
+  assert.strictEqual(devData.status, null, 'BUG 1: status omitido no cadastro deve ser estritamente null ("não informado"), NUNCA "Lançamento"');
   assert.strictEqual(devData.origem, 'construtora', 'Origem padrão deve ser "construtora"');
   assert.strictEqual(devData.condicao, 'novo', 'Condição padrão para construtora deve ser "novo"');
   assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
@@ -332,9 +337,9 @@ async function runMcpTests() {
   assert.strictEqual(devData.interno?.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
   assert.notStrictEqual(devData.observacao, devData.interno?.observacao_interna, 'observacao e observacao_interna devem ser diferentes');
   assert.strictEqual(devData.nome_publico, null, 'nome_publico deve ser estritamente null quando omitido');
-  console.log('  ✓ endereco ≠ endereco_completo, objeto interno, observacao ≠ observacao_interna e nome_publico null: PASS');
+  console.log('  ✓ status=null no cadastro, endereco ≠ endereco_completo, objeto interno, observacao ≠ observacao_interna: PASS');
 
-  // 4c. TESTE CRÍTICO: UPSERT COM MERGE (enviando SÓ descricao -> todos os outros campos continuam iguais)
+  // 4c. TESTE CRÍTICO: UPSERT COM MERGE (enviando SÓ descricao -> todos os outros campos continuam iguais e status permanece null)
   console.log('\n[4c] Testando UPSERT COM MERGE estrito (enviando APENAS descricao)...');
   const mergeCall = await rpcCall({
     method: 'tools/call',
@@ -373,13 +378,37 @@ async function runMcpTests() {
   assert.strictEqual(afterMerge.data_tabela, 'Outubro/2026', 'data_tabela deve ser mantida');
   assert.strictEqual(afterMerge.interno?.construtora, 'Alliance Construtora', 'construtora deve ser mantida');
   assert.strictEqual(afterMerge.interno?.contato_construtora, '(83) 99999-8888 (Eng. Carlos)', 'contato_construtora deve ser mantido');
-  assert.strictEqual(afterMerge.status, 'Lançamento', 'status não pode ter sido reiniciado');
+  assert.strictEqual(afterMerge.status, null, 'Status omitido no merge deve continuar null anterior');
   assert.strictEqual(afterMerge.vagas, null, 'Vagas continua null');
   assert.strictEqual(afterMerge.diferenciais.length, 3, 'diferenciais devem ser preservados');
-  console.log('  ✓ Upsert enviando só descricao preservou todos os campos anteriores intactos: PASS');
+  console.log('  ✓ Upsert enviando só descricao preservou todos os campos anteriores e status=null: PASS');
 
-  // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza preço sem duplicar
-  console.log('\n[5] Testando idempotência (atualização pontual de preço)...');
+  // 4d. TESTE ATUALIZAÇÃO EXPLÍCITA DE STATUS PARA ENUM E PRESERVAÇÃO EM UPDATE SUBSEQUENTE
+  console.log('\n[4d] Testando atualização de status para enum "lancamento" e preservação em update...');
+  const setStatusCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'upsert_empreendimento',
+      arguments: {
+        chave_externa: testChaveExterna,
+        status: 'lancamento',
+      },
+    },
+  });
+  assert.strictEqual(setStatusCall.status, 200);
+
+  const getWithStatus = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { chave_externa: testChaveExterna },
+    },
+  });
+  const devWithStatus = JSON.parse(getWithStatus.json.result.content[0].text);
+  assert.strictEqual(devWithStatus.status, 'lancamento', 'Deve retornar o enum padronizado "lancamento", não o rótulo "Lançamento"');
+
+  // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza preço sem status e deve MANTER "lancamento"
+  console.log('\n[5] Testando idempotência (atualização pontual de preço sem status mantém status anterior)...');
   const idempotentCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -393,7 +422,18 @@ async function runMcpTests() {
   const idempResult = JSON.parse(idempotentCall.json.result.content[0].text);
   assert.strictEqual(idempResult.id, createdDevId, 'ID deve ser idêntico');
   assert.strictEqual(idempResult.criado, false, 'Deve marcar criado=false');
-  console.log('  ✓ Idempotência confirmada (atualizado sem duplicar): PASS');
+
+  const getAfterPrice = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { chave_externa: testChaveExterna },
+    },
+  });
+  const devAfterPrice = JSON.parse(getAfterPrice.json.result.content[0].text);
+  assert.strictEqual(devAfterPrice.preco_a_partir_de, 460000.0);
+  assert.strictEqual(devAfterPrice.status, 'lancamento', 'Update omitindo status deve manter o status anterior intacto');
+  console.log('  ✓ Idempotência confirmada e status="lancamento" mantido intacto: PASS');
 
   // 5b. TESTAR buscar_empreendimentos: isolamento de teste e construtora dentro de "interno"
   console.log('\n[5b] Testando buscar_empreendimentos (filtro de teste e construtora em item.interno)...');
@@ -630,6 +670,28 @@ async function runMcpTests() {
   assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
   assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
   console.log('  ✓ Unidade com posicao "Nascente Norte", sem position, andar, banheiros, vagas, mobiliado, tipo=null e campos não informados como NULL: PASS');
+
+  // Validação BUG 2: buscar_empreendimentos e obter_empreendimento com a mesma contagem de unidades e fotos
+  const searchAfterUnits = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'buscar_empreendimentos',
+      arguments: {
+        texto: testChaveExterna,
+        incluir_testes: true,
+      },
+    },
+  });
+  assert.strictEqual(searchAfterUnits.status, 200);
+  const searchAfterUnitsData = JSON.parse(searchAfterUnits.json.result.content[0].text);
+  const foundInSearch = searchAfterUnitsData.itens.find((it) => it.chave_externa === testChaveExterna);
+  assert(foundInSearch, 'Empreendimento deve ser encontrado na busca');
+  console.log(`  ✓ Contagens imediatamente após escrita: buscar.unidades_count=${foundInSearch.unidades_count}, obter.unidades_count=${fullDev.unidades_count}`);
+  assert.strictEqual(foundInSearch.unidades_count, 2, 'buscar_empreendimentos deve retornar unidades_count=2');
+  assert.strictEqual(fullDev.unidades_count, 2, 'obter_empreendimento deve retornar unidades_count=2');
+  assert.strictEqual(foundInSearch.unidades_count, fullDev.unidades_count, 'unidades_count deve ser exatamente idêntico em buscar e obter logo após escrita');
+  assert.strictEqual(foundInSearch.fotos_count, fullDev.fotos_count, 'fotos_count deve ser exatamente idêntico em buscar e obter logo após escrita');
+  console.log('  ✓ BUG 2: unidades_count e fotos_count perfeitamente sincronizados entre buscar e obter: PASS');
 
   // 8b. VALIDAÇÃO DE ISOLAMENTO CONFIDENCIAL (CLIENTE / COMPARTILHAMENTO)
   console.log('\n[8b] Conferindo isolamento de dados confidenciais (cliente / compartilhamento)...');

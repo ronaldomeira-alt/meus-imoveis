@@ -5,7 +5,7 @@ export const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'buscar_empreendimentos',
     description:
-      'Busca empreendimentos e imóveis no catálogo do CRM por texto (nome, construtora, bairro, chave_externa) sem diferenciar maiúsculas ou acentos. Retorna lista com metadados básicos e contagem para evitar cadastros duplicados.',
+      'Busca empreendimentos e imóveis no catálogo do CRM por texto (nome, construtora, bairro, chave_externa) sem diferenciar maiúsculas ou acentos. Retorna lista com metadados básicos, status em enum padronizado ("lancamento" | "em_construcao" | "pronto" | "pre_lancamento" | null) e contagens unidades_count e fotos_count sincronizadas em tempo real para evitar cadastros duplicados.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -85,14 +85,12 @@ export const MCP_TOOLS_DEFINITIONS = [
         origem: {
           type: ['string', 'null'],
           enum: ['proprio', 'parceiro', 'construtora', null],
-          default: 'construtora',
-          description: 'Origem do imóvel no CRM: proprio, parceiro ou construtora (padrão MCP: construtora)',
+          description: 'Origem do imóvel no CRM: proprio, parceiro ou construtora (padrão no cadastro: construtora; em atualizações, se omitido, mantém o existente)',
         },
         condicao: {
           type: ['string', 'null'],
           enum: ['novo', 'usado', 'na_planta', null],
-          default: 'novo',
-          description: 'Condição do imóvel: novo, usado ou na_planta (padrão: novo quando origem = construtora)',
+          description: 'Condição do imóvel: novo, usado ou na_planta (padrão no cadastro: novo quando origem=construtora; em atualizações, se omitido, mantém o existente)',
         },
         construtora: {
           type: ['string', 'null'],
@@ -108,8 +106,7 @@ export const MCP_TOOLS_DEFINITIONS = [
         },
         cidade: {
           type: ['string', 'null'],
-          default: 'João Pessoa',
-          description: 'Cidade do empreendimento. Padrão: "João Pessoa"',
+          description: 'Cidade do empreendimento (padrão no cadastro: "João Pessoa"; em atualizações, se omitido, mantém o existente)',
         },
         endereco: {
           type: ['string', 'null'],
@@ -122,7 +119,7 @@ export const MCP_TOOLS_DEFINITIONS = [
         status: {
           type: ['string', 'null'],
           enum: ['lancamento', 'em_construcao', 'pronto', 'pre_lancamento', null],
-          description: 'Fase da obra: lancamento, em_construcao, pronto ou pre_lancamento',
+          description: 'Fase da obra: lancamento, em_construcao, pronto ou pre_lancamento (se omitido no cadastro, grava null "não informado"; em atualizações, se omitido, mantém o valor existente intacto)',
         },
         entrega: {
           type: ['string', 'null'],
@@ -223,15 +220,15 @@ export const MCP_TOOLS_DEFINITIONS = [
               chave_externa: { type: 'string', description: 'Chave externa única do empreendimento' },
               nome: { type: 'string', description: 'Nome comercial do empreendimento' },
               nome_publico: { type: ['string', 'null'], description: 'Título público para clientes (opcional, ou null)' },
-              origem: { type: ['string', 'null'], enum: ['proprio', 'parceiro', 'construtora', null], description: 'Origem no CRM (padrão: construtora)' },
-              condicao: { type: ['string', 'null'], enum: ['novo', 'usado', 'na_planta', null], description: 'Condição do imóvel (padrão: novo)' },
+              origem: { type: ['string', 'null'], enum: ['proprio', 'parceiro', 'construtora', null], description: 'Origem no CRM (padrão no cadastro: construtora; em atualizações, mantém o existente)' },
+              condicao: { type: ['string', 'null'], enum: ['novo', 'usado', 'na_planta', null], description: 'Condição do imóvel (padrão no cadastro: novo; em atualizações, mantém o existente)' },
               construtora: { type: ['string', 'null'], description: 'Nome da construtora (interno/confidencial)' },
               contato_construtora: { type: ['string', 'null'], description: 'Nome/telefone de contato na construtora (interno/confidencial)' },
               bairro: { type: ['string', 'null'], description: 'Bairro do empreendimento' },
-              cidade: { type: ['string', 'null'], description: 'Cidade do empreendimento' },
+              cidade: { type: ['string', 'null'], description: 'Cidade do empreendimento (padrão no cadastro: "João Pessoa"; em atualizações, mantém o existente)' },
               endereco: { type: ['string', 'null'], description: 'Endereço PÚBLICO do imóvel (apenas bairro e cidade, sem número)' },
               endereco_completo: { type: ['string', 'null'], description: 'Endereço INTERNO da construtora com rua, número e complemento (estritamente confidencial, ou null)' },
-              status: { type: ['string', 'null'], enum: ['lancamento', 'em_construcao', 'pronto', 'pre_lancamento', null] },
+              status: { type: ['string', 'null'], enum: ['lancamento', 'em_construcao', 'pronto', 'pre_lancamento', null], description: 'Fase da obra: lancamento, em_construcao, pronto ou pre_lancamento (se omitido no cadastro, grava null; em atualizações, mantém o existente)' },
               entrega: { type: ['string', 'null'], description: 'Previsão de entrega AAAA-MM' },
               preco_a_partir_de: { type: ['number', 'null'], description: 'Preço a partir de (ou null)' },
               area_min_m2: { type: ['number', 'null'], description: 'Metragem mínima em m² (ou null)' },
@@ -719,7 +716,7 @@ export async function handleMcpServer(req, res) {
 
     return sendJson(res, 200, {
       name: 'meus-imoveis-mcp',
-      version: '1.2.1',
+      version: '1.2.2',
       protocol: 'mcp-jsonrpc-2.0',
       status: 'online',
       tools_available: MCP_TOOLS_DEFINITIONS.length,
@@ -769,7 +766,7 @@ export async function handleMcpServer(req, res) {
             },
             serverInfo: {
               name: 'meus-imoveis-mcp',
-              version: '1.2.1',
+              version: '1.2.2',
             },
           },
         });
