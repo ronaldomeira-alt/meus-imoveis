@@ -927,11 +927,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                 )}
 
                 {/* Observação Interna (Confidencial) */}
-                {((property as any).observacao_interna || (property as any).internal_notes || (property as any).observacao) && (
+                {((property as any).observacao_interna || (property as any).internal_notes) && (
                   <div className="pt-2 border-t border-line-subtle/50">
                     <span className="text-[10px] uppercase font-bold text-ink-secondary block">Observação Interna</span>
                     <p className="text-xs text-ink-secondary mt-1 whitespace-pre-line bg-black/25 p-2.5 rounded-xl border border-white/5">
-                      {(property as any).observacao_interna || (property as any).internal_notes || (property as any).observacao}
+                      {(property as any).observacao_interna || (property as any).internal_notes}
                     </p>
                   </div>
                 )}

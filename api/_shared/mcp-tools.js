@@ -332,7 +332,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     condicao: p.condicao || p.condition?.toLowerCase() || 'novo',
     bairro: p.neighborhood || p.bairro || null,
     cidade: p.cidade || p.city || 'João Pessoa',
-    endereco: p.endereco_completo || p.address || null,
+    endereco: p.endereco !== undefined ? p.endereco : ([p.neighborhood || p.bairro, p.cidade || p.city].filter(Boolean).join(', ') || null),
     endereco_completo: p.endereco_completo || p.address || null,
     status: p.stage || p.status || 'Ativo',
     entrega: p.delivery_date || null,
@@ -346,8 +346,8 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     banheiros: p.bathrooms !== undefined && p.bathrooms !== null ? p.bathrooms : (p.banheiros !== undefined ? p.banheiros : null),
     posicao: p.posicao || p.position || null,
     descricao: p.notes || p.descricao || null,
-    observacao: p.observacao_interna || p.internal_notes || p.observacao || null,
-    observacao_interna: p.observacao_interna || p.internal_notes || p.observacao || null,
+    observacao: p.observacao || null,
+    observacao_interna: p.observacao_interna || p.internal_notes || null,
     diferenciais: p.building_features || [],
     link_tabela: p.link_tabela || null,
     link_pasta: p.link_pasta || null,
@@ -356,7 +356,29 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     fotos_count: photos.length,
     fotos: photos,
     unidades_count: units.length,
-    unidades: units,
+    unidades: units.map((u) => ({
+      id: u.id,
+      empreendimento_id: u.empreendimento_id || found.property_id,
+      chave_externa: u.chave_externa || null,
+      unidade: u.unidade || null,
+      torre_bloco: u.torre_bloco || null,
+      tipo: u.tipo || 'Apartamento',
+      quartos: u.quartos !== undefined && u.quartos !== null ? u.quartos : (u.bedrooms !== undefined ? u.bedrooms : null),
+      suites: u.suites !== undefined && u.suites !== null ? u.suites : null,
+      banheiros: u.banheiros !== undefined && u.banheiros !== null ? u.banheiros : (u.bathrooms !== undefined ? u.bathrooms : null),
+      vagas: u.vagas !== undefined && u.vagas !== null ? u.vagas : (u.parking_spaces !== undefined ? u.parking_spaces : null),
+      posicao: u.posicao || u.position || null,
+      position: u.posicao || u.position || null,
+      andar: u.andar !== undefined && u.andar !== null ? u.andar : (u.floor !== undefined ? u.floor : null),
+      mobiliado: u.mobiliado !== undefined && u.mobiliado !== null ? Boolean(u.mobiliado) : (u.furnished !== undefined && u.furnished !== null ? Boolean(u.furnished) : null),
+      area_m2: u.area_m2 !== undefined && u.area_m2 !== null ? u.area_m2 : null,
+      metragem_texto: u.metragem_texto || (u.area_m2 ? `${u.area_m2}m²` : null),
+      preco: u.preco !== undefined && u.preco !== null ? u.preco : null,
+      sinal: u.sinal !== undefined && u.sinal !== null ? u.sinal : null,
+      parcela: u.parcela !== undefined && u.parcela !== null ? u.parcela : null,
+      status: u.status || 'disponivel',
+      atualizado_em: u.atualizado_em || null,
+    })),
     atualizado_em: p.updated_at || found.updated_at,
   };
 }
@@ -446,12 +468,18 @@ export async function upsertEmpreendimento(params = {}) {
     finalCidade = 'João Pessoa';
   }
 
-  // 6. Endereço completo (com número, estritamente interno)
-  let finalEnderecoCompleto = existingData.endereco_completo || existingData.address || null;
+  // 6a. Endereço público (apenas bairro e cidade, sem número)
+  let finalEndereco = existingData.endereco ?? null;
+  if (params.endereco !== undefined) {
+    finalEndereco = params.endereco !== null ? String(params.endereco).trim() : null;
+  } else if (isCreate && !finalEndereco) {
+    finalEndereco = [finalBairro, finalCidade].filter(Boolean).join(', ') || null;
+  }
+
+  // 6b. Endereço completo interno (com rua, número e complemento, estritamente confidencial)
+  let finalEnderecoCompleto = existingData.endereco_completo ?? (existingData.address ?? null);
   if (params.endereco_completo !== undefined) {
     finalEnderecoCompleto = params.endereco_completo !== null ? String(params.endereco_completo).trim() : null;
-  } else if (params.endereco !== undefined) {
-    finalEnderecoCompleto = params.endereco !== null ? String(params.endereco).trim() : null;
   }
 
   // 7. Status (fase da obra)
@@ -534,22 +562,29 @@ export async function upsertEmpreendimento(params = {}) {
     finalDescricao = params.descricao !== null ? String(params.descricao).trim() : null;
   }
 
-  // 17. Observação interna (avulso, alertas, origem dos dados)
-  let finalObservacaoInterna = existingData.observacao_interna || existingData.internal_notes || existingData.observacao || null;
-  if (params.observacao_interna !== undefined) {
-    finalObservacaoInterna = params.observacao_interna !== null ? String(params.observacao_interna).trim() : null;
-  } else if (params.observacao !== undefined) {
-    finalObservacaoInterna = params.observacao !== null ? String(params.observacao).trim() : null;
+  // 17a. Observação geral / pública
+  let finalObservacao = existingData.observacao ?? null;
+  if (params.observacao !== undefined) {
+    finalObservacao = params.observacao !== null ? String(params.observacao).trim() : null;
   }
 
-  // 18. Nome público (opcional): título exibido ao cliente. Se vazio, gerar genérico como "Apartamento 2 quartos no Bessa"
+  // 17b. Observação interna (confidencial: alertas, comissão, regras de visita, origem dos dados)
+  let finalObservacaoInterna = existingData.observacao_interna !== undefined
+    ? existingData.observacao_interna
+    : (existingData.internal_notes ?? null);
+  if (params.observacao_interna !== undefined) {
+    finalObservacaoInterna = params.observacao_interna !== null ? String(params.observacao_interna).trim() : null;
+  }
+
+  // 18. Nome público: se vier vazio ou não informado, usar "Imóvel em <bairro>"
   let finalNomePublico = existingData.nome_publico ?? null;
   if (params.nome_publico !== undefined) {
-    finalNomePublico = params.nome_publico !== null ? String(params.nome_publico).trim() : null;
-  } else if (isCreate || !finalNomePublico) {
-    const qCount = finalBedroomsOptions && finalBedroomsOptions.length > 0 ? finalBedroomsOptions[0] : 2;
-    const bLabel = finalBairro ? `no ${finalBairro}` : 'em João Pessoa';
-    finalNomePublico = `Apartamento ${qCount} quarto${qCount === 1 ? '' : 's'} ${bLabel}`;
+    const trimmed = params.nome_publico !== null ? String(params.nome_publico).trim() : '';
+    finalNomePublico = trimmed.length > 0 ? trimmed : null;
+  }
+  if (!finalNomePublico) {
+    const local = finalBairro ? finalBairro : (finalCidade || 'João Pessoa');
+    finalNomePublico = `Imóvel em ${local}`;
   }
 
   // 19. Diferenciais
@@ -606,7 +641,8 @@ export async function upsertEmpreendimento(params = {}) {
     bairro: finalBairro,
     cidade: finalCidade,
     city: finalCidade,
-    address: finalEnderecoCompleto,
+    address: finalEnderecoCompleto || finalEndereco,
+    endereco: finalEndereco,
     endereco_completo: finalEnderecoCompleto,
     stage: finalStage,
     delivery_date: finalEntrega,
@@ -625,7 +661,7 @@ export async function upsertEmpreendimento(params = {}) {
     posicao: finalPosicao,
     notes: finalDescricao,
     descricao: finalDescricao,
-    observacao: finalObservacaoInterna,
+    observacao: finalObservacao,
     observacao_interna: finalObservacaoInterna,
     internal_notes: finalObservacaoInterna,
     building_features: finalDiferenciais,

@@ -87,10 +87,11 @@ async function runMcpTests() {
   console.log('  ✓ Handshake initialize: PASS');
 
   // 3. LISTAGEM DE FERRAMENTAS: tools/list
-  console.log('[3] Testando tools/list...');
+  console.log('[3] Testando tools/list e validação estrita de JSON Schemas...');
   const toolsRes = await rpcCall({ method: 'tools/list' });
   assert.strictEqual(toolsRes.status, 200);
-  const toolNames = toolsRes.json.result.tools.map((t) => t.name);
+  const toolsList = toolsRes.json.result.tools;
+  const toolNames = toolsList.map((t) => t.name);
   console.log(`  ✓ Ferramentas expostas (${toolNames.length}):`, toolNames.join(', '));
   assert(toolNames.includes('buscar_empreendimentos'));
   assert(toolNames.includes('obter_empreendimento'));
@@ -105,12 +106,48 @@ async function runMcpTests() {
   assert(toolNames.includes('upsert_unidades_lote'));
   assert(toolNames.includes('marcar_unidades_status'));
   assert(toolNames.includes('desativar_empreendimento'));
-  console.log('  ✓ Todas as ferramentas do Grokbot presentes com schemas completos: PASS');
+
+  // Validação dos schemas declarados no tools/list
+  const upsertTool = toolsList.find((t) => t.name === 'upsert_empreendimento');
+  const upsertProps = upsertTool.inputSchema.properties;
+  assert(upsertProps.origem, 'upsert_empreendimento deve declarar origem');
+  assert(upsertProps.condicao, 'upsert_empreendimento deve declarar condicao');
+  assert(upsertProps.nome_publico, 'upsert_empreendimento deve declarar nome_publico');
+  assert(upsertProps.construtora, 'upsert_empreendimento deve declarar construtora');
+  assert(upsertProps.contato_construtora, 'upsert_empreendimento deve declarar contato_construtora');
+  assert(upsertProps.observacao_interna, 'upsert_empreendimento deve declarar observacao_interna');
+  assert(upsertProps.endereco, 'upsert_empreendimento deve declarar endereco público');
+  assert(upsertProps.endereco_completo, 'upsert_empreendimento deve declarar endereco_completo');
+
+  const upsertLoteTool = toolsList.find((t) => t.name === 'upsert_empreendimentos_lote');
+  const loteItemProps = upsertLoteTool.inputSchema.properties.itens.items.properties;
+  assert(loteItemProps.origem, 'upsert_empreendimentos_lote deve declarar origem nos itens');
+  assert(loteItemProps.condicao, 'upsert_empreendimentos_lote deve declarar condicao nos itens');
+  assert(loteItemProps.nome_publico, 'upsert_empreendimentos_lote deve declarar nome_publico nos itens');
+  assert(loteItemProps.construtora, 'upsert_empreendimentos_lote deve declarar construtora nos itens');
+  assert(loteItemProps.contato_construtora, 'upsert_empreendimentos_lote deve declarar contato_construtora nos itens');
+  assert(loteItemProps.observacao_interna, 'upsert_empreendimentos_lote deve declarar observacao_interna nos itens');
+  assert(loteItemProps.endereco_completo, 'upsert_empreendimentos_lote deve declarar endereco_completo nos itens');
+
+  const upsertUnidadesTool = toolsList.find((t) => t.name === 'upsert_unidades_lote');
+  const unidadeItemProps = upsertUnidadesTool.inputSchema.properties.unidades.items.properties;
+  assert(unidadeItemProps.posicao, 'upsert_unidades_lote deve declarar posicao');
+  assert(unidadeItemProps.andar, 'upsert_unidades_lote deve declarar andar');
+  assert(unidadeItemProps.suites, 'upsert_unidades_lote deve declarar suites');
+  assert(unidadeItemProps.banheiros, 'upsert_unidades_lote deve declarar banheiros');
+  assert(unidadeItemProps.vagas, 'upsert_unidades_lote deve declarar vagas');
+  assert(unidadeItemProps.mobiliado, 'upsert_unidades_lote deve declarar mobiliado');
+
+  const loteFotosTool = toolsList.find((t) => t.name === 'adicionar_fotos_lote');
+  assert(loteFotosTool, 'adicionar_fotos_lote deve estar publicado no tools/list');
+  assert(loteFotosTool.inputSchema.properties.fotos, 'adicionar_fotos_lote deve declarar parâmetro fotos');
+
+  console.log('  ✓ Todas as ferramentas e JSON Schemas declarados com 100% de precisão: PASS');
 
   const testChaveExterna = `teste-grok-infinity-${Date.now()}`;
 
-  // 4. CRIAR EMPREENDIMENTO COM VALORES PADRÕES E CAMPOS CONFIDENCIAIS
-  console.log('\n[4] Testando criação de empreendimento (origem="construtora", condicao="novo", vagas=NULL, campos internos)...');
+  // 4. CRIAR EMPREENDIMENTO COM ENDEREÇO PÚBLICO E COMPLETO DIFERENTES, E OBSERVAÇÃO PÚBLICA E INTERNA DIFERENTES
+  console.log('\n[4] Testando criação com endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
   const createCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -118,11 +155,13 @@ async function runMcpTests() {
       arguments: {
         chave_externa: testChaveExterna,
         nome: 'Residencial Infinity Ocean Teste Grok',
+        // nome_publico omitido para testar fallback "Imóvel em <bairro>"
         construtora: 'Alliance Construtora',
         contato_construtora: '(83) 99999-8888 (Eng. Carlos)',
         bairro: 'Cabo Branco',
         cidade: 'João Pessoa',
-        endereco: 'Av. Cabo Branco, 1800',
+        endereco: 'Cabo Branco, João Pessoa', // público
+        endereco_completo: 'Av. Cabo Branco, 1800, Apt 301', // interno
         status: 'lancamento',
         entrega: '2027-12',
         preco_a_partir_de: 450000.0,
@@ -131,7 +170,8 @@ async function runMcpTests() {
         quartos_min: 1,
         quartos_max: 3,
         // vagas omitido intencionalmente: deve permanecer NULL ("não informado"), nunca 0!
-        observacao_interna: 'Observação interna confidencial sobre negociação e comissão de 6%.',
+        observacao: 'Observação geral do condomínio.', // pública
+        observacao_interna: 'Observação interna confidencial sobre negociação e comissão de 6%.', // interna
         descricao: 'Empreendimento de alto padrão beira-mar com rooftop e piscina de borda infinita.',
         diferenciais: ['Piscina na cobertura', 'Rooftop gourmet', 'Academia com vista para o mar'],
         link_tabela: 'https://docs.google.com/spreadsheets/d/tabela-exemplo',
@@ -153,8 +193,8 @@ async function runMcpTests() {
   assert.strictEqual(createResult.criado, true, 'Deve marcar criado=true');
   const createdDevId = createResult.id;
 
-  // 4b. VERIFICAR PADRÕES (origem="construtora", condicao="novo", vagas=null, campos internos)
-  console.log('\n[4b] Verificando se origem="construtora", condicao="novo", vagas=null e campos internos foram persistidos...');
+  // 4b. VERIFICAR QUE ENDEREÇO E OBSERVAÇÃO GRAVARAM E LERAM DIFERENTES
+  console.log('\n[4b] Verificando se endereco ≠ endereco_completo e observacao ≠ observacao_interna...');
   const getDevCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -168,8 +208,14 @@ async function runMcpTests() {
   assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
   assert.strictEqual(devData.construtora, 'Alliance Construtora');
   assert.strictEqual(devData.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
+  assert.strictEqual(devData.endereco, 'Cabo Branco, João Pessoa', 'Endereco público deve ser só bairro/cidade');
+  assert.strictEqual(devData.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereco completo interno deve conter rua/número');
+  assert.notStrictEqual(devData.endereco, devData.endereco_completo, 'endereco e endereco_completo devem ser diferentes');
+  assert.strictEqual(devData.observacao, 'Observação geral do condomínio.', 'observacao pública deve ser independente');
   assert.strictEqual(devData.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
-  console.log('  ✓ Origem="construtora", condicao="novo", vagas=null e campos internos conferidos: PASS');
+  assert.notStrictEqual(devData.observacao, devData.observacao_interna, 'observacao e observacao_interna devem ser diferentes');
+  assert.strictEqual(devData.nome_publico, 'Imóvel em Cabo Branco', 'nome_publico deve ser "Imóvel em <bairro>"');
+  console.log('  ✓ endereco ≠ endereco_completo, observacao ≠ observacao_interna e nome_publico corretos: PASS');
 
   // 4c. TESTE CRÍTICO: UPSERT COM MERGE (enviando SÓ descricao -> todos os outros campos continuam iguais)
   console.log('\n[4c] Testando UPSERT COM MERGE estrito (enviando APENAS descricao)...');
@@ -199,18 +245,21 @@ async function runMcpTests() {
   });
   const afterMerge = JSON.parse(getAfterMerge.json.result.content[0].text);
   assert.strictEqual(afterMerge.descricao, 'Descrição atualizada mantendo endereço, entrega, links e status intactos.');
-  assert.strictEqual(afterMerge.endereco, 'Av. Cabo Branco, 1800', 'Endereço não pode ter sido apagado');
+  assert.strictEqual(afterMerge.endereco, 'Cabo Branco, João Pessoa', 'Endereço público mantido');
+  assert.strictEqual(afterMerge.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereço completo mantido');
+  assert.strictEqual(afterMerge.observacao, 'Observação geral do condomínio.', 'Observação pública mantida');
+  assert.strictEqual(afterMerge.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.', 'Observação interna mantida');
+  assert.strictEqual(afterMerge.nome_publico, 'Imóvel em Cabo Branco', 'Nome público mantido');
   assert.strictEqual(afterMerge.entrega, '2027-12', 'Entrega não pode ter sido apagada');
   assert.strictEqual(afterMerge.link_tabela, 'https://docs.google.com/spreadsheets/d/tabela-exemplo', 'link_tabela deve ser mantido');
   assert.strictEqual(afterMerge.link_pasta, 'https://drive.google.com/drive/folders/pasta-exemplo', 'link_pasta deve ser mantido');
   assert.strictEqual(afterMerge.data_tabela, 'Outubro/2026', 'data_tabela deve ser mantida');
   assert.strictEqual(afterMerge.construtora, 'Alliance Construtora', 'construtora deve ser mantida');
   assert.strictEqual(afterMerge.contato_construtora, '(83) 99999-8888 (Eng. Carlos)', 'contato_construtora deve ser mantido');
-  assert.strictEqual(afterMerge.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.', 'observacao_interna mantida');
   assert.strictEqual(afterMerge.status, 'Lançamento', 'status não pode ter sido reiniciado');
   assert.strictEqual(afterMerge.vagas, null, 'Vagas continua null');
   assert.strictEqual(afterMerge.diferenciais.length, 3, 'diferenciais devem ser preservados');
-  console.log('  ✓ Upsert enviando só descricao preservou todos os 11 campos anteriores intactos: PASS');
+  console.log('  ✓ Upsert enviando só descricao preservou todos os campos anteriores intactos: PASS');
 
   // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza preço sem duplicar
   console.log('\n[5] Testando idempotência (atualização pontual de preço)...');
@@ -364,11 +413,15 @@ async function runMcpTests() {
   const u102 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-102'));
   assert.strictEqual(u101.posicao, 'Nascente Norte', 'Posição da unidade deve ser "Nascente Norte"');
   assert.strictEqual(u101.position, 'Nascente Norte');
+  assert.strictEqual(u101.andar, 5, 'Andar da unidade deve ser 5');
+  assert.strictEqual(u101.banheiros, 1, 'Banheiros da unidade deve ser 1');
+  assert.strictEqual(u101.vagas, 1, 'Vagas da unidade deve ser 1');
+  assert.strictEqual(u101.mobiliado, false, 'Mobiliado da unidade deve ser false');
   assert.strictEqual(u101.sinal, null, 'Sinal omitido deve ser null');
   assert.strictEqual(u101.parcela, null, 'Parcela omitida deve ser null');
   assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
   assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
-  console.log('  ✓ Unidade com posicao "Nascente Norte" e campos não informados preservados como NULL: PASS');
+  console.log('  ✓ Unidade com posicao "Nascente Norte", andar, banheiros, vagas, mobiliado e campos não informados como NULL: PASS');
 
   // 8b. VALIDAÇÃO DE ISOLAMENTO CONFIDENCIAL (CLIENTE / COMPARTILHAMENTO)
   console.log('\n[8b] Conferindo isolamento de dados confidenciais (cliente / compartilhamento)...');
