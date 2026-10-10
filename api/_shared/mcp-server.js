@@ -519,9 +519,12 @@ async function executeToolCall(toolName, args = {}) {
 }
 
 function sendJson(res, status, obj) {
+  const jsonStr = JSON.stringify(obj);
+  const buf = Buffer.from(jsonStr, 'utf-8');
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(obj));
+  res.setHeader('Content-Length', String(buf.length));
+  res.end(buf);
 }
 
 /**
