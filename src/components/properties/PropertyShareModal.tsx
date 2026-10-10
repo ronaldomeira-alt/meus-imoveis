@@ -35,7 +35,7 @@ export const PropertyShareModal: React.FC<PropertyShareModalProps> = ({
   if (!isOpen || !property) return null;
 
   const publicUrl = getPropertyPublicUrl(property.id);
-  const isAvailable = property.status === 'Ativo';
+  const isAvailable = property.ativo !== false && property.status !== 'Arquivado';
 
   const coverPhoto = property.photos?.find((p) => p.is_cover) || property.photos?.[0];
   const coverUrl = coverPhoto ? getPhotoUrl(coverPhoto.storage_path) : '';

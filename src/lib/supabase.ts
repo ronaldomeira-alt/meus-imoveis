@@ -82,11 +82,11 @@ export const getPhotoUrl = (path: string): string => {
 export const resolveMediaUrl = getPhotoUrl;
 
 export const calculateDashboardStats = (properties: Property[]): DashboardStats => {
-  const activeProps = properties.filter((p) => p.status === 'Ativo');
+  const activeProps = properties.filter((p) => p.ativo !== false && p.status !== 'Arquivado');
   const totalActive = activeProps.length;
 
   const ownCount = activeProps.filter((p) => p.source_type === 'Próprio').length;
-  const partnerCount = activeProps.filter((p) => p.source_type === 'Parceiro').length;
+  const partnerCount = activeProps.filter((p) => p.source_type === 'Parceiro' || p.source_type === 'Construtora').length;
 
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -112,7 +112,7 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
   // ── Agrupamento por Tipos de Imóvel (Barras Verticais) ──
   const countsByType: Record<string, number> = {};
   activeProps.forEach((p) => {
-    const t = p.type || 'Outro';
+    const t = p.type || (p.is_development ? 'Empreendimento' : 'Outro');
     countsByType[t] = (countsByType[t] || 0) + 1;
   });
 
@@ -144,8 +144,9 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
 
   const byPriceRange: PriceRangeStat[] = rangesDef.map((def) => {
     const count = activeProps.filter((p) => {
-      if (def.max === Infinity) return p.price >= def.min;
-      return p.price >= def.min && p.price < def.max;
+      const priceVal = Number(p.price || p.price_from || 0);
+      if (def.max === Infinity) return priceVal >= def.min;
+      return priceVal >= def.min && priceVal < def.max;
     }).length;
 
     const pct = totalActive > 0 ? (count / totalActive) * 100 : 0;
@@ -161,7 +162,7 @@ export const calculateDashboardStats = (properties: Property[]): DashboardStats 
     };
   });
 
-  const totalPortfolioValue = activeProps.reduce((sum, p) => sum + (p.price || 0), 0);
+  const totalPortfolioValue = activeProps.reduce((sum, p) => sum + Number(p.price || p.price_from || 0), 0);
 
   return {
     totalActive,

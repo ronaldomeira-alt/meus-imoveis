@@ -8,11 +8,11 @@ interface ReportsViewProps {
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ properties, stats }) => {
-  const activeProperties = properties.filter((p) => p.status === 'Ativo');
+  const activeProperties = properties.filter((p) => p.ativo !== false && p.status !== 'Arquivado');
 
-  const totalValue = activeProperties.reduce((acc, p) => acc + p.price, 0);
+  const totalValue = activeProperties.reduce((acc, p) => acc + Number(p.price || p.price_from || 0), 0);
   const avgTicket = activeProperties.length > 0 ? totalValue / activeProperties.length : 0;
-  const totalArea = activeProperties.reduce((acc, p) => acc + p.area_m2, 0);
+  const totalArea = activeProperties.reduce((acc, p) => acc + Number(p.area_m2 || p.area_range?.min || 0), 0);
   const avgM2Price = totalArea > 0 ? totalValue / totalArea : 0;
 
   const typesMap: Record<string, number> = {};

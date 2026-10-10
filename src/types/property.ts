@@ -45,7 +45,15 @@ export type FieldState = 'informed' | 'missing' | 'ambiguous';
 
 export type SourceType = 'Próprio' | 'Parceiro' | 'Construtora';
 
-export type PropertyStatus = 'Ativo' | 'Vendido' | 'Arquivado';
+export type PropertyStatus =
+  | 'Ativo'
+  | 'Vendido'
+  | 'Arquivado'
+  | 'lancamento'
+  | 'em_construcao'
+  | 'pronto'
+  | 'pre_lancamento'
+  | null;
 
 export type SocialPlatform = 'instagram' | 'tiktok' | 'facebook';
 export type SocialPublishStatus = 'not_published' | 'published';

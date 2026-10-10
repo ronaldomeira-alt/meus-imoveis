@@ -118,9 +118,9 @@ export const PropertySummaryModal: React.FC<PropertySummaryModalProps> = ({
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-white/[0.05] text-ink-secondary border border-line-subtle">
                   {property.source_type}
                 </span>
-                {property.status !== 'Ativo' && (
+                {(property.ativo === false || property.status === 'Arquivado') && (
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-status-warning/15 text-status-warning border border-status-warning/30">
-                    {property.status}
+                    Arquivado
                   </span>
                 )}
               </div>

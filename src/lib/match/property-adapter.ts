@@ -100,8 +100,9 @@ export function propertyToProjection(
   }
 
   // Status comercial
+  const isAtivo = property.ativo !== false && property.status !== 'Arquivado';
   const status: 'ativo' | 'inativo' | 'arquivado' =
-    property.status === 'Ativo'
+    isAtivo
       ? 'ativo'
       : property.status === 'Vendido'
       ? 'inativo'

@@ -39,8 +39,10 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
     filters.neighborhood || filters.type || filters.bedrooms || filters.minPrice ||
     filters.maxPrice || filters.sourceType || filters.onlyThisWeek || filters.status !== 'Ativo'
   );
-  const priceMinBound = Math.floor(availablePriceBounds.min / 10000) * 10000;
-  const priceMaxBound = Math.max(priceMinBound + 10000, Math.ceil(availablePriceBounds.max / 10000) * 10000);
+  const rawMin = Number.isFinite(availablePriceBounds?.min) ? availablePriceBounds.min : 0;
+  const rawMax = Number.isFinite(availablePriceBounds?.max) ? availablePriceBounds.max : 1000000;
+  const priceMinBound = Math.floor(rawMin / 10000) * 10000;
+  const priceMaxBound = Math.max(priceMinBound + 10000, Math.ceil(rawMax / 10000) * 10000);
   const [priceRange, setPriceRange] = useState({ min: priceMinBound, max: priceMaxBound });
 
   useEffect(() => {

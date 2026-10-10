@@ -329,7 +329,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
   useEffect(() => {
     if (!inventoryReady || initialMatchSyncStarted.current) return;
     initialMatchSyncStarted.current = true;
-    const activeProps = properties.filter((p) => p.status === 'Ativo');
+    const activeProps = properties.filter((p) => p.ativo !== false && p.status !== 'Arquivado');
     // Executa em segundo plano de forma silenciosa e não-bloqueante
     activeProps.forEach((p) => {
       syncPropertyToMatch(p).catch(() => {});
@@ -393,7 +393,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
     if (currentProperty?.public_page_active) {
       const token = getSavedPublicAdminToken();
       if (token) {
-        void setPublicPage(syncedProperty, syncedProperty.status === 'Ativo' && currentProperty.status === 'Ativo', token)
+        void setPublicPage(syncedProperty, syncedProperty.ativo !== false && currentProperty.ativo !== false, token)
           .then((result) => setProperties((prev) => prev.map((property) => property.id === updatedProperty.id
             ? { ...syncedProperty, public_page_id: result.id, public_page_active: result.active }
             : property)))
@@ -534,13 +534,15 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       // Filtro de Preço Mínimo
       if (filters.minPrice) {
         const minP = parseFloat(filters.minPrice);
-        if (p.price < minP) return false;
+        const propPrice = Number(p.price || p.price_from || 0);
+        if (propPrice > 0 && propPrice < minP) return false;
       }
 
       // Filtro de Preço Máximo
       if (filters.maxPrice) {
         const maxP = parseFloat(filters.maxPrice);
-        if (p.price > maxP) return false;
+        const propPrice = Number(p.price || p.price_from || 0);
+        if (propPrice > 0 && propPrice > maxP) return false;
       }
 
       // Filtro de Origem
@@ -557,10 +559,12 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
 
       return true;
     }).sort((a, b) => {
-      if (filters.sortBy === 'price_asc') return a.price - b.price;
-      if (filters.sortBy === 'price_desc') return b.price - a.price;
-      if (filters.sortBy === 'area_asc') return a.area_m2 - b.area_m2;
-      if (filters.sortBy === 'area_desc') return b.area_m2 - a.area_m2;
+      const priceA = Number(a.price || a.price_from || 0);
+      const priceB = Number(b.price || b.price_from || 0);
+      if (filters.sortBy === 'price_asc') return priceA - priceB;
+      if (filters.sortBy === 'price_desc') return priceB - priceA;
+      if (filters.sortBy === 'area_asc') return (a.area_m2 || 0) - (b.area_m2 || 0);
+      if (filters.sortBy === 'area_desc') return (b.area_m2 || 0) - (a.area_m2 || 0);
       // Default: recent
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
@@ -618,7 +622,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
     const wasArquivado = property?.ativo === false || property?.status === 'Arquivado';
     const nextAtivo = wasArquivado; // se estava arquivado, volta a ser ativo (true)
     if (property) {
-      syncPropertyToMatch({ ...property, ativo: nextAtivo, status: nextAtivo ? 'Ativo' : 'Arquivado' }).catch(console.error);
+      syncPropertyToMatch({ ...property, ativo: nextAtivo }).catch(console.error);
     }
     setProperties((prev) =>
       prev.map((p) => {
@@ -971,7 +975,7 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
             {/* 3. RODAPÉ: Carrossel Horizontal de Adicionados Recentemente */}
             <div className="flex-shrink-0">
               <RecentCarousel
-                properties={properties.filter((p) => p.status === 'Ativo')}
+                properties={properties.filter((p) => p.ativo !== false && p.status !== 'Arquivado')}
                 onSelectProperty={(prop) => handleOpenDetail(prop)}
                 onViewAll={() => navigateToSection('estoque')}
               />
@@ -989,8 +993,8 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
                 onFilterChange={(newFilters) => setFilters(newFilters)}
                 availableNeighborhoods={availableNeighborhoods}
                 availablePriceBounds={{
-                  min: Math.min(...properties.map((property) => property.price), 0),
-                  max: Math.max(...properties.map((property) => property.price), 0),
+                  min: Math.min(...properties.map((p) => Number(p.price || p.price_from || 0)).filter((v) => v > 0), 0),
+                  max: Math.max(...properties.map((p) => Number(p.price || p.price_from || 0)), 0),
                 }}
                 totalResults={filteredProperties.length}
               />
