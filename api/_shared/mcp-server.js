@@ -33,8 +33,8 @@ export const MCP_TOOLS_DEFINITIONS = [
         },
         incluir_internos: {
           type: 'boolean',
-          default: true,
-          description: 'Se true, inclui os dados confidenciais (construtora, contato, observação interna) agrupados no objeto interno (padrão: true)',
+          default: false,
+          description: 'Se true, inclui os dados confidenciais (construtora, contato, observação interna) agrupados no objeto interno (padrão: false)',
         },
         incluir_testes: {
           type: 'boolean',
@@ -199,9 +199,9 @@ export const MCP_TOOLS_DEFINITIONS = [
           description: 'Se o empreendimento está ativo no catálogo (true) ou arquivado (false)',
         },
         is_teste: {
-          type: ['boolean', 'null'],
+          type: 'boolean',
           default: false,
-          description: 'Se true, marca o imóvel como registro de teste técnico (nunca é exibido no estoque, site ou redes sociais)',
+          description: 'Se true, marca o empreendimento como registro de teste técnico (padrão: false). Registros de teste nunca são exibidos no estoque, site ou redes sociais.',
         },
       },
     },
@@ -250,7 +250,7 @@ export const MCP_TOOLS_DEFINITIONS = [
               link_pasta: { type: ['string', 'null'] },
               data_tabela: { type: ['string', 'null'] },
               ativo: { type: ['boolean', 'null'] },
-              is_teste: { type: ['boolean', 'null'], default: false, description: 'Se true, marca o imóvel como teste técnico' },
+              is_teste: { type: 'boolean', default: false, description: 'Se true, marca o empreendimento como teste técnico (padrão: false)' },
             },
           },
           description: 'Lista de empreendimentos para processar (máximo 50 itens)',

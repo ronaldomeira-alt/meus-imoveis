@@ -187,7 +187,7 @@ export async function withDevelopmentLock(key, fn) {
 /**
  * 1. buscar_empreendimentos
  */
-export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0, incluir_internos = true, incluir_testes = false } = {}) {
+export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0, incluir_internos = false, incluir_testes = false } = {}) {
   const supabase = getSupabaseClient();
   const accountId = getAccountId();
 
@@ -381,7 +381,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
       chave_externa: u.chave_externa || null,
       unidade: u.unidade || null,
       torre_bloco: u.torre_bloco || null,
-      tipo: u.tipo || 'Apartamento',
+      tipo: u.tipo || null,
       quartos: u.quartos !== undefined && u.quartos !== null ? u.quartos : (u.bedrooms !== undefined ? u.bedrooms : null),
       suites: u.suites !== undefined && u.suites !== null ? u.suites : null,
       banheiros: u.banheiros !== undefined && u.banheiros !== null ? u.banheiros : (u.bathrooms !== undefined ? u.bathrooms : null),
@@ -813,7 +813,7 @@ async function validateImageQuality(buffer) {
     const shortSide = Math.min(width, height);
 
     if (longSide < 400 || shortSide < 300) {
-      throw new Error('imagem inválida');
+      throw new Error(`imagem ${width}x${height} abaixo do mínimo 400x300`);
     }
 
     const sampleSize = 64;
@@ -845,13 +845,13 @@ async function validateImageQuality(buffer) {
     const totalStd = Math.sqrt((stdR ** 2 + stdG ** 2 + stdB ** 2) / 3);
 
     if (totalStd < 8) {
-      throw new Error('imagem inválida');
+      throw new Error(`imagem monocromática sem variação de cor suficiente (desvio padrão: ${totalStd.toFixed(1)})`);
     }
   } catch (err) {
-    if (err.message === 'imagem inválida') {
+    if (err.message.startsWith('imagem ')) {
       throw err;
     }
-    throw new Error('imagem inválida');
+    throw new Error(`imagem inválida: ${err.message}`);
   }
 }
 
@@ -1626,9 +1626,11 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
         id: existing ? existing.id : crypto.randomUUID(),
         empreendimento_id: propertyId,
         chave_externa: String(u.chave_externa).trim(),
-        unidade: u.unidade !== undefined ? String(u.unidade).trim() : (existing?.unidade || ''),
-        torre_bloco: u.torre_bloco !== undefined ? String(u.torre_bloco).trim() : (existing?.torre_bloco || ''),
-        tipo: u.tipo !== undefined ? String(u.tipo).trim() : (existing?.tipo || 'Apartamento'),
+        unidade: u.unidade !== undefined ? (u.unidade !== null ? String(u.unidade).trim() : null) : (existing?.unidade || ''),
+        torre_bloco: u.torre_bloco !== undefined ? (u.torre_bloco !== null ? String(u.torre_bloco).trim() : null) : (existing?.torre_bloco || ''),
+        tipo: u.tipo !== undefined
+          ? (u.tipo !== null && String(u.tipo).trim() !== '' ? String(u.tipo).trim() : null)
+          : (existing?.tipo ?? null),
         quartos: u.quartos !== undefined
           ? (u.quartos !== null ? Number(u.quartos) : null)
           : (existing?.quartos ?? null),

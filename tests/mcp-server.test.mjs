@@ -429,30 +429,29 @@ async function runMcpTests() {
   assert(foundItem, 'Item deve existir na lista de resultados com incluir_testes');
   assert.strictEqual(foundItem.is_teste, true, 'Item deve ter is_teste=true');
   assert.strictEqual(foundItem.construtora, undefined, 'construtora NÃO pode estar no nível de cima (raiz)');
-  assert(foundItem.interno, 'item.interno deve existir quando incluir_internos=true (padrão)');
-  assert.strictEqual(foundItem.interno.construtora, 'Alliance Construtora', 'interno.construtora deve ser Alliance Construtora');
-  assert.strictEqual(foundItem.interno.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
-  assert.strictEqual(foundItem.interno.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
-  assert.strictEqual(foundItem.interno.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301');
+  assert.strictEqual(foundItem.interno, undefined, 'item.interno NÃO deve existir na busca padrão quando incluir_internos=false (padrão)');
 
-  // Testar buscar_empreendimentos com incluir_internos: false
-  const searchWithoutInternals = await rpcCall({
+  // Testar buscar_empreendimentos com incluir_internos: true explícito
+  const searchWithInternals = await rpcCall({
     method: 'tools/call',
     params: {
       name: 'buscar_empreendimentos',
       arguments: {
         texto: testChaveExterna,
         incluir_testes: true,
-        incluir_internos: false,
+        incluir_internos: true,
       },
     },
   });
-  const searchWithoutInternalsResult = JSON.parse(searchWithoutInternals.json.result.content[0].text);
-  const foundWithoutInternals = searchWithoutInternalsResult.itens.find((it) => it.chave_externa === testChaveExterna);
-  assert(foundWithoutInternals, 'Item deve existir');
-  assert.strictEqual(foundWithoutInternals.construtora, undefined);
-  assert.strictEqual(foundWithoutInternals.interno, undefined, 'item.interno deve ser omitido quando incluir_internos=false');
-  console.log('  ✓ buscar_empreendimentos filtra is_teste por padrão e isola construtora em objeto interno: PASS');
+  const searchWithInternalsResult = JSON.parse(searchWithInternals.json.result.content[0].text);
+  const foundWithInternals = searchWithInternalsResult.itens.find((it) => it.chave_externa === testChaveExterna);
+  assert(foundWithInternals, 'Item deve existir');
+  assert(foundWithInternals.interno, 'item.interno deve existir quando incluir_internos=true');
+  assert.strictEqual(foundWithInternals.interno.construtora, 'Alliance Construtora', 'interno.construtora deve ser Alliance Construtora');
+  assert.strictEqual(foundWithInternals.interno.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
+  assert.strictEqual(foundWithInternals.interno.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
+  assert.strictEqual(foundWithInternals.interno.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301');
+  console.log('  ✓ buscar_empreendimentos tem incluir_internos=false por padrão e isola construtora em item.interno quando true: PASS');
 
   // 5c. TESTE DE VALIDAÇÃO DE IMAGENS: rejeitar imagens menores que 400x300 ou de uma cor só (std dev < 8)
   console.log('\n[5c] Testando rejeição de imagem inválida (pequena ou monocromática)...');
@@ -468,7 +467,7 @@ async function runMcpTests() {
     },
   });
   assert(smallImgCall.json.result.isError, 'Imagem menor que 400x300 deve ser rejeitada com erro');
-  assert(smallImgCall.json.result.content[0].text.includes('imagem inválida'), 'Erro deve ser "imagem inválida"');
+  assert(smallImgCall.json.result.content[0].text.includes('abaixo do mínimo 400x300'), 'Erro deve especificar dimensões abaixo do mínimo 400x300');
 
   const monoImgCall = await rpcCall({
     method: 'tools/call',
@@ -482,8 +481,8 @@ async function runMcpTests() {
     },
   });
   assert(monoImgCall.json.result.isError, 'Imagem de uma cor só deve ser rejeitada com erro');
-  assert(monoImgCall.json.result.content[0].text.includes('imagem inválida'), 'Erro deve ser "imagem inválida"');
-  console.log('  ✓ Rejeição de imagens menores que 400x300 px ou monocromáticas com erro "imagem inválida": PASS');
+  assert(monoImgCall.json.result.content[0].text.includes('monocromática'), 'Erro deve especificar imagem monocromática');
+  console.log('  ✓ Rejeição de imagens menores que 400x300 px ou monocromáticas com mensagem descritiva: PASS');
 
   // 6. TESTAR adicionar_fotos_lote (10 fotos válidas em série e confirmar 10 gravadas)
   console.log('\n[6] Testando adicionar_fotos_lote com 10 fotos válidas em série...');
@@ -595,7 +594,7 @@ async function runMcpTests() {
             chave_externa: `${testChaveExterna}-apto-102`,
             unidade: '102',
             torre_bloco: 'Torre Mar',
-            tipo: 'Apartamento',
+            // tipo omitido intencionalmente: deve permanecer null
             // quartos, suites, area_m2, preco, sinal omitidos intencionalmente
             status: 'disponivel',
           },
@@ -626,9 +625,10 @@ async function runMcpTests() {
   assert.strictEqual(u101.mobiliado, false, 'Mobiliado da unidade deve ser false');
   assert.strictEqual(u101.sinal, null, 'Sinal omitido deve ser null');
   assert.strictEqual(u101.parcela, null, 'Parcela omitida deve ser null');
+  assert.strictEqual(u102.tipo, null, 'Tipo omitido na unidade 102 deve permanecer null (não padrão Apartamento)');
   assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
   assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
-  console.log('  ✓ Unidade com posicao "Nascente Norte", sem position, andar, banheiros, vagas, mobiliado e campos não informados como NULL: PASS');
+  console.log('  ✓ Unidade com posicao "Nascente Norte", sem position, andar, banheiros, vagas, mobiliado, tipo=null e campos não informados como NULL: PASS');
 
   // 8b. VALIDAÇÃO DE ISOLAMENTO CONFIDENCIAL (CLIENTE / COMPARTILHAMENTO)
   console.log('\n[8b] Conferindo isolamento de dados confidenciais (cliente / compartilhamento)...');
