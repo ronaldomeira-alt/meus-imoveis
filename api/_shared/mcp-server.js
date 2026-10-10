@@ -261,7 +261,7 @@ export const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'adicionar_foto',
     description:
-      'Baixa uma imagem a partir de uma URL pública (converte automaticamente links do Google Drive e Dropbox), valida (JPG/PNG/WEBP até 15MB), deduplica por hash SHA-256, salva no storage do CRM e vincula ao empreendimento.',
+      'Baixa uma imagem a partir de uma URL pública (converte automaticamente links do Google Drive e Dropbox), valida dimensões mínimas (400x300 px), qualidade de cor (rejeita fotos monocromáticas), formatos JPG/PNG/WEBP até 15MB, deduplica por hash SHA-256, salva no storage do CRM e vincula ao empreendimento.',
     inputSchema: {
       type: 'object',
       required: ['url'],
@@ -297,7 +297,7 @@ export const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'adicionar_fotos_lote',
     description:
-      'Envia até 30 fotos em lote para um empreendimento. Processa em série no servidor com lock atômico por empreendimento, baixando cada URL (Google Drive e Dropbox convertidos para download direto), validando formato/tamanho, deduplicando por SHA-256 e gravando no R2. Se capa=true em alguma foto, define como capa ao final.',
+      'Envia até 30 fotos em lote para um empreendimento. Processa em série no servidor com lock atômico por empreendimento, baixando cada URL (Google Drive e Dropbox convertidos para download direto), validando dimensões mínimas (400x300 px), qualidade de cor (rejeita fotos monocromáticas) e formatos JPG/PNG/WEBP até 15MB, deduplicando por SHA-256 e gravando no R2. Se capa=true em alguma foto, define como capa ao final.',
     inputSchema: {
       type: 'object',
       required: ['fotos'],
@@ -343,7 +343,7 @@ export const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'adicionar_foto_base64',
     description:
-      'Adiciona uma foto diretamente enviando os bytes em Base64. Valida tamanho e tipo, deduplica por hash, salva no storage e vincula ao empreendimento.',
+      'Adiciona uma foto diretamente enviando os bytes em Base64. Valida dimensões mínimas (400x300 px), qualidade de cor (rejeita imagens monocromáticas), tamanho e tipo (JPG/PNG/WEBP até 15MB), deduplica por hash, salva no storage e vincula ao empreendimento.',
     inputSchema: {
       type: 'object',
       required: ['base64'],
@@ -719,7 +719,7 @@ export async function handleMcpServer(req, res) {
 
     return sendJson(res, 200, {
       name: 'meus-imoveis-mcp',
-      version: '1.2.0',
+      version: '1.2.1',
       protocol: 'mcp-jsonrpc-2.0',
       status: 'online',
       tools_available: MCP_TOOLS_DEFINITIONS.length,
@@ -769,7 +769,7 @@ export async function handleMcpServer(req, res) {
             },
             serverInfo: {
               name: 'meus-imoveis-mcp',
-              version: '1.2.0',
+              version: '1.2.1',
             },
           },
         });
