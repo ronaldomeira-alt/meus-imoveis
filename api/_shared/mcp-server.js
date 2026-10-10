@@ -650,26 +650,17 @@ async function executeToolCall(toolName, args = {}) {
 }
 
 function sendJson(res, status, obj) {
-  if (typeof res.status === 'function' && typeof res.json === 'function') {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.setHeader('Surrogate-Control', 'no-store');
-    res.setHeader('CDN-Cache-Control', 'no-store');
-    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
-    return res.status(status).json(obj);
-  }
-
+  const buf = Buffer.from(JSON.stringify(obj), 'utf-8');
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Length', String(buf.byteLength));
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('Surrogate-Control', 'no-store');
   res.setHeader('CDN-Cache-Control', 'no-store');
   res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
-  res.end(JSON.stringify(obj));
+  res.end(buf);
 }
 
 /**
