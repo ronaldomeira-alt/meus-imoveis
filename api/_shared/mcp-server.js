@@ -31,6 +31,11 @@ export const MCP_TOOLS_DEFINITIONS = [
           default: 0,
           description: 'Deslocamento para paginação (0, 20, 40...). Padrão: 0',
         },
+        incluir_internos: {
+          type: 'boolean',
+          default: true,
+          description: 'Se true, inclui os dados confidenciais (construtora, contato, observação interna) agrupados no objeto interno (padrão: true)',
+        },
       },
     },
   },
@@ -642,7 +647,12 @@ function sendJson(res, status, obj) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': buf.length,
-    'Cache-Control': 'no-store',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+    'CDN-Cache-Control': 'no-store',
+    'Vercel-CDN-Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept',
@@ -654,11 +664,13 @@ function sendJson(res, status, obj) {
  * Handler principal do MCP Server sobre HTTP Streamable / JSON-RPC 2.0
  */
 export async function handleMcpServer(req, res) {
-  // CORS universal
+  // CORS universal e no-store
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -675,13 +687,15 @@ export async function handleMcpServer(req, res) {
     });
   }
 
-  // Suporte a handshake GET (exibe status e informações do MCP)
+  // Suporte a handshake GET (exibe status, ferramentas disponíveis e catálogo completo)
   if (req.method === 'GET') {
     const isSse = (req.headers['accept'] || '').includes('text/event-stream');
     if (isSse) {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
         Connection: 'keep-alive',
       });
       res.write(`event: endpoint\ndata: ${req.url}\n\n`);
@@ -694,6 +708,7 @@ export async function handleMcpServer(req, res) {
       protocol: 'mcp-jsonrpc-2.0',
       status: 'online',
       tools_available: MCP_TOOLS_DEFINITIONS.length,
+      tools: MCP_TOOLS_DEFINITIONS,
     });
   }
 
@@ -735,7 +750,7 @@ export async function handleMcpServer(req, res) {
           result: {
             protocolVersion: '2024-11-05',
             capabilities: {
-              tools: { listChanged: false },
+              tools: { listChanged: true },
             },
             serverInfo: {
               name: 'meus-imoveis-mcp',
@@ -753,7 +768,11 @@ export async function handleMcpServer(req, res) {
         return sendJson(res, 200, { jsonrpc: '2.0', id, result: {} });
       }
 
-      case 'tools/list': {
+      case 'tools/list':
+      case 'list_tools':
+      case 'listTools':
+      case 'tools.list':
+      case 'mcp.tools/list': {
         return sendJson(res, 200, {
           jsonrpc: '2.0',
           id,

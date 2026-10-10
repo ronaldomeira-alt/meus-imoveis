@@ -84,12 +84,21 @@ async function runMcpTests() {
   });
   assert.strictEqual(initRes.status, 200);
   assert.strictEqual(initRes.json.result.serverInfo.name, 'meus-imoveis-mcp');
-  console.log('  ✓ Handshake initialize: PASS');
+  assert.strictEqual(initRes.json.result.capabilities?.tools?.listChanged, true, 'capabilities.tools.listChanged deve ser true para invalidar cache de clientes MCP');
+  console.log('  ✓ Handshake initialize com listChanged=true: PASS');
 
   // 3. LISTAGEM DE FERRAMENTAS: tools/list
   console.log('[3] Testando tools/list e validação estrita de JSON Schemas...');
   const toolsRes = await rpcCall({ method: 'tools/list' });
   assert.strictEqual(toolsRes.status, 200);
+  assert(toolsRes.headers['Cache-Control']?.includes('no-store'), 'Deve conter Cache-Control no-store');
+  assert(toolsRes.headers['CDN-Cache-Control'] === 'no-store', 'Deve conter CDN-Cache-Control no-store');
+
+  // Testar alias list_tools
+  const aliasRes = await rpcCall({ method: 'list_tools' });
+  assert.strictEqual(aliasRes.status, 200);
+  assert.strictEqual(aliasRes.json.result.tools.length, toolsRes.json.result.tools.length);
+
   const toolsList = toolsRes.json.result.tools;
   const toolNames = toolsList.map((t) => t.name);
   console.log(`  ✓ Ferramentas expostas (${toolNames.length}):`, toolNames.join(', '));
@@ -108,6 +117,9 @@ async function runMcpTests() {
   assert(toolNames.includes('desativar_empreendimento'));
 
   // Validação dos schemas declarados no tools/list
+  const buscarTool = toolsList.find((t) => t.name === 'buscar_empreendimentos');
+  assert(buscarTool.inputSchema.properties.incluir_internos, 'buscar_empreendimentos deve declarar parâmetro incluir_internos');
+
   const upsertTool = toolsList.find((t) => t.name === 'upsert_empreendimento');
   const upsertProps = upsertTool.inputSchema.properties;
   assert(upsertProps.origem, 'upsert_empreendimento deve declarar origem');
@@ -284,6 +296,47 @@ async function runMcpTests() {
   assert.strictEqual(idempResult.id, createdDevId, 'ID deve ser idêntico');
   assert.strictEqual(idempResult.criado, false, 'Deve marcar criado=false');
   console.log('  ✓ Idempotência confirmada (atualizado sem duplicar): PASS');
+
+  // 5b. TESTAR buscar_empreendimentos: construtora dentro de "interno", nunca na raiz
+  console.log('\n[5b] Testando buscar_empreendimentos (construtora em item.interno e ausente na raiz)...');
+  const searchCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'buscar_empreendimentos',
+      arguments: {
+        texto: testChaveExterna,
+      },
+    },
+  });
+  assert.strictEqual(searchCall.status, 200);
+  const searchResult = JSON.parse(searchCall.json.result.content[0].text);
+  assert(searchResult.total >= 1, 'Deve encontrar o empreendimento recém-criado');
+  const foundItem = searchResult.itens.find((it) => it.chave_externa === testChaveExterna);
+  assert(foundItem, 'Item deve existir na lista de resultados');
+  assert.strictEqual(foundItem.construtora, undefined, 'construtora NÃO pode estar no nível de cima (raiz)');
+  assert(foundItem.interno, 'item.interno deve existir quando incluir_internos=true (padrão)');
+  assert.strictEqual(foundItem.interno.construtora, 'Alliance Construtora', 'interno.construtora deve ser Alliance Construtora');
+  assert.strictEqual(foundItem.interno.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
+  assert.strictEqual(foundItem.interno.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
+  assert.strictEqual(foundItem.interno.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301');
+
+  // Testar buscar_empreendimentos com incluir_internos: false
+  const searchWithoutInternals = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'buscar_empreendimentos',
+      arguments: {
+        texto: testChaveExterna,
+        incluir_internos: false,
+      },
+    },
+  });
+  const searchWithoutInternalsResult = JSON.parse(searchWithoutInternals.json.result.content[0].text);
+  const foundWithoutInternals = searchWithoutInternalsResult.itens.find((it) => it.chave_externa === testChaveExterna);
+  assert(foundWithoutInternals, 'Item deve existir');
+  assert.strictEqual(foundWithoutInternals.construtora, undefined);
+  assert.strictEqual(foundWithoutInternals.interno, undefined, 'item.interno deve ser omitido quando incluir_internos=false');
+  console.log('  ✓ buscar_empreendimentos isola construtora em objeto interno e respeita incluir_internos: PASS');
 
   // 6. TESTAR adicionar_fotos_lote (10 fotos em série e confirmar 10 gravadas)
   console.log('\n[6] Testando adicionar_fotos_lote com 10 fotos em série...');

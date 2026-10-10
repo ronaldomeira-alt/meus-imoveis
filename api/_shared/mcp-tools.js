@@ -187,7 +187,7 @@ export async function withDevelopmentLock(key, fn) {
 /**
  * 1. buscar_empreendimentos
  */
-export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0 } = {}) {
+export async function buscarEmpreendimentos({ texto = '', construtora = '', bairro = '', limite = 20, offset = 0, incluir_internos = true } = {}) {
   const supabase = getSupabaseClient();
   const accountId = getAccountId();
 
@@ -234,24 +234,37 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
   const total = filtered.length;
   const paged = filtered.slice(skip, skip + take);
 
-  const itens = paged.map(({ id, data: p, updated_at }) => ({
-    id,
-    chave_externa: p.chave_externa || null,
-    nome: p.condominium_name || p.title || p.nome || 'Sem nome',
-    construtora: p.partner_name || p.construtora || null,
-    bairro: p.neighborhood || p.bairro || null,
-    cidade: p.cidade || p.city || 'João Pessoa',
-    status: p.stage || p.status || 'Ativo',
-    ativo: p.status !== 'Arquivado' && p.ativo !== false,
-    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined && p.price !== null ? p.price : null),
-    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
-    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
-    vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
-    observacao: p.observacao || null,
-    fotos_count: Array.isArray(p.photos) ? p.photos.length : 0,
-    unidades_count: Array.isArray(p.units) ? p.units.length : 0,
-    atualizado_em: p.updated_at || updated_at,
-  }));
+  const itens = paged.map(({ id, data: p, updated_at }) => {
+    const item = {
+      id,
+      chave_externa: p.chave_externa || null,
+      nome: p.condominium_name || p.title || p.nome || 'Sem nome',
+      nome_publico: p.nome_publico || null,
+      bairro: p.neighborhood || p.bairro || null,
+      cidade: p.cidade || p.city || 'João Pessoa',
+      status: p.stage || p.status || 'Ativo',
+      ativo: p.status !== 'Arquivado' && p.ativo !== false,
+      preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
+      area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
+      area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
+      vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
+      observacao: p.observacao || null,
+      fotos_count: Array.isArray(p.photos) ? p.photos.length : 0,
+      unidades_count: Array.isArray(p.units) ? p.units.length : 0,
+      atualizado_em: p.updated_at || updated_at,
+    };
+
+    if (incluir_internos) {
+      item.interno = {
+        construtora: p.partner_name || p.construtora || null,
+        contato_construtora: p.contato_construtora || p.partner_phone || null,
+        observacao_interna: p.observacao_interna || p.internal_notes || null,
+        endereco_completo: p.endereco_completo || null,
+      };
+    }
+
+    return item;
+  });
 
   return {
     total,
