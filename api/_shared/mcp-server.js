@@ -637,10 +637,17 @@ async function executeToolCall(toolName, args = {}) {
 }
 
 function sendJson(res, status, obj) {
-  res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-store');
-  res.end(JSON.stringify(obj));
+  const jsonStr = JSON.stringify(obj);
+  const buf = Buffer.from(jsonStr, 'utf-8');
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept',
+  });
+  res.end(buf);
 }
 
 /**
