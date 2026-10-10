@@ -260,9 +260,10 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
   const paged = filtered.slice(skip, skip + take);
 
   const itens = paged.map(({ id, data: p, updated_at }) => {
-    const itemStatus = p.status_enum !== undefined
-      ? p.status_enum
-      : mapStatusToEnum(p.stage);
+    const isAtivo = p.ativo !== false;
+    const itemStatus = p.status_enum !== undefined && p.status_enum !== null
+      ? mapStatusToEnum(p.status_enum)
+      : (mapStatusToEnum(p.stage) ?? (p.status !== 'Ativo' && p.status !== 'Arquivado' ? mapStatusToEnum(p.status) : null) ?? null);
 
     const fotosCount = p.fotos_count !== undefined && p.fotos_count !== null
       ? Number(p.fotos_count)
@@ -281,7 +282,9 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
       bairro: p.neighborhood || p.bairro || null,
       cidade: p.cidade || p.city || 'João Pessoa',
       status: itemStatus,
-      ativo: p.status !== 'Arquivado' && p.ativo !== false,
+      ativo: isAtivo,
+      motivo_desativacao: !isAtivo ? (p.desativado_motivo || p.motivo_desativacao || null) : null,
+      desativado_em: !isAtivo ? (p.desativado_em || null) : null,
       preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
       area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
       area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
@@ -380,6 +383,14 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
   const linkTabelaVal = p.link_tabela || null;
   const linkPastaVal = p.link_pasta || null;
 
+  const isAtivo = p.ativo !== false;
+  const currentStatusEnum = p.status_enum !== undefined && p.status_enum !== null
+    ? mapStatusToEnum(p.status_enum)
+    : (mapStatusToEnum(p.stage) ?? (p.status !== 'Ativo' && p.status !== 'Arquivado' ? mapStatusToEnum(p.status) : null) ?? null);
+
+  const motivoDesativacao = !isAtivo ? (p.desativado_motivo || p.motivo_desativacao || null) : null;
+  const desativadoEm = !isAtivo ? (p.desativado_em || null) : null;
+
   return {
     id: found.property_id,
     chave_externa: p.chave_externa || null,
@@ -391,7 +402,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     bairro: p.neighborhood || p.bairro || null,
     cidade: p.cidade || p.city || 'João Pessoa',
     endereco: p.endereco !== undefined ? p.endereco : ([p.neighborhood || p.bairro, p.cidade || p.city].filter(Boolean).join(', ') || null),
-    status: p.status_enum !== undefined ? p.status_enum : mapStatusToEnum(p.stage),
+    status: currentStatusEnum,
     entrega: p.delivery_date || null,
     preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
     area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
@@ -406,7 +417,9 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     observacao: p.observacao || null,
     diferenciais: p.building_features || [],
     data_tabela: p.data_tabela || null,
-    ativo: p.status !== 'Arquivado' && p.ativo !== false,
+    ativo: isAtivo,
+    motivo_desativacao: motivoDesativacao,
+    desativado_em: desativadoEm,
     fotos_count: p.fotos_count !== undefined && p.fotos_count !== null ? Number(p.fotos_count) : photos.length,
     fotos: photos,
     unidades_count: p.unidades_count !== undefined && p.unidades_count !== null ? Number(p.unidades_count) : units.length,
@@ -569,9 +582,9 @@ export async function upsertEmpreendimento(params = {}) {
   // 7. Status (fase da obra): enum ('lancamento' | 'em_construcao' | 'pronto' | 'pre_lancamento' | null)
   // - Na criação: se omitido ou null, grava null ("não informado").
   // - No update: se omitido (undefined), mantém o valor existente sem sobrescrever. Se explicitamente null, grava null.
-  const existingStatusEnum = existingData.status_enum !== undefined
-    ? existingData.status_enum
-    : mapStatusToEnum(existingData.stage);
+  const existingStatusEnum = existingData.status_enum !== undefined && existingData.status_enum !== null
+    ? mapStatusToEnum(existingData.status_enum)
+    : (mapStatusToEnum(existingData.stage) ?? (existingData.status !== 'Ativo' && existingData.status !== 'Arquivado' ? mapStatusToEnum(existingData.status) : null) ?? null);
 
   let finalStatusEnum;
   if (params.status !== undefined) {
@@ -713,12 +726,24 @@ export async function upsertEmpreendimento(params = {}) {
     finalDataTabela = params.data_tabela !== null ? String(params.data_tabela).trim() : null;
   }
 
-  // 21. Ativo
-  let finalAtivo = existingData.status !== 'Arquivado' && existingData.ativo !== false;
+  // 21. Ativo & Reativação
+  let finalAtivo = existingData.ativo !== false;
+  let finalDesativadoMotivo = existingData.desativado_motivo || existingData.motivo_desativacao || null;
+  let finalDesativadoEm = existingData.desativado_em || null;
+
   if (params.ativo !== undefined) {
     finalAtivo = Boolean(params.ativo);
+    if (finalAtivo) {
+      // Reativação explícita: limpa motivo e data de desativação
+      finalDesativadoMotivo = null;
+      finalDesativadoEm = null;
+    } else if (existingData.ativo !== false) {
+      finalDesativadoEm = finalDesativadoEm || nowIso;
+    }
   } else if (isCreate) {
     finalAtivo = true;
+    finalDesativadoMotivo = null;
+    finalDesativadoEm = null;
   }
 
   const nowIso = new Date().toISOString();
@@ -775,7 +800,10 @@ export async function upsertEmpreendimento(params = {}) {
     link_pasta: finalLinkPasta,
     data_tabela: finalDataTabela,
     ativo: finalAtivo,
-    status: finalAtivo ? 'Ativo' : 'Arquivado',
+    status: finalStatusEnum, // Estritamente o enum da fase da obra (ou null), NUNCA 'Ativo' nem 'Arquivado'
+    desativado_motivo: finalDesativadoMotivo,
+    motivo_desativacao: finalDesativadoMotivo,
+    desativado_em: finalDesativadoEm,
     is_teste: finalIsTeste,
     photos_count: Array.isArray(existingData.photos) ? existingData.photos.length : 0,
     photos: Array.isArray(existingData.photos) ? existingData.photos : [],
@@ -809,6 +837,8 @@ export async function upsertEmpreendimento(params = {}) {
   return {
     id: propertyId,
     chave_externa: String(chave_externa).trim(),
+    ativo: finalAtivo,
+    status: finalStatusEnum,
     is_teste: finalIsTeste,
     criado: isCreate,
     atualizado_em: nowIso,
@@ -1861,9 +1891,20 @@ export async function desativarEmpreendimento({ id = null, chave_externa = null,
   const propertyData = devRow.property_data || {};
   const nowIso = new Date().toISOString();
 
+  // Preserva a fase da obra existente em formato de enum
+  const currentStatusEnum = propertyData.status_enum !== undefined && propertyData.status_enum !== null
+    ? mapStatusToEnum(propertyData.status_enum)
+    : (mapStatusToEnum(propertyData.stage) ?? (propertyData.status !== 'Ativo' && propertyData.status !== 'Arquivado' ? mapStatusToEnum(propertyData.status) : null) ?? null);
+
+  const desativadoMotivo = String(motivo || 'Desativado via MCP').trim();
+
+  // Soft delete: ativo=false; a fase da obra em status é preservada!
   propertyData.ativo = false;
-  propertyData.status = 'Arquivado';
-  propertyData.desativado_motivo = String(motivo || 'Desativado via MCP').trim();
+  propertyData.status = currentStatusEnum; // NUNCA 'Arquivado'! Preserva a fase real no enum ou null
+  propertyData.status_enum = currentStatusEnum;
+  propertyData.stage = mapEnumToStage(currentStatusEnum);
+  propertyData.desativado_motivo = desativadoMotivo;
+  propertyData.motivo_desativacao = desativadoMotivo;
   propertyData.desativado_em = nowIso;
   propertyData.updated_at = nowIso;
 
@@ -1876,16 +1917,16 @@ export async function desativarEmpreendimento({ id = null, chave_externa = null,
   await logMcpAudit({
     tool: 'desativar_empreendimento',
     affected_ids: [propertyId],
-    payload: { id: propertyId, motivo },
-    result: { ativo: false, status: 'Arquivado' },
+    payload: { id: propertyId, motivo: desativadoMotivo },
+    result: { ativo: false, status: currentStatusEnum },
   });
 
   return {
     id: propertyId,
     chave_externa: propertyData.chave_externa || null,
     ativo: false,
-    status: 'Arquivado',
-    motivo: propertyData.desativado_motivo,
+    status: currentStatusEnum,
+    motivo: desativadoMotivo,
     desativado_em: nowIso,
   };
 }

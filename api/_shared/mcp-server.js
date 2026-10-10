@@ -565,7 +565,7 @@ export const MCP_TOOLS_DEFINITIONS = [
   {
     name: 'desativar_empreendimento',
     description:
-      'Desativa um empreendimento com segurança (soft delete: ativo=false, status="Arquivado"). Nunca apaga do banco, preservando histórico e integridade.',
+      'Desativa um empreendimento existente no CRM (soft delete: ativo=false; a fase da obra em status é preservada). Não remove o registro físico nem as fotos.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -716,7 +716,7 @@ export async function handleMcpServer(req, res) {
 
     return sendJson(res, 200, {
       name: 'meus-imoveis-mcp',
-      version: '1.2.2',
+      version: '1.2.3',
       protocol: 'mcp-jsonrpc-2.0',
       status: 'online',
       tools_available: MCP_TOOLS_DEFINITIONS.length,
@@ -766,7 +766,7 @@ export async function handleMcpServer(req, res) {
             },
             serverInfo: {
               name: 'meus-imoveis-mcp',
-              version: '1.2.2',
+              version: '1.2.3',
             },
           },
         });

@@ -459,12 +459,15 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
       // Se estiver na seção "parceiros", filtra automaticamente apenas parceiros
       if (activeSection === 'parceiros' && p.source_type !== 'Parceiro') return false;
 
-      // Se estiver na seção "arquivados", filtra arquivados e vendidos
-      if (activeSection === 'arquivados' && p.status === 'Ativo') return false;
+      // Se estiver na seção "arquivados", filtra arquivados (ativo=false) e vendidos
+      if (activeSection === 'arquivados' && p.ativo !== false && p.status !== 'Arquivado') return false;
 
       // Se estiver no estoque normal, filtra status do filtro (default 'Ativo')
-      if (activeSection === 'estoque' && filters.status && p.status !== filters.status) {
-        return false;
+      if (activeSection === 'estoque') {
+        const isArquivado = p.ativo === false || p.status === 'Arquivado';
+        if (filters.status === 'Ativo' && isArquivado) return false;
+        if (filters.status === 'Arquivado' && !isArquivado) return false;
+        if (!filters.status && isArquivado) return false;
       }
 
       // Busca textual (construtora, condomínio, bairro, tipologia, endereço, etc.)
@@ -612,14 +615,21 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         .then((result) => setProperties((prev) => prev.map((item) => item.id === id ? { ...item, public_page_id: result.id, public_page_active: result.active } : item)))
         .catch((error) => console.error('Não foi possível atualizar a página pública do imóvel:', error));
     }
-    const nextStatus = property?.status === 'Arquivado' ? 'Ativo' : 'Arquivado';
+    const wasArquivado = property?.ativo === false || property?.status === 'Arquivado';
+    const nextAtivo = wasArquivado; // se estava arquivado, volta a ser ativo (true)
     if (property) {
-      syncPropertyToMatch({ ...property, status: nextStatus }).catch(console.error);
+      syncPropertyToMatch({ ...property, ativo: nextAtivo, status: nextAtivo ? 'Ativo' : 'Arquivado' }).catch(console.error);
     }
     setProperties((prev) =>
       prev.map((p) => {
         if (p.id === id) {
-          return { ...p, status: nextStatus, updated_at: new Date().toISOString() };
+          return {
+            ...p,
+            ativo: nextAtivo,
+            desativado_em: nextAtivo ? undefined : new Date().toISOString(),
+            motivo_desativacao: nextAtivo ? undefined : 'Arquivado via CRM',
+            updated_at: new Date().toISOString(),
+          };
         }
         return p;
       })

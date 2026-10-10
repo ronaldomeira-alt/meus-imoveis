@@ -284,7 +284,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                   className="w-full px-3.5 py-2 text-left text-xs font-medium text-ink-primary hover:text-ink-primary hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   <Archive className="w-3.5 h-3.5 text-status-warning" />
-                  <span>{property.status === 'Arquivado' ? 'Reativar imóvel' : 'Arquivar imóvel'}</span>
+                  <span>{property.ativo === false || property.status === 'Arquivado' ? 'Reativar imóvel' : 'Arquivar imóvel'}</span>
                 </button>
 
                 {/* Marcar como Vendido */}
@@ -338,14 +338,14 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
 
               <span
                 className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                  property.status === 'Ativo'
-                    ? 'bg-status-success/15 text-status-success border-status-success/30'
+                  property.ativo === false || property.status === 'Arquivado'
+                    ? 'bg-status-warning/15 text-status-warning border-status-warning/30'
                     : property.status === 'Vendido'
                     ? 'bg-accent/15 text-accent border-accent/30'
-                    : 'bg-status-warning/15 text-status-warning border-status-warning/30'
+                    : 'bg-status-success/15 text-status-success border-status-success/30'
                 }`}
               >
-                {property.status}
+                {property.ativo === false || property.status === 'Arquivado' ? 'Arquivado' : (property.status === 'Vendido' ? 'Vendido' : 'Ativo')}
               </span>
             </div>
 

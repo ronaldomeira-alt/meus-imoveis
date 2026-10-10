@@ -58,9 +58,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick, o
         />
 
         {/* Status se não for ativo */}
-        {property.status !== 'Ativo' && (
+        {(property.ativo === false || property.status === 'Arquivado') && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-bold bg-status-warning/20 border border-status-warning/40 text-status-warning">
-            {property.status}
+            Arquivado
           </span>
         )}
 

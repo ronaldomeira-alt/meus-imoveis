@@ -174,7 +174,7 @@ async function runMcpTests() {
   });
   assert.strictEqual(initRes.status, 200);
   assert.strictEqual(initRes.json.result.serverInfo.name, 'meus-imoveis-mcp');
-  assert.strictEqual(initRes.json.result.serverInfo.version, '1.2.2');
+  assert.strictEqual(initRes.json.result.serverInfo.version, '1.2.3');
   assert.strictEqual(initRes.json.result.capabilities?.tools?.listChanged, true, 'capabilities.tools.listChanged deve ser true para invalidar cache de clientes MCP');
   console.log('  ✓ Handshake initialize com listChanged=true: PASS');
 
@@ -738,7 +738,7 @@ async function runMcpTests() {
   assert.strictEqual(markResult.atualizadas, 1);
   console.log('  ✓ Unidade 101 marcada como vendida: PASS');
 
-  // 10. DESATIVAR EMPREENDIMENTO: desativar_empreendimento (soft delete)
+  // 10. DESATIVAR EMPREENDIMENTO: desativar_empreendimento (soft delete preservando status)
   console.log('\n[10] Testando desativação do empreendimento...');
   const deactCall = await rpcCall({
     method: 'tools/call',
@@ -751,9 +751,84 @@ async function runMcpTests() {
     },
   });
   const deactResult = JSON.parse(deactCall.json.result.content[0].text);
-  assert.strictEqual(deactResult.ativo, false);
-  assert.strictEqual(deactResult.status, 'Arquivado');
-  console.log('  ✓ Empreendimento desativado com segurança (soft delete): PASS');
+  assert.strictEqual(deactResult.ativo, false, 'ativo deve ser false');
+  assert.strictEqual(deactResult.status, 'lancamento', 'status deve ser preservado como "lancamento" (enum), NUNCA "Arquivado"');
+  assert.strictEqual(deactResult.motivo, 'Teste automatizado concluído');
+  assert.ok(deactResult.desativado_em);
+
+  // 10b. Conferência em obter_empreendimento e buscar_empreendimentos
+  const getDeactCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { id: createdDevId },
+    },
+  });
+  const getDeactResult = JSON.parse(getDeactCall.json.result.content[0].text);
+  assert.strictEqual(getDeactResult.ativo, false);
+  assert.strictEqual(getDeactResult.status, 'lancamento');
+  assert.strictEqual(getDeactResult.motivo_desativacao, 'Teste automatizado concluído');
+  assert.ok(getDeactResult.desativado_em);
+
+  const searchDeactCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'buscar_empreendimentos',
+      arguments: { chave_externa: testChaveExterna, incluir_testes: true },
+    },
+  });
+  const searchDeactResult = JSON.parse(searchDeactCall.json.result.content[0].text);
+  const foundDeact = searchDeactResult.itens.find((i) => i.id === createdDevId);
+  assert.ok(foundDeact);
+  assert.strictEqual(foundDeact.ativo, false);
+  assert.strictEqual(foundDeact.status, 'lancamento');
+  assert.strictEqual(foundDeact.motivo_desativacao, 'Teste automatizado concluído');
+  assert.ok(foundDeact.desativado_em);
+  console.log('  ✓ desativar_empreendimento, obter e buscar retornam mesmo status ("lancamento") e ativo:false: PASS');
+
+  // 11. REATIVAÇÃO: upsert_empreendimento com ativo: true
+  console.log('\n[11] Testando reativação com ativo:true mantendo o status...');
+  const reactCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'upsert_empreendimento',
+      arguments: {
+        chave_externa: testChaveExterna,
+        ativo: true,
+      },
+    },
+  });
+  const reactResult = JSON.parse(reactCall.json.result.content[0].text);
+  assert.strictEqual(reactResult.ativo, true);
+
+  const getReactCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { id: createdDevId },
+    },
+  });
+  const getReactResult = JSON.parse(getReactCall.json.result.content[0].text);
+  assert.strictEqual(getReactResult.ativo, true);
+  assert.strictEqual(getReactResult.status, 'lancamento', 'Reativação deve preservar o status intacto');
+  assert.strictEqual(getReactResult.motivo_desativacao, null, 'Reativação deve limpar motivo_desativacao');
+  assert.strictEqual(getReactResult.desativado_em, null, 'Reativação deve limpar desativado_em');
+  console.log('  ✓ Reativação com ativo:true reativa com sucesso e mantém o status: PASS');
+
+  // 12. Validação de toda a base: nenhum status fora do enum
+  console.log('\n[12] Verificando se toda a base possui status válido no enum...');
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const accountId = (process.env.MEUS_IMOVEIS_ACCOUNT_ID || process.env.MATCH_CANONICAL_ACCOUNT_ID || '').trim();
+  if (supabaseUrl && supabaseKey && accountId) {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: allProps } = await supabase.from('inventory_properties').select('property_id, property_data').eq('account_id', accountId);
+    const validEnums = new Set(['lancamento', 'em_construcao', 'pronto', 'pre_lancamento', null]);
+    const invalidList = (allProps || []).filter((r) => !validEnums.has(r.property_data?.status));
+    assert.strictEqual(invalidList.length, 0, `Nenhum registro pode ter status fora do enum. Encontrados: ${invalidList.length}`);
+    console.log(`  ✓ 100% dos ${allProps.length} registros da base têm status dentro do enum ("lancamento", "em_construcao", "pronto", "pre_lancamento", null): PASS`);
+  }
   } finally {
     console.log('\n[FINALLY] Executando limpeza estrita do registro de teste...');
     await cleanupTestDev(testChaveExterna, createdDevId);

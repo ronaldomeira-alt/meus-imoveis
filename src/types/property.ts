@@ -96,6 +96,9 @@ export interface Property {
   area_m2: number;
   is_development?: boolean;
   is_teste?: boolean;
+  ativo?: boolean;
+  motivo_desativacao?: string;
+  desativado_em?: string;
   area_range?: { min: number; max: number } | null;
   bedrooms_options?: number[] | null;
   stage?: DevelopmentStage;
