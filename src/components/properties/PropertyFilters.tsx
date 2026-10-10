@@ -170,6 +170,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
               <option value="" className="bg-[#15181D]">Todos</option>
               <option value="Próprio" className="bg-[#15181D]">Próprio</option>
               <option value="Parceiro" className="bg-[#15181D]">Parceiro</option>
+              <option value="Construtora" className="bg-[#15181D]">Construtora</option>
             </select>
           </div>
           <div>

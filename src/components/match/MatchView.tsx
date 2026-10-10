@@ -134,11 +134,13 @@ export const MatchView: React.FC<MatchViewProps> = ({ searchQuery = '' }) => {
         const leadPhone = (m.lead?.phone || '').toLowerCase();
         const propTitle = (m.property?.title || '').toLowerCase();
         const propNeighborhood = (m.property?.neighborhood || '').toLowerCase();
+        const propConstrutora = (((m.property as any)?.construtora || (m.property as any)?.partner_name) || '').toLowerCase();
         if (
           !leadName.includes(query) &&
           !leadPhone.includes(query) &&
           !propTitle.includes(query) &&
-          !propNeighborhood.includes(query)
+          !propNeighborhood.includes(query) &&
+          !propConstrutora.includes(query)
         ) {
           return false;
         }

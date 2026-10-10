@@ -77,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* ── Direita: Busca (desktop), Notificações, Perfil ── */}
         <div className="flex items-center gap-2.5 flex-shrink-0">
           {/* Busca — desktop/tablet */}
-          <div className="relative hidden sm:block w-48 md:w-64 lg:w-72 pill-surface rounded-full">
+          <div className="relative hidden sm:block w-52 md:w-72 lg:w-80 pill-surface rounded-full">
             <Search
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-secondary"
               style={{ width: '13px', height: '13px' }}
@@ -85,7 +85,7 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <input
               type="text"
-              placeholder="Buscar por bairro, quartos, preço..."
+              placeholder="Buscar por construtora, bairro, preço..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               className="w-full pl-9 pr-14 py-2 bg-transparent rounded-full text-xs text-ink-primary placeholder-ink-secondary focus:outline-none"
@@ -187,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
         />
         <input
           type="text"
-          placeholder="Buscar por bairro, quartos, preço..."
+          placeholder="Buscar por construtora, bairro, preço..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           className="w-full pl-9 pr-4 py-2 bg-transparent rounded-full text-xs text-ink-primary placeholder-ink-secondary focus:outline-none"

@@ -126,6 +126,8 @@ export interface Property {
   owner_phone?: string;
   partner_name?: string;
   partner_phone?: string;
+  construtora?: string;
+  contato_construtora?: string;
   instagram_source_url?: string;
   status: PropertyStatus;
   created_by?: string;

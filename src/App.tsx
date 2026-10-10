@@ -467,15 +467,47 @@ const CrmAppContent: React.FC<{ theme: AppTheme; onToggleTheme: () => void }> = 
         return false;
       }
 
-      // Busca textual
+      // Busca textual (construtora, condomínio, bairro, tipologia, endereço, etc.)
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = (p.type + ' ' + p.neighborhood).toLowerCase().includes(q);
-        const matchInternalName = (p.internal_name || '').toLowerCase().includes(q);
-        const matchCondo = (p.condominium_name || '').toLowerCase().includes(q);
-        const matchAddress = (p.address || '').toLowerCase().includes(q);
-        const matchNotes = (p.notes || '').toLowerCase().includes(q);
-        if (!matchTitle && !matchInternalName && !matchCondo && !matchAddress && !matchNotes) {
+        const normalize = (str: string = '') =>
+          str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+        const q = normalize(searchQuery);
+        const qTerms = q.split(/\s+/).filter(Boolean);
+
+        const construtora = p.construtora || (p as any).construtora || (p.source_type === 'Construtora' ? p.partner_name : '') || '';
+        const partner = p.partner_name || '';
+        const condo = p.condominium_name || '';
+        const title = p.title || '';
+        const internalName = p.internal_name || '';
+        const neighborhood = p.neighborhood || '';
+        const type = p.type || '';
+        const address = p.address || '';
+        const notes = p.notes || '';
+        const unit = p.unit || '';
+        const sourceType = p.source_type || '';
+
+        const allFields = [
+          construtora,
+          partner,
+          condo,
+          title,
+          internalName,
+          neighborhood,
+          type,
+          `${type} ${neighborhood}`,
+          address,
+          notes,
+          unit,
+          sourceType,
+        ].map(normalize);
+
+        const combinedText = allFields.join(' ');
+
+        const matchesExact = combinedText.includes(q);
+        const matchesAllTerms = qTerms.length > 0 && qTerms.every((term) => combinedText.includes(term));
+
+        if (!matchesExact && !matchesAllTerms) {
           return false;
         }
       }

@@ -93,7 +93,8 @@ export const PilotoAutomaticoView: React.FC<PilotoAutomaticoViewProps> = ({
       const matchCaption = post.caption.toLowerCase().includes(q);
       const matchTitle = (post.property_snapshot?.title || '').toLowerCase().includes(q);
       const matchNeigh = (post.property_snapshot?.neighborhood || '').toLowerCase().includes(q);
-      return matchCaption || matchTitle || matchNeigh;
+      const matchConstrutora = ((post.property_snapshot as any)?.construtora || post.property_snapshot?.partner_name || '').toLowerCase().includes(q);
+      return matchCaption || matchTitle || matchNeigh || matchConstrutora;
     }
     return true;
   });
