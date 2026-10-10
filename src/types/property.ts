@@ -43,7 +43,7 @@ export type PropertyPurpose = 'Venda' | 'Locação';
 
 export type FieldState = 'informed' | 'missing' | 'ambiguous';
 
-export type SourceType = 'Próprio' | 'Parceiro';
+export type SourceType = 'Próprio' | 'Parceiro' | 'Construtora';
 
 export type PropertyStatus = 'Ativo' | 'Vendido' | 'Arquivado';
 
