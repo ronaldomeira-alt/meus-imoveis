@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import { handleMcpServer } from '../api/_shared/mcp-server.js';
+import { buildPublicListing } from '../api/_shared/public-pages.js';
 import { Readable } from 'node:stream';
 
 const TEST_TOKEN = process.env.CRM_MCP_TOKEN || 'mcp_sec_7a9f82d4c01e68b31a54b9d0e12f';
@@ -108,8 +109,8 @@ async function runMcpTests() {
 
   const testChaveExterna = `teste-grok-infinity-${Date.now()}`;
 
-  // 4. CRIAR EMPREENDIMENTO COM VAGAS OMITIDAS E COM OBSERVACAO
-  console.log('\n[4] Testando upsert_empreendimento sem vagas (NULL) e com campo observacao...');
+  // 4. CRIAR EMPREENDIMENTO COM VALORES PADRÕES E CAMPOS CONFIDENCIAIS
+  console.log('\n[4] Testando criação de empreendimento (origem="construtora", condicao="novo", vagas=NULL, campos internos)...');
   const createCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -118,6 +119,7 @@ async function runMcpTests() {
         chave_externa: testChaveExterna,
         nome: 'Residencial Infinity Ocean Teste Grok',
         construtora: 'Alliance Construtora',
+        contato_construtora: '(83) 99999-8888 (Eng. Carlos)',
         bairro: 'Cabo Branco',
         cidade: 'João Pessoa',
         endereco: 'Av. Cabo Branco, 1800',
@@ -129,7 +131,7 @@ async function runMcpTests() {
         quartos_min: 1,
         quartos_max: 3,
         // vagas omitido intencionalmente: deve permanecer NULL ("não informado"), nunca 0!
-        observacao: 'Observação estritamente interna da diretoria comercial.',
+        observacao_interna: 'Observação interna confidencial sobre negociação e comissão de 6%.',
         descricao: 'Empreendimento de alto padrão beira-mar com rooftop e piscina de borda infinita.',
         diferenciais: ['Piscina na cobertura', 'Rooftop gourmet', 'Academia com vista para o mar'],
         link_tabela: 'https://docs.google.com/spreadsheets/d/tabela-exemplo',
@@ -151,8 +153,8 @@ async function runMcpTests() {
   assert.strictEqual(createResult.criado, true, 'Deve marcar criado=true');
   const createdDevId = createResult.id;
 
-  // 4b. VERIFICAR QUE VAGAS = NULL E OBSERVACAO GRAVOU CORRETAMENTE
-  console.log('\n[4b] Verificando se vagas = NULL e observacao foram persistidos...');
+  // 4b. VERIFICAR PADRÕES (origem="construtora", condicao="novo", vagas=null, campos internos)
+  console.log('\n[4b] Verificando se origem="construtora", condicao="novo", vagas=null e campos internos foram persistidos...');
   const getDevCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -161,12 +163,57 @@ async function runMcpTests() {
     },
   });
   const devData = JSON.parse(getDevCall.json.result.content[0].text);
+  assert.strictEqual(devData.origem, 'construtora', 'Origem padrão deve ser "construtora"');
+  assert.strictEqual(devData.condicao, 'novo', 'Condição padrão para construtora deve ser "novo"');
   assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
-  assert.strictEqual(devData.observacao, 'Observação estritamente interna da diretoria comercial.');
-  console.log('  ✓ Vagas = null ("não informado") e observacao gravada e lida com perfeição: PASS');
+  assert.strictEqual(devData.construtora, 'Alliance Construtora');
+  assert.strictEqual(devData.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
+  assert.strictEqual(devData.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
+  console.log('  ✓ Origem="construtora", condicao="novo", vagas=null e campos internos conferidos: PASS');
 
-  // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza sem duplicar
-  console.log('\n[5] Testando idempotência (mesma chave_externa)...');
+  // 4c. TESTE CRÍTICO: UPSERT COM MERGE (enviando SÓ descricao -> todos os outros campos continuam iguais)
+  console.log('\n[4c] Testando UPSERT COM MERGE estrito (enviando APENAS descricao)...');
+  const mergeCall = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'upsert_empreendimento',
+      arguments: {
+        chave_externa: testChaveExterna,
+        descricao: 'Descrição atualizada mantendo endereço, entrega, links e status intactos.',
+      },
+    },
+  });
+  assert.strictEqual(mergeCall.status, 200);
+  assert.strictEqual(mergeCall.json.result.isError, false);
+  const mergeResult = JSON.parse(mergeCall.json.result.content[0].text);
+  assert.strictEqual(mergeResult.id, createdDevId);
+  assert.strictEqual(mergeResult.criado, false);
+
+  // Consulta para comprovar que NENHUM campo foi apagado
+  const getAfterMerge = await rpcCall({
+    method: 'tools/call',
+    params: {
+      name: 'obter_empreendimento',
+      arguments: { id: createdDevId },
+    },
+  });
+  const afterMerge = JSON.parse(getAfterMerge.json.result.content[0].text);
+  assert.strictEqual(afterMerge.descricao, 'Descrição atualizada mantendo endereço, entrega, links e status intactos.');
+  assert.strictEqual(afterMerge.endereco, 'Av. Cabo Branco, 1800', 'Endereço não pode ter sido apagado');
+  assert.strictEqual(afterMerge.entrega, '2027-12', 'Entrega não pode ter sido apagada');
+  assert.strictEqual(afterMerge.link_tabela, 'https://docs.google.com/spreadsheets/d/tabela-exemplo', 'link_tabela deve ser mantido');
+  assert.strictEqual(afterMerge.link_pasta, 'https://drive.google.com/drive/folders/pasta-exemplo', 'link_pasta deve ser mantido');
+  assert.strictEqual(afterMerge.data_tabela, 'Outubro/2026', 'data_tabela deve ser mantida');
+  assert.strictEqual(afterMerge.construtora, 'Alliance Construtora', 'construtora deve ser mantida');
+  assert.strictEqual(afterMerge.contato_construtora, '(83) 99999-8888 (Eng. Carlos)', 'contato_construtora deve ser mantido');
+  assert.strictEqual(afterMerge.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.', 'observacao_interna mantida');
+  assert.strictEqual(afterMerge.status, 'Lançamento', 'status não pode ter sido reiniciado');
+  assert.strictEqual(afterMerge.vagas, null, 'Vagas continua null');
+  assert.strictEqual(afterMerge.diferenciais.length, 3, 'diferenciais devem ser preservados');
+  console.log('  ✓ Upsert enviando só descricao preservou todos os 11 campos anteriores intactos: PASS');
+
+  // 5. TESTAR IDEMPOTÊNCIA: segunda chamada atualiza preço sem duplicar
+  console.log('\n[5] Testando idempotência (atualização pontual de preço)...');
   const idempotentCall = await rpcCall({
     method: 'tools/call',
     params: {
@@ -277,7 +324,11 @@ async function runMcpTests() {
             tipo: 'Studio',
             quartos: 1,
             suites: 1,
-            posicao: 'Nascente',
+            posicao: 'Nascente Norte',
+            andar: 5,
+            vagas: 1,
+            banheiros: 1,
+            mobiliado: false,
             area_m2: 32.5,
             metragem_texto: '32,5m²',
             preco: 460000.0,
@@ -300,7 +351,7 @@ async function runMcpTests() {
   const unitsResult = JSON.parse(unitsCall.json.result.content[0].text);
   assert.strictEqual(unitsResult.criadas, 2, 'Deve ter criado 2 unidades');
 
-  // Validação dos campos null nas unidades
+  // Validação dos campos null e posicao "Nascente Norte" nas unidades
   const getFullDev = await rpcCall({
     method: 'tools/call',
     params: {
@@ -311,11 +362,41 @@ async function runMcpTests() {
   const fullDev = JSON.parse(getFullDev.json.result.content[0].text);
   const u101 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-101'));
   const u102 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-102'));
+  assert.strictEqual(u101.posicao, 'Nascente Norte', 'Posição da unidade deve ser "Nascente Norte"');
+  assert.strictEqual(u101.position, 'Nascente Norte');
   assert.strictEqual(u101.sinal, null, 'Sinal omitido deve ser null');
   assert.strictEqual(u101.parcela, null, 'Parcela omitida deve ser null');
   assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
   assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
-  console.log('  ✓ Campos não informados nas unidades preservados como NULL (nunca 0): PASS');
+  console.log('  ✓ Unidade com posicao "Nascente Norte" e campos não informados preservados como NULL: PASS');
+
+  // 8b. VALIDAÇÃO DE ISOLAMENTO CONFIDENCIAL (CLIENTE / COMPARTILHAMENTO)
+  console.log('\n[8b] Conferindo isolamento de dados confidenciais (cliente / compartilhamento)...');
+  const publicListing = buildPublicListing({
+    id: createdDevId,
+    title: afterMerge.nome,
+    type: 'Apartamento',
+    neighborhood: afterMerge.bairro,
+    price: afterMerge.preco_a_partir_de,
+    partner_name: afterMerge.construtora,
+    partner_phone: afterMerge.contato_construtora,
+    contato_construtora: afterMerge.contato_construtora,
+    observacao_interna: afterMerge.observacao_interna,
+    internal_notes: afterMerge.observacao_interna,
+    link_tabela: afterMerge.link_tabela,
+    link_pasta: afterMerge.link_pasta,
+    endereco_completo: afterMerge.endereco,
+    address: afterMerge.endereco,
+  });
+  assert.strictEqual(publicListing.partner_name, undefined);
+  assert.strictEqual(publicListing.partner_phone, undefined);
+  assert.strictEqual(publicListing.contato_construtora, undefined);
+  assert.strictEqual(publicListing.observacao_interna, undefined);
+  assert.strictEqual(publicListing.link_tabela, undefined);
+  assert.strictEqual(publicListing.link_pasta, undefined);
+  assert.strictEqual(publicListing.endereco_completo, undefined);
+  assert(!JSON.stringify(publicListing).includes('comissão de 6%'), 'Nenhum dado confidencial no payload público');
+  console.log('  ✓ Dados internos (construtora, contato, observação, links e endereço completo) estritamente omitidos na visão do cliente: PASS');
 
   // 9. MARCAR STATUS DE UNIDADE: marcar_unidades_status
   console.log('\n[9] Testando marcar unidade como vendida...');

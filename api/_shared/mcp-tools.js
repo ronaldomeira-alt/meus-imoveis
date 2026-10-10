@@ -324,61 +324,51 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
   return {
     id: found.property_id,
     chave_externa: p.chave_externa || null,
-    nome: p.condominium_name || p.title || p.nome || '',
-    construtora: p.partner_name || p.construtora || '',
-    bairro: p.neighborhood || p.bairro || '',
+    nome: p.condominium_name || p.title || p.nome || 'Sem nome',
+    nome_publico: p.nome_publico || null,
+    construtora: p.construtora || p.partner_name || null,
+    contato_construtora: p.contato_construtora || p.partner_phone || null,
+    origem: p.origem || (p.source_type === 'Construtora' ? 'construtora' : p.source_type === 'Parceiro' ? 'parceiro' : 'proprio'),
+    condicao: p.condicao || p.condition?.toLowerCase() || 'novo',
+    bairro: p.neighborhood || p.bairro || null,
     cidade: p.cidade || p.city || 'João Pessoa',
-    endereco: p.address || p.endereco || '',
-    status: p.stage || 'Lançamento',
-    ativo: p.status !== 'Arquivado' && p.ativo !== false,
-    entrega: p.delivery_date || p.entrega || '',
-    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined && p.price !== null ? p.price : null),
-    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined && p.area_m2 !== null ? p.area_m2 : null),
+    endereco: p.endereco_completo || p.address || null,
+    endereco_completo: p.endereco_completo || p.address || null,
+    status: p.stage || p.status || 'Ativo',
+    entrega: p.delivery_date || null,
+    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined ? p.price : null),
+    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined ? p.area_m2 : null),
     area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null ? p.area_range.max : null,
-    quartos_min: p.bedrooms_options?.length ? Math.min(...p.bedrooms_options) : (p.bedrooms !== undefined && p.bedrooms !== null ? p.bedrooms : null),
-    quartos_max: p.bedrooms_options?.length ? Math.max(...p.bedrooms_options) : (p.bedrooms !== undefined && p.bedrooms !== null ? p.bedrooms : null),
+    quartos_min: p.bedrooms_options && p.bedrooms_options.length > 0 ? p.bedrooms_options[0] : (p.bedrooms !== undefined ? p.bedrooms : null),
+    quartos_max: p.bedrooms_options && p.bedrooms_options.length > 0 ? p.bedrooms_options[p.bedrooms_options.length - 1] : (p.bedrooms !== undefined ? p.bedrooms : null),
     vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
-    descricao: p.notes || p.descricao || '',
-    observacao: p.observacao || p.internal_notes || null,
-    diferenciais: Array.isArray(p.building_features) ? p.building_features : (p.diferenciais || []),
-    link_tabela: p.link_tabela || '',
-    link_pasta: p.link_pasta || '',
-    data_tabela: p.data_tabela || '',
+    suites: p.suites !== undefined && p.suites !== null ? p.suites : null,
+    banheiros: p.bathrooms !== undefined && p.bathrooms !== null ? p.bathrooms : (p.banheiros !== undefined ? p.banheiros : null),
+    posicao: p.posicao || p.position || null,
+    descricao: p.notes || p.descricao || null,
+    observacao: p.observacao_interna || p.internal_notes || p.observacao || null,
+    observacao_interna: p.observacao_interna || p.internal_notes || p.observacao || null,
+    diferenciais: p.building_features || [],
+    link_tabela: p.link_tabela || null,
+    link_pasta: p.link_pasta || null,
+    data_tabela: p.data_tabela || null,
+    ativo: p.status !== 'Arquivado' && p.ativo !== false,
     fotos_count: photos.length,
-    unidades_count: units.length,
     fotos: photos,
+    unidades_count: units.length,
     unidades: units,
     atualizado_em: p.updated_at || found.updated_at,
   };
 }
 
 /**
- * 3. upsert_empreendimento (idempotente por chave_externa)
+ * 3. upsert_empreendimento (idempotente por chave_externa com MERGE estrito)
+ * Atualiza APENAS os campos enviados no payload.
+ * Campo omitido (undefined) = mantém o valor existente intacto.
+ * Só limpa um campo se for explicitamente enviado como null.
  */
 export async function upsertEmpreendimento(params = {}) {
-  const {
-    chave_externa,
-    nome,
-    construtora,
-    bairro,
-    cidade = 'João Pessoa',
-    endereco = '',
-    status = 'lancamento',
-    entrega = '',
-    preco_a_partir_de,
-    area_min_m2,
-    area_max_m2,
-    quartos_min,
-    quartos_max,
-    vagas,
-    descricao = '',
-    observacao = null,
-    diferenciais = [],
-    link_tabela = '',
-    link_pasta = '',
-    data_tabela = '',
-    ativo = true,
-  } = params;
+  const { chave_externa } = params;
 
   if (!chave_externa || typeof chave_externa !== 'string' || !chave_externa.trim()) {
     throw new Error('Campo "chave_externa" é obrigatório para garantir idempotência.');
@@ -392,47 +382,121 @@ export async function upsertEmpreendimento(params = {}) {
   const existingData = isCreate ? {} : (existingRow.property_data || {});
   const propertyId = isCreate ? generateDevelopmentId(chave_externa) : existingRow.property_id;
 
-  if (isCreate && !nome) {
+  if (isCreate && !params.nome) {
     throw new Error('Campo "nome" é obrigatório ao cadastrar um novo empreendimento.');
   }
 
-  const finalNome = nome !== undefined ? String(nome).trim() : (existingData.condominium_name || existingData.title || '');
-  const finalConstrutora = construtora !== undefined ? String(construtora).trim() : (existingData.partner_name || '');
-  const finalBairro = bairro !== undefined ? String(bairro).trim() : (existingData.neighborhood || '');
-  const finalCidade = cidade !== undefined ? String(cidade).trim() : (existingData.cidade || 'João Pessoa');
-  const finalEndereco = endereco !== undefined ? String(endereco).trim() : (existingData.address || '');
-  const finalStage = status !== undefined ? mapStatusToStage(status) : (existingData.stage || 'Lançamento');
-  const finalEntrega = entrega !== undefined ? String(entrega).trim() : (existingData.delivery_date || '');
-  const finalPrecoFrom = preco_a_partir_de !== undefined
-    ? (preco_a_partir_de !== null ? Number(preco_a_partir_de) : null)
-    : (existingData.price_from !== undefined ? existingData.price_from : (existingData.price ?? null));
-
-  let finalAreaMin = null;
-  let finalAreaMax = null;
-  if (area_min_m2 !== undefined) {
-    finalAreaMin = area_min_m2 !== null ? Number(area_min_m2) : null;
-  } else {
-    finalAreaMin = existingData.area_range?.min !== undefined ? existingData.area_range.min : (existingData.area_m2 ?? null);
+  // 1. Origem do Imóvel: 'proprio' | 'parceiro' | 'construtora' (padrão MCP: 'construtora')
+  let finalOrigem = existingData.origem || 'construtora';
+  if (params.origem !== undefined) {
+    finalOrigem = params.origem !== null ? String(params.origem).trim().toLowerCase() : 'construtora';
+  } else if (isCreate) {
+    finalOrigem = 'construtora';
   }
 
-  if (area_max_m2 !== undefined) {
-    finalAreaMax = area_max_m2 !== null ? Number(area_max_m2) : null;
-  } else {
-    finalAreaMax = existingData.area_range?.max !== undefined ? existingData.area_range.max : finalAreaMin;
+  const finalSourceType = finalOrigem === 'proprio'
+    ? 'Próprio'
+    : finalOrigem === 'parceiro'
+      ? 'Parceiro'
+      : 'Construtora';
+
+  // 2. Condição: 'novo' | 'usado' | 'na_planta' (padrão 'novo' para construtora)
+  let finalCondicao = existingData.condicao || (finalOrigem === 'construtora' ? 'novo' : 'usado');
+  if (params.condicao !== undefined) {
+    finalCondicao = params.condicao !== null ? String(params.condicao).trim().toLowerCase() : null;
+  } else if (isCreate) {
+    finalCondicao = finalOrigem === 'construtora' ? 'novo' : 'usado';
+  }
+
+  const finalCondition = finalCondicao === 'novo'
+    ? 'Novo'
+    : finalCondicao === 'na_planta'
+      ? 'Na planta'
+      : finalCondicao === 'usado'
+        ? 'Usado'
+        : (finalCondicao ? finalCondicao.charAt(0).toUpperCase() + finalCondicao.slice(1) : (finalOrigem === 'construtora' ? 'Novo' : 'Usado'));
+
+  // 3. Nome comercial (interno)
+  let finalNome = existingData.condominium_name || existingData.title || existingData.nome || '';
+  if (params.nome !== undefined) {
+    finalNome = params.nome !== null ? String(params.nome).trim() : '';
+  }
+
+  // 4. Construtora e Contato Construtora (internos)
+  let finalConstrutora = existingData.construtora || existingData.partner_name || null;
+  if (params.construtora !== undefined) {
+    finalConstrutora = params.construtora !== null ? String(params.construtora).trim() : null;
+  }
+
+  let finalContatoConstrutora = existingData.contato_construtora || existingData.partner_phone || null;
+  if (params.contato_construtora !== undefined) {
+    finalContatoConstrutora = params.contato_construtora !== null ? String(params.contato_construtora).trim() : null;
+  }
+
+  // 5. Bairro e Cidade
+  let finalBairro = existingData.neighborhood || existingData.bairro || null;
+  if (params.bairro !== undefined) {
+    finalBairro = params.bairro !== null ? String(params.bairro).trim() : null;
+  }
+
+  let finalCidade = existingData.cidade || existingData.city || (isCreate ? 'João Pessoa' : null);
+  if (params.cidade !== undefined) {
+    finalCidade = params.cidade !== null ? String(params.cidade).trim() : 'João Pessoa';
+  } else if (isCreate) {
+    finalCidade = 'João Pessoa';
+  }
+
+  // 6. Endereço completo (com número, estritamente interno)
+  let finalEnderecoCompleto = existingData.endereco_completo || existingData.address || null;
+  if (params.endereco_completo !== undefined) {
+    finalEnderecoCompleto = params.endereco_completo !== null ? String(params.endereco_completo).trim() : null;
+  } else if (params.endereco !== undefined) {
+    finalEnderecoCompleto = params.endereco !== null ? String(params.endereco).trim() : null;
+  }
+
+  // 7. Status (fase da obra)
+  let finalStage = existingData.stage || (isCreate ? 'Lançamento' : null);
+  if (params.status !== undefined) {
+    finalStage = params.status !== null ? mapStatusToStage(params.status) : (isCreate ? 'Lançamento' : existingData.stage);
+  } else if (isCreate) {
+    finalStage = 'Lançamento';
+  }
+
+  // 8. Previsão de entrega
+  let finalEntrega = existingData.delivery_date !== undefined ? existingData.delivery_date : null;
+  if (params.entrega !== undefined) {
+    finalEntrega = params.entrega !== null ? String(params.entrega).trim() : null;
+  }
+
+  // 9. Preço a partir de
+  let finalPrecoFrom = existingData.price_from !== undefined ? existingData.price_from : (existingData.price ?? null);
+  if (params.preco_a_partir_de !== undefined) {
+    finalPrecoFrom = params.preco_a_partir_de !== null ? Number(params.preco_a_partir_de) : null;
+  }
+
+  // 10. Metragem mínima e máxima
+  let finalAreaMin = existingData.area_range?.min !== undefined ? existingData.area_range.min : (existingData.area_m2 ?? null);
+  if (params.area_min_m2 !== undefined) {
+    finalAreaMin = params.area_min_m2 !== null ? Number(params.area_min_m2) : null;
+  }
+
+  let finalAreaMax = existingData.area_range?.max !== undefined ? existingData.area_range.max : null;
+  if (params.area_max_m2 !== undefined) {
+    finalAreaMax = params.area_max_m2 !== null ? Number(params.area_max_m2) : null;
   }
 
   const finalAreaRange = (finalAreaMin !== null || finalAreaMax !== null)
     ? { min: finalAreaMin ?? finalAreaMax, max: finalAreaMax ?? finalAreaMin }
-    : null;
+    : (existingData.area_range ?? null);
 
-  // Quartos options
-  let finalBedroomsOptions = existingData.bedrooms_options || null;
-  if (quartos_min !== undefined || quartos_max !== undefined) {
-    if (quartos_min === null && quartos_max === null) {
+  // 11. Quartos
+  let finalBedroomsOptions = existingData.bedrooms_options !== undefined ? existingData.bedrooms_options : null;
+  if (params.quartos_min !== undefined || params.quartos_max !== undefined) {
+    if (params.quartos_min === null && params.quartos_max === null) {
       finalBedroomsOptions = null;
     } else {
-      const qMin = Math.max(Number(quartos_min !== undefined && quartos_min !== null ? quartos_min : (quartos_max || 1)), 0);
-      const qMax = Math.max(Number(quartos_max !== undefined && quartos_max !== null ? quartos_max : qMin), qMin);
+      const qMin = Math.max(Number(params.quartos_min !== undefined && params.quartos_min !== null ? params.quartos_min : (params.quartos_max || 1)), 0);
+      const qMax = Math.max(Number(params.quartos_max !== undefined && params.quartos_max !== null ? params.quartos_max : qMin), qMin);
       finalBedroomsOptions = [];
       for (let i = qMin; i <= qMax; i++) {
         finalBedroomsOptions.push(i);
@@ -440,24 +504,83 @@ export async function upsertEmpreendimento(params = {}) {
     }
   }
 
-  // Vagas: preserva null se não informado
-  let finalVagas = null;
-  if (vagas !== undefined) {
-    finalVagas = vagas !== null ? Number(vagas) : null;
-  } else {
-    finalVagas = existingData.parking_spaces !== undefined ? existingData.parking_spaces : null;
+  // 12. Vagas: preserva null ("não informado"), nunca 0
+  let finalVagas = existingData.parking_spaces !== undefined ? existingData.parking_spaces : null;
+  if (params.vagas !== undefined) {
+    finalVagas = params.vagas !== null ? Number(params.vagas) : null;
   }
 
-  const finalDescricao = descricao !== undefined ? String(descricao).trim() : (existingData.notes || '');
-  const finalObservacao = observacao !== undefined
-    ? (observacao !== null ? String(observacao).trim() : null)
-    : (existingData.observacao || existingData.internal_notes || null);
+  // 13. Suítes
+  let finalSuites = existingData.suites !== undefined ? existingData.suites : null;
+  if (params.suites !== undefined) {
+    finalSuites = params.suites !== null ? Number(params.suites) : null;
+  }
 
-  const finalDiferenciais = diferenciais !== undefined && Array.isArray(diferenciais) ? diferenciais : (existingData.building_features || []);
-  const finalLinkTabela = link_tabela !== undefined ? String(link_tabela).trim() : (existingData.link_tabela || '');
-  const finalLinkPasta = link_pasta !== undefined ? String(link_pasta).trim() : (existingData.link_pasta || '');
-  const finalDataTabela = data_tabela !== undefined ? String(data_tabela).trim() : (existingData.data_tabela || '');
-  const finalAtivo = ativo !== undefined ? Boolean(ativo) : (existingData.status !== 'Arquivado' && existingData.ativo !== false);
+  // 14. Banheiros
+  let finalBathrooms = existingData.bathrooms !== undefined ? existingData.bathrooms : (existingData.banheiros ?? null);
+  if (params.banheiros !== undefined) {
+    finalBathrooms = params.banheiros !== null ? Number(params.banheiros) : null;
+  }
+
+  // 15. Posição
+  let finalPosicao = existingData.posicao || existingData.position || null;
+  if (params.posicao !== undefined) {
+    finalPosicao = params.posicao !== null ? String(params.posicao).trim() : null;
+  }
+
+  // 16. Descrição comercial
+  let finalDescricao = existingData.notes !== undefined ? existingData.notes : null;
+  if (params.descricao !== undefined) {
+    finalDescricao = params.descricao !== null ? String(params.descricao).trim() : null;
+  }
+
+  // 17. Observação interna (avulso, alertas, origem dos dados)
+  let finalObservacaoInterna = existingData.observacao_interna || existingData.internal_notes || existingData.observacao || null;
+  if (params.observacao_interna !== undefined) {
+    finalObservacaoInterna = params.observacao_interna !== null ? String(params.observacao_interna).trim() : null;
+  } else if (params.observacao !== undefined) {
+    finalObservacaoInterna = params.observacao !== null ? String(params.observacao).trim() : null;
+  }
+
+  // 18. Nome público (opcional): título exibido ao cliente. Se vazio, gerar genérico como "Apartamento 2 quartos no Bessa"
+  let finalNomePublico = existingData.nome_publico ?? null;
+  if (params.nome_publico !== undefined) {
+    finalNomePublico = params.nome_publico !== null ? String(params.nome_publico).trim() : null;
+  } else if (isCreate || !finalNomePublico) {
+    const qCount = finalBedroomsOptions && finalBedroomsOptions.length > 0 ? finalBedroomsOptions[0] : 2;
+    const bLabel = finalBairro ? `no ${finalBairro}` : 'em João Pessoa';
+    finalNomePublico = `Apartamento ${qCount} quarto${qCount === 1 ? '' : 's'} ${bLabel}`;
+  }
+
+  // 19. Diferenciais
+  let finalDiferenciais = existingData.building_features || [];
+  if (params.diferenciais !== undefined) {
+    finalDiferenciais = Array.isArray(params.diferenciais) ? params.diferenciais : [];
+  }
+
+  // 20. Links da construtora
+  let finalLinkTabela = existingData.link_tabela !== undefined ? existingData.link_tabela : null;
+  if (params.link_tabela !== undefined) {
+    finalLinkTabela = params.link_tabela !== null ? String(params.link_tabela).trim() : null;
+  }
+
+  let finalLinkPasta = existingData.link_pasta !== undefined ? existingData.link_pasta : null;
+  if (params.link_pasta !== undefined) {
+    finalLinkPasta = params.link_pasta !== null ? String(params.link_pasta).trim() : null;
+  }
+
+  let finalDataTabela = existingData.data_tabela !== undefined ? existingData.data_tabela : null;
+  if (params.data_tabela !== undefined) {
+    finalDataTabela = params.data_tabela !== null ? String(params.data_tabela).trim() : null;
+  }
+
+  // 21. Ativo
+  let finalAtivo = existingData.status !== 'Arquivado' && existingData.ativo !== false;
+  if (params.ativo !== undefined) {
+    finalAtivo = Boolean(params.ativo);
+  } else if (isCreate) {
+    finalAtivo = true;
+  }
 
   const nowIso = new Date().toISOString();
 
@@ -468,11 +591,23 @@ export async function upsertEmpreendimento(params = {}) {
     is_development: true,
     title: finalNome,
     condominium_name: finalNome,
+    internal_name: finalNome,
+    nome: finalNome,
+    nome_publico: finalNomePublico,
     partner_name: finalConstrutora,
-    source_type: 'Parceiro',
+    construtora: finalConstrutora,
+    contato_construtora: finalContatoConstrutora,
+    partner_phone: finalContatoConstrutora,
+    origem: finalOrigem,
+    source_type: finalSourceType,
+    condicao: finalCondicao,
+    condition: finalCondition,
     neighborhood: finalBairro,
+    bairro: finalBairro,
     cidade: finalCidade,
-    address: finalEndereco,
+    city: finalCidade,
+    address: finalEnderecoCompleto,
+    endereco_completo: finalEnderecoCompleto,
     stage: finalStage,
     delivery_date: finalEntrega,
     price_from: finalPrecoFrom,
@@ -483,9 +618,16 @@ export async function upsertEmpreendimento(params = {}) {
     bedrooms_options: finalBedroomsOptions,
     parking_spaces: finalVagas,
     parking_options: finalVagas !== null ? [finalVagas] : null,
+    suites: finalSuites,
+    bathrooms: finalBathrooms,
+    banheiros: finalBathrooms,
+    position: finalPosicao,
+    posicao: finalPosicao,
     notes: finalDescricao,
-    observacao: finalObservacao,
-    internal_notes: finalObservacao,
+    descricao: finalDescricao,
+    observacao: finalObservacaoInterna,
+    observacao_interna: finalObservacaoInterna,
+    internal_notes: finalObservacaoInterna,
     building_features: finalDiferenciais,
     apartment_features: existingData.apartment_features || [],
     link_tabela: finalLinkTabela,
@@ -522,7 +664,7 @@ export async function upsertEmpreendimento(params = {}) {
 
   return {
     id: propertyId,
-    chave_externa,
+    chave_externa: String(chave_externa).trim(),
     criado: isCreate,
     atualizado_em: nowIso,
   };
@@ -1314,6 +1456,30 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
       const idx = existingUnits.findIndex((eu) => eu.chave_externa === u.chave_externa);
       const existing = idx >= 0 ? existingUnits[idx] : null;
 
+      const unitPosicao = u.posicao !== undefined
+        ? (u.posicao !== null ? String(u.posicao).trim() : null)
+        : (existing?.posicao || existing?.position || null);
+
+      const unitAndar = u.andar !== undefined
+        ? (u.andar !== null ? Number(u.andar) : null)
+        : (existing?.andar ?? existing?.floor ?? null);
+
+      const unitSuites = u.suites !== undefined
+        ? (u.suites !== null ? Number(u.suites) : null)
+        : (existing?.suites ?? null);
+
+      const unitBanheiros = u.banheiros !== undefined
+        ? (u.banheiros !== null ? Number(u.banheiros) : null)
+        : (existing?.banheiros ?? existing?.bathrooms ?? null);
+
+      const unitVagas = u.vagas !== undefined
+        ? (u.vagas !== null ? Number(u.vagas) : null)
+        : (existing?.vagas ?? existing?.parking_spaces ?? null);
+
+      const unitMobiliado = u.mobiliado !== undefined
+        ? (u.mobiliado !== null ? Boolean(u.mobiliado) : null)
+        : (existing?.mobiliado ?? existing?.furnished ?? null);
+
       const unitRecord = {
         id: existing ? existing.id : crypto.randomUUID(),
         empreendimento_id: propertyId,
@@ -1324,15 +1490,20 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
         quartos: u.quartos !== undefined
           ? (u.quartos !== null ? Number(u.quartos) : null)
           : (existing?.quartos ?? null),
-        suites: u.suites !== undefined
-          ? (u.suites !== null ? Number(u.suites) : null)
-          : (existing?.suites ?? null),
-        banheiros: u.banheiros !== undefined
-          ? (u.banheiros !== null ? Number(u.banheiros) : null)
-          : (existing?.banheiros ?? null),
-        posicao: u.posicao !== undefined
-          ? (u.posicao !== null ? String(u.posicao).trim() : null)
-          : (existing?.posicao ?? null),
+        bedrooms: u.quartos !== undefined
+          ? (u.quartos !== null ? Number(u.quartos) : null)
+          : (existing?.quartos ?? null),
+        suites: unitSuites,
+        banheiros: unitBanheiros,
+        bathrooms: unitBanheiros,
+        vagas: unitVagas,
+        parking_spaces: unitVagas,
+        posicao: unitPosicao,
+        position: unitPosicao,
+        andar: unitAndar,
+        floor: unitAndar,
+        mobiliado: unitMobiliado,
+        furnished: unitMobiliado,
         area_m2: u.area_m2 !== undefined
           ? (u.area_m2 !== null ? Number(u.area_m2) : null)
           : (existing?.area_m2 ?? null),

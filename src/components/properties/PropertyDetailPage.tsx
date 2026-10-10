@@ -538,12 +538,18 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <Bed className="w-3 h-3 text-accent" /> Quartos
             </span>
             <div className="text-base font-black text-ink-primary mt-1">
-              {property.bedrooms}
-              {property.suites > 0 ? (
-                <span className="text-xs font-normal text-ink-secondary block">
-                  ({property.suites} suíte{property.suites > 1 ? 's' : ''})
-                </span>
-              ) : null}
+              {property.bedrooms !== null && property.bedrooms !== undefined ? (
+                <>
+                  {property.bedrooms}
+                  {property.suites > 0 ? (
+                    <span className="text-xs font-normal text-ink-secondary block">
+                      ({property.suites} suíte{property.suites > 1 ? 's' : ''})
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-xs font-normal text-ink-secondary">Não informado</span>
+              )}
             </div>
           </div>
 
@@ -553,7 +559,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <Maximize2 className="w-3 h-3 text-accent" /> Área Útil
             </span>
             <div className="text-base font-black text-ink-primary mt-1">
-              {property.area_m2} <span className="text-xs font-normal text-ink-secondary">m²</span>
+              {property.area_m2 !== null && property.area_m2 !== undefined ? (
+                <>{property.area_m2} <span className="text-xs font-normal text-ink-secondary">m²</span></>
+              ) : (
+                <span className="text-xs font-normal text-ink-secondary">Não informada</span>
+              )}
             </div>
           </div>
 
@@ -563,7 +573,13 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <Car className="w-3 h-3 text-accent" /> Garagem
             </span>
             <div className="text-base font-black text-ink-primary mt-1">
-              {property.parking_spaces_type === 'Rotativas' ? 'Rotativas' : <>{property.parking_spaces} <span className="text-xs font-normal text-ink-secondary">vaga(s)</span></>}
+              {property.parking_spaces_type === 'Rotativas' ? (
+                'Rotativas'
+              ) : property.parking_spaces !== null && property.parking_spaces !== undefined ? (
+                <>{property.parking_spaces} <span className="text-xs font-normal text-ink-secondary">vaga(s)</span></>
+              ) : (
+                <span className="text-xs font-normal text-ink-secondary">Não informado</span>
+              )}
             </div>
           </div>
 
@@ -571,7 +587,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           <div className="panel-surface p-3.5 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] uppercase font-bold text-ink-secondary">Banheiros</span>
             <div className="text-base font-black text-ink-primary mt-1">
-              {property.bathrooms || 1}
+              {property.bathrooms !== null && property.bathrooms !== undefined ? (
+                property.bathrooms
+              ) : (
+                <span className="text-xs font-normal text-ink-secondary">Não informado</span>
+              )}
             </div>
           </div>
 
@@ -581,7 +601,7 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <Compass className="w-3 h-3 text-accent" /> Posição
             </span>
             <div className="text-sm font-black text-ink-primary mt-1 truncate">
-              {property.position || 'Não informada'}
+              {property.position || (property as any).posicao || 'Não informada'}
             </div>
           </div>
 
@@ -589,7 +609,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           <div className="panel-surface p-3.5 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] uppercase font-bold text-ink-secondary">Andar</span>
             <div className="text-sm font-black text-ink-primary mt-1">
-              {property.floor !== null && property.floor !== undefined ? `${property.floor}º andar` : '—'}
+              {property.floor !== null && property.floor !== undefined
+                ? `${property.floor}º andar`
+                : (property as any).andar !== null && (property as any).andar !== undefined
+                  ? `${(property as any).andar}º andar`
+                  : '—'}
             </div>
           </div>
 
@@ -597,7 +621,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           <div className="panel-surface p-3.5 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] uppercase font-bold text-ink-secondary">Mobiliado</span>
             <div className="text-sm font-black text-ink-primary mt-1">
-              {property.furnished ? 'Sim' : 'Não'}
+              {typeof property.furnished === 'boolean'
+                ? (property.furnished ? 'Sim' : 'Não')
+                : typeof (property as any).mobiliado === 'boolean'
+                  ? ((property as any).mobiliado ? 'Sim' : 'Não')
+                  : 'Não informado'}
             </div>
           </div>
 
@@ -605,7 +633,11 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
           <div className="panel-surface p-3.5 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] uppercase font-bold text-ink-secondary">Condição</span>
             <div className="text-sm font-black text-ink-primary mt-1">
-              {property.condition || 'Usado'}
+              {property.condition ||
+                (property as any).condicao ||
+                (property.source_type === 'Construtora' || (property as any).origem === 'construtora'
+                  ? 'Novo'
+                  : 'Não informado')}
             </div>
           </div>
         </div>
@@ -660,9 +692,65 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               <h3 className="text-sm font-extrabold text-ink-primary">Descrição do Imóvel</h3>
               <p className="text-xs sm:text-sm text-ink-secondary leading-relaxed whitespace-pre-line">
                 {property.notes ||
-                  `Excelente ${property.type.toLowerCase()} localizado no bairro ${property.neighborhood}, com ${property.area_m2} m² de área privativa, ${property.bedrooms} quartos${property.suites > 0 ? ` (${property.suites} suíte)` : ''} e ${property.parking_spaces_type === 'Rotativas' ? 'vagas rotativas' : `${property.parking_spaces} vaga(s) de garagem`}.`}
+                  `Excelente ${property.type.toLowerCase()} localizado no bairro ${property.neighborhood}, com ${property.area_m2 ? `${property.area_m2} m²` : 'ótima metragem'}.`}
               </p>
             </div>
+
+            {/* Unidades do Empreendimento (se houver) */}
+            {Array.isArray((property as any).units) && (property as any).units.length > 0 && (
+              <div className="panel-surface p-5 sm:p-6 rounded-3xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-extrabold text-ink-primary flex items-center gap-2">
+                    <Building className="w-4 h-4 text-accent" />
+                    Unidades Disponíveis ({(property as any).units.length})
+                  </h3>
+                </div>
+                <div className="overflow-x-auto -mx-2 sm:mx-0">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-line-subtle text-[11px] uppercase font-bold text-ink-secondary">
+                        <th className="py-2.5 px-3">Unidade</th>
+                        <th className="py-2.5 px-3">Torre/Bloco</th>
+                        <th className="py-2.5 px-3">Tipo</th>
+                        <th className="py-2.5 px-3">Posição</th>
+                        <th className="py-2.5 px-3">Andar</th>
+                        <th className="py-2.5 px-3">Área</th>
+                        <th className="py-2.5 px-3">Preço</th>
+                        <th className="py-2.5 px-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line-subtle/50 text-ink-primary">
+                      {(property as any).units.map((u: any, idx: number) => (
+                        <tr key={u.chave_externa || u.id || idx} className="hover:bg-white/5 transition-colors">
+                          <td className="py-2.5 px-3 font-bold">{u.unidade || '—'}</td>
+                          <td className="py-2.5 px-3 text-ink-secondary">{u.torre_bloco || '—'}</td>
+                          <td className="py-2.5 px-3">{u.tipo || 'Apartamento'}</td>
+                          <td className="py-2.5 px-3 font-medium text-accent">{u.posicao || u.position || 'Não informada'}</td>
+                          <td className="py-2.5 px-3 text-ink-secondary">{u.andar !== null && u.andar !== undefined ? `${u.andar}º` : (u.floor !== null && u.floor !== undefined ? `${u.floor}º` : '—')}</td>
+                          <td className="py-2.5 px-3">{u.area_m2 ? `${u.area_m2} m²` : (u.metragem_texto || '—')}</td>
+                          <td className="py-2.5 px-3 font-semibold text-status-success">
+                            {u.preco ? `R$ ${Number(u.preco).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                u.status === 'vendida'
+                                  ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                  : u.status === 'reservada'
+                                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              }`}
+                            >
+                              {u.status || 'Disponível'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Coluna Direita (1/3): Informações Confidenciais do Corretor */}
@@ -696,7 +784,73 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
               </p>
 
               <div className="space-y-3 pt-2 border-t border-line-subtle">
-                {property.source_type === 'Próprio' ? (
+                {property.source_type === 'Construtora' || (property as any).origem === 'construtora' || (property as any).construtora ? (
+                  <>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-ink-secondary block">Construtora / Incorporadora</span>
+                      <strong className="text-sm font-bold text-ink-primary block mt-0.5">
+                        {(property as any).construtora || property.partner_name || 'Construtora não informada'}
+                      </strong>
+                    </div>
+
+                    {((property as any).contato_construtora || property.partner_phone) ? (
+                      <div className="flex flex-col gap-2 pt-1">
+                        <span className="text-[10px] uppercase font-bold text-ink-secondary block">Contato Construtora</span>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`tel:${cleanPhone((property as any).contato_construtora || property.partner_phone)}`}
+                            className="flex-1 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-line-subtle text-xs font-semibold text-ink-primary flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-accent" />
+                            <span>Ligar</span>
+                          </a>
+
+                          <a
+                            href={`https://wa.me/55${cleanPhone((property as any).contato_construtora || property.partner_phone)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 py-2 px-3 rounded-xl bg-status-success/15 hover:bg-status-success/25 border border-status-success/30 text-xs font-semibold text-status-success flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-status-success" />
+                            <span>WhatsApp</span>
+                          </a>
+                        </div>
+                        <span className="text-xs font-mono text-ink-secondary text-center">
+                          {(property as any).contato_construtora || property.partner_phone}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-ink-secondary italic block">Contato não informado</span>
+                    )}
+
+                    {/* Arquivos Internos da Construtora */}
+                    {((property as any).link_tabela || (property as any).link_pasta) && (
+                      <div className="pt-2 border-t border-line-subtle/50 flex flex-col gap-1.5">
+                        <span className="text-[10px] uppercase font-bold text-ink-secondary block">Arquivos da Construtora</span>
+                        {(property as any).link_tabela && (
+                          <a
+                            href={(property as any).link_tabela}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-accent hover:underline flex items-center gap-1 truncate"
+                          >
+                            📊 Tabela de Preços / Espelho
+                          </a>
+                        )}
+                        {(property as any).link_pasta && (
+                          <a
+                            href={(property as any).link_pasta}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-accent hover:underline flex items-center gap-1 truncate"
+                          >
+                            📁 Pasta de Materiais (Drive/Dropbox)
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : property.source_type === 'Próprio' ? (
                   <>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-ink-secondary block">Proprietário</span>
@@ -770,6 +924,27 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
                       <span className="text-xs text-ink-secondary italic block">Telefone não informado</span>
                     )}
                   </>
+                )}
+
+                {/* Observação Interna (Confidencial) */}
+                {((property as any).observacao_interna || (property as any).internal_notes || (property as any).observacao) && (
+                  <div className="pt-2 border-t border-line-subtle/50">
+                    <span className="text-[10px] uppercase font-bold text-ink-secondary block">Observação Interna</span>
+                    <p className="text-xs text-ink-secondary mt-1 whitespace-pre-line bg-black/25 p-2.5 rounded-xl border border-white/5">
+                      {(property as any).observacao_interna || (property as any).internal_notes || (property as any).observacao}
+                    </p>
+                  </div>
+                )}
+
+                {/* Endereço Completo com Número (Interno) */}
+                {((property as any).endereco_completo || property.address) && (
+                  <div className="pt-2 border-t border-line-subtle/50">
+                    <span className="text-[10px] uppercase font-bold text-ink-secondary block">Endereço Completo (Interno)</span>
+                    <span className="text-xs text-ink-primary font-medium block mt-0.5">
+                      {(property as any).endereco_completo || property.address}
+                      {property.number ? `, Nº ${property.number}` : ''}
+                    </span>
+                  </div>
                 )}
               </div>
 

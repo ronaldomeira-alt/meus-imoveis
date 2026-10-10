@@ -66,11 +66,31 @@ export const MCP_TOOLS_DEFINITIONS = [
         },
         nome: {
           type: 'string',
-          description: 'Nome do empreendimento (obrigatório no cadastro)',
+          description: 'Nome comercial do empreendimento (obrigatório no cadastro, mantido interno)',
+        },
+        nome_publico: {
+          type: 'string',
+          description: 'Título público exibido ao cliente (opcional; se omitido, gera título genérico como "Apartamento 2 quartos no Bessa")',
+        },
+        origem: {
+          type: 'string',
+          enum: ['proprio', 'parceiro', 'construtora'],
+          default: 'construtora',
+          description: 'Origem do imóvel no CRM: proprio, parceiro ou construtora (padrão MCP: construtora)',
+        },
+        condicao: {
+          type: 'string',
+          enum: ['novo', 'usado', 'na_planta'],
+          default: 'novo',
+          description: 'Condição do imóvel: novo, usado ou na_planta (padrão: novo quando origem = construtora)',
         },
         construtora: {
           type: 'string',
-          description: 'Nome da construtora ou incorporadora parceira',
+          description: 'Nome da construtora ou incorporadora parceira (exibido no quadro confidencial)',
+        },
+        contato_construtora: {
+          type: 'string',
+          description: 'Nome e telefone/WhatsApp de contato da construtora para visitas/tabela (estritamente confidencial)',
         },
         bairro: {
           type: 'string',
@@ -83,7 +103,11 @@ export const MCP_TOOLS_DEFINITIONS = [
         },
         endereco: {
           type: 'string',
-          description: 'Endereço completo ou rua/avenida',
+          description: 'Endereço completo com rua e número (armazenado internamente, nunca exibido com número na visão pública)',
+        },
+        endereco_completo: {
+          type: 'string',
+          description: 'Endereço completo com rua e número (estritamente interno)',
         },
         status: {
           type: 'string',
@@ -114,17 +138,33 @@ export const MCP_TOOLS_DEFINITIONS = [
           type: 'integer',
           description: 'Maior número de quartos disponível (ex: 3)',
         },
+        suites: {
+          type: 'integer',
+          description: 'Quantidade de suítes',
+        },
+        banheiros: {
+          type: 'integer',
+          description: 'Quantidade de banheiros',
+        },
         vagas: {
           type: 'integer',
-          description: 'Quantidade de vagas de garagem padrão',
+          description: 'Quantidade de vagas de garagem (se omitido ou null, permanece null "não informado", nunca 0)',
+        },
+        posicao: {
+          type: 'string',
+          description: 'Posição solar/vento (ex: "Nascente Norte", "Poente")',
         },
         descricao: {
           type: 'string',
-          description: 'Texto descritivo completo do empreendimento, book ou memorial',
+          description: 'Texto descritivo comercial do empreendimento, book ou memorial',
         },
         observacao: {
           type: 'string',
           description: 'Observação ou notas de uso estritamente interno da imobiliária (NÃO exibido ao cliente)',
+        },
+        observacao_interna: {
+          type: 'string',
+          description: 'Notas internas confidenciais: alertas, comissão, regras de visita, origem dos dados',
         },
         diferenciais: {
           type: 'array',
@@ -167,10 +207,15 @@ export const MCP_TOOLS_DEFINITIONS = [
             properties: {
               chave_externa: { type: 'string' },
               nome: { type: 'string' },
+              nome_publico: { type: 'string' },
+              origem: { type: 'string', enum: ['proprio', 'parceiro', 'construtora'] },
+              condicao: { type: 'string', enum: ['novo', 'usado', 'na_planta'] },
               construtora: { type: 'string' },
+              contato_construtora: { type: 'string' },
               bairro: { type: 'string' },
               cidade: { type: 'string' },
               endereco: { type: 'string' },
+              endereco_completo: { type: 'string' },
               status: { type: 'string' },
               entrega: { type: 'string' },
               preco_a_partir_de: { type: 'number' },
@@ -178,9 +223,13 @@ export const MCP_TOOLS_DEFINITIONS = [
               area_max_m2: { type: 'number' },
               quartos_min: { type: 'integer' },
               quartos_max: { type: 'integer' },
+              suites: { type: 'integer' },
+              banheiros: { type: 'integer' },
               vagas: { type: 'integer' },
+              posicao: { type: 'string' },
               descricao: { type: 'string' },
               observacao: { type: 'string' },
+              observacao_interna: { type: 'string' },
               diferenciais: { type: 'array', items: { type: 'string' } },
               link_tabela: { type: 'string' },
               link_pasta: { type: 'string' },
@@ -419,9 +468,25 @@ export const MCP_TOOLS_DEFINITIONS = [
                 type: 'integer',
                 description: 'Número de suítes',
               },
+              banheiros: {
+                type: 'integer',
+                description: 'Número de banheiros',
+              },
+              vagas: {
+                type: 'integer',
+                description: 'Quantidade de vagas de garagem',
+              },
+              andar: {
+                type: 'integer',
+                description: 'Andar da unidade (ex: 4)',
+              },
+              mobiliado: {
+                type: 'boolean',
+                description: 'Se a unidade é mobiliada (true/false)',
+              },
               posicao: {
                 type: 'string',
-                description: 'Posição solar/vento (ex: "Nascente Sul", "Poente")',
+                description: 'Posição solar/vento (ex: "Nascente Norte", "Poente")',
               },
               area_m2: {
                 type: 'number',
