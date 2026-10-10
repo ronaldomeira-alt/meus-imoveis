@@ -118,6 +118,9 @@ async function runMcpTests() {
   assert(upsertProps.observacao_interna, 'upsert_empreendimento deve declarar observacao_interna');
   assert(upsertProps.endereco, 'upsert_empreendimento deve declarar endereco público');
   assert(upsertProps.endereco_completo, 'upsert_empreendimento deve declarar endereco_completo');
+  assert(Array.isArray(upsertProps.vagas.type) && upsertProps.vagas.type.includes('null'), 'vagas deve aceitar null');
+  assert(Array.isArray(upsertProps.area_min_m2.type) && upsertProps.area_min_m2.type.includes('null'), 'area_min_m2 deve aceitar null');
+  assert(Array.isArray(upsertProps.endereco_completo.type) && upsertProps.endereco_completo.type.includes('null'), 'endereco_completo deve aceitar null');
 
   const upsertLoteTool = toolsList.find((t) => t.name === 'upsert_empreendimentos_lote');
   const loteItemProps = upsertLoteTool.inputSchema.properties.itens.items.properties;
@@ -133,16 +136,20 @@ async function runMcpTests() {
   const unidadeItemProps = upsertUnidadesTool.inputSchema.properties.unidades.items.properties;
   assert(unidadeItemProps.posicao, 'upsert_unidades_lote deve declarar posicao');
   assert(unidadeItemProps.andar, 'upsert_unidades_lote deve declarar andar');
+  assert(Array.isArray(unidadeItemProps.andar.type) && unidadeItemProps.andar.type.includes('null'), 'andar deve aceitar null');
   assert(unidadeItemProps.suites, 'upsert_unidades_lote deve declarar suites');
   assert(unidadeItemProps.banheiros, 'upsert_unidades_lote deve declarar banheiros');
+  assert(Array.isArray(unidadeItemProps.banheiros.type) && unidadeItemProps.banheiros.type.includes('null'), 'banheiros deve aceitar null');
   assert(unidadeItemProps.vagas, 'upsert_unidades_lote deve declarar vagas');
+  assert(Array.isArray(unidadeItemProps.vagas.type) && unidadeItemProps.vagas.type.includes('null'), 'vagas deve aceitar null');
   assert(unidadeItemProps.mobiliado, 'upsert_unidades_lote deve declarar mobiliado');
+  assert(Array.isArray(unidadeItemProps.mobiliado.type) && unidadeItemProps.mobiliado.type.includes('null'), 'mobiliado deve aceitar null');
 
   const loteFotosTool = toolsList.find((t) => t.name === 'adicionar_fotos_lote');
   assert(loteFotosTool, 'adicionar_fotos_lote deve estar publicado no tools/list');
   assert(loteFotosTool.inputSchema.properties.fotos, 'adicionar_fotos_lote deve declarar parâmetro fotos');
 
-  console.log('  ✓ Todas as ferramentas e JSON Schemas declarados com 100% de precisão: PASS');
+  console.log('  ✓ Todas as ferramentas e JSON Schemas declarados com tipos anuláveis (null): PASS');
 
   const testChaveExterna = `teste-grok-infinity-${Date.now()}`;
 
@@ -206,16 +213,16 @@ async function runMcpTests() {
   assert.strictEqual(devData.origem, 'construtora', 'Origem padrão deve ser "construtora"');
   assert.strictEqual(devData.condicao, 'novo', 'Condição padrão para construtora deve ser "novo"');
   assert.strictEqual(devData.vagas, null, 'Vagas omitido deve ser estritamente null (nunca 0)');
-  assert.strictEqual(devData.construtora, 'Alliance Construtora');
-  assert.strictEqual(devData.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
+  assert.strictEqual(devData.interno?.construtora, 'Alliance Construtora');
+  assert.strictEqual(devData.interno?.contato_construtora, '(83) 99999-8888 (Eng. Carlos)');
   assert.strictEqual(devData.endereco, 'Cabo Branco, João Pessoa', 'Endereco público deve ser só bairro/cidade');
-  assert.strictEqual(devData.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereco completo interno deve conter rua/número');
-  assert.notStrictEqual(devData.endereco, devData.endereco_completo, 'endereco e endereco_completo devem ser diferentes');
+  assert.strictEqual(devData.interno?.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereco completo interno deve conter rua/número');
+  assert.notStrictEqual(devData.endereco, devData.interno?.endereco_completo, 'endereco e endereco_completo devem ser diferentes');
   assert.strictEqual(devData.observacao, 'Observação geral do condomínio.', 'observacao pública deve ser independente');
-  assert.strictEqual(devData.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
-  assert.notStrictEqual(devData.observacao, devData.observacao_interna, 'observacao e observacao_interna devem ser diferentes');
-  assert.strictEqual(devData.nome_publico, 'Imóvel em Cabo Branco', 'nome_publico deve ser "Imóvel em <bairro>"');
-  console.log('  ✓ endereco ≠ endereco_completo, observacao ≠ observacao_interna e nome_publico corretos: PASS');
+  assert.strictEqual(devData.interno?.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.');
+  assert.notStrictEqual(devData.observacao, devData.interno?.observacao_interna, 'observacao e observacao_interna devem ser diferentes');
+  assert.strictEqual(devData.nome_publico, null, 'nome_publico deve ser estritamente null quando omitido');
+  console.log('  ✓ endereco ≠ endereco_completo, objeto interno, observacao ≠ observacao_interna e nome_publico null: PASS');
 
   // 4c. TESTE CRÍTICO: UPSERT COM MERGE (enviando SÓ descricao -> todos os outros campos continuam iguais)
   console.log('\n[4c] Testando UPSERT COM MERGE estrito (enviando APENAS descricao)...');
@@ -246,16 +253,16 @@ async function runMcpTests() {
   const afterMerge = JSON.parse(getAfterMerge.json.result.content[0].text);
   assert.strictEqual(afterMerge.descricao, 'Descrição atualizada mantendo endereço, entrega, links e status intactos.');
   assert.strictEqual(afterMerge.endereco, 'Cabo Branco, João Pessoa', 'Endereço público mantido');
-  assert.strictEqual(afterMerge.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereço completo mantido');
+  assert.strictEqual(afterMerge.interno?.endereco_completo, 'Av. Cabo Branco, 1800, Apt 301', 'Endereço completo mantido');
   assert.strictEqual(afterMerge.observacao, 'Observação geral do condomínio.', 'Observação pública mantida');
-  assert.strictEqual(afterMerge.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.', 'Observação interna mantida');
-  assert.strictEqual(afterMerge.nome_publico, 'Imóvel em Cabo Branco', 'Nome público mantido');
+  assert.strictEqual(afterMerge.interno?.observacao_interna, 'Observação interna confidencial sobre negociação e comissão de 6%.', 'Observação interna mantida');
+  assert.strictEqual(afterMerge.nome_publico, null, 'Nome público continua null');
   assert.strictEqual(afterMerge.entrega, '2027-12', 'Entrega não pode ter sido apagada');
-  assert.strictEqual(afterMerge.link_tabela, 'https://docs.google.com/spreadsheets/d/tabela-exemplo', 'link_tabela deve ser mantido');
-  assert.strictEqual(afterMerge.link_pasta, 'https://drive.google.com/drive/folders/pasta-exemplo', 'link_pasta deve ser mantido');
+  assert.strictEqual(afterMerge.interno?.link_tabela, 'https://docs.google.com/spreadsheets/d/tabela-exemplo', 'link_tabela deve ser mantido');
+  assert.strictEqual(afterMerge.interno?.link_pasta, 'https://drive.google.com/drive/folders/pasta-exemplo', 'link_pasta deve ser mantido');
   assert.strictEqual(afterMerge.data_tabela, 'Outubro/2026', 'data_tabela deve ser mantida');
-  assert.strictEqual(afterMerge.construtora, 'Alliance Construtora', 'construtora deve ser mantida');
-  assert.strictEqual(afterMerge.contato_construtora, '(83) 99999-8888 (Eng. Carlos)', 'contato_construtora deve ser mantido');
+  assert.strictEqual(afterMerge.interno?.construtora, 'Alliance Construtora', 'construtora deve ser mantida');
+  assert.strictEqual(afterMerge.interno?.contato_construtora, '(83) 99999-8888 (Eng. Carlos)', 'contato_construtora deve ser mantido');
   assert.strictEqual(afterMerge.status, 'Lançamento', 'status não pode ter sido reiniciado');
   assert.strictEqual(afterMerge.vagas, null, 'Vagas continua null');
   assert.strictEqual(afterMerge.diferenciais.length, 3, 'diferenciais devem ser preservados');
@@ -412,7 +419,7 @@ async function runMcpTests() {
   const u101 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-101'));
   const u102 = fullDev.unidades.find((u) => u.chave_externa.endsWith('-apto-102'));
   assert.strictEqual(u101.posicao, 'Nascente Norte', 'Posição da unidade deve ser "Nascente Norte"');
-  assert.strictEqual(u101.position, 'Nascente Norte');
+  assert.strictEqual(u101.position, undefined, 'Campo duplicado position deve ser removido');
   assert.strictEqual(u101.andar, 5, 'Andar da unidade deve ser 5');
   assert.strictEqual(u101.banheiros, 1, 'Banheiros da unidade deve ser 1');
   assert.strictEqual(u101.vagas, 1, 'Vagas da unidade deve ser 1');
@@ -421,7 +428,7 @@ async function runMcpTests() {
   assert.strictEqual(u101.parcela, null, 'Parcela omitida deve ser null');
   assert.strictEqual(u102.quartos, null, 'Quartos omitido na unidade 102 deve ser null');
   assert.strictEqual(u102.preco, null, 'Preço omitido na unidade 102 deve ser null');
-  console.log('  ✓ Unidade com posicao "Nascente Norte", andar, banheiros, vagas, mobiliado e campos não informados como NULL: PASS');
+  console.log('  ✓ Unidade com posicao "Nascente Norte", sem position, andar, banheiros, vagas, mobiliado e campos não informados como NULL: PASS');
 
   // 8b. VALIDAÇÃO DE ISOLAMENTO CONFIDENCIAL (CLIENTE / COMPARTILHAMENTO)
   console.log('\n[8b] Conferindo isolamento de dados confidenciais (cliente / compartilhamento)...');
@@ -431,14 +438,14 @@ async function runMcpTests() {
     type: 'Apartamento',
     neighborhood: afterMerge.bairro,
     price: afterMerge.preco_a_partir_de,
-    partner_name: afterMerge.construtora,
-    partner_phone: afterMerge.contato_construtora,
-    contato_construtora: afterMerge.contato_construtora,
-    observacao_interna: afterMerge.observacao_interna,
-    internal_notes: afterMerge.observacao_interna,
-    link_tabela: afterMerge.link_tabela,
-    link_pasta: afterMerge.link_pasta,
-    endereco_completo: afterMerge.endereco,
+    partner_name: afterMerge.interno?.construtora,
+    partner_phone: afterMerge.interno?.contato_construtora,
+    contato_construtora: afterMerge.interno?.contato_construtora,
+    observacao_interna: afterMerge.interno?.observacao_interna,
+    internal_notes: afterMerge.interno?.observacao_interna,
+    link_tabela: afterMerge.interno?.link_tabela,
+    link_pasta: afterMerge.interno?.link_pasta,
+    endereco_completo: afterMerge.interno?.endereco_completo,
     address: afterMerge.endereco,
   });
   assert.strictEqual(publicListing.partner_name, undefined);

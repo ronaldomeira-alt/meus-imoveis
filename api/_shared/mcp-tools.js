@@ -244,10 +244,10 @@ export async function buscarEmpreendimentos({ texto = '', construtora = '', bair
     status: p.stage || p.status || 'Ativo',
     ativo: p.status !== 'Arquivado' && p.ativo !== false,
     preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined && p.price !== null ? p.price : null),
-    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined && p.area_m2 !== null ? p.area_m2 : null),
-    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null ? p.area_range.max : null,
+    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
+    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
     vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
-    observacao: p.observacao || p.internal_notes || null,
+    observacao: p.observacao || null,
     fotos_count: Array.isArray(p.photos) ? p.photos.length : 0,
     unidades_count: Array.isArray(p.units) ? p.units.length : 0,
     atualizado_em: p.updated_at || updated_at,
@@ -321,24 +321,28 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
   const photos = Array.isArray(p.photos) ? p.photos : [];
   const units = Array.isArray(p.units) ? p.units : [];
 
+  const construtoraVal = p.construtora || p.partner_name || null;
+  const contatoConstrutoraVal = p.contato_construtora || p.partner_phone || null;
+  const observacaoInternaVal = p.observacao_interna || p.internal_notes || null;
+  const enderecoCompletoVal = (p.endereco_completo !== undefined && p.endereco_completo !== null) ? p.endereco_completo : null;
+  const linkTabelaVal = p.link_tabela || null;
+  const linkPastaVal = p.link_pasta || null;
+
   return {
     id: found.property_id,
     chave_externa: p.chave_externa || null,
     nome: p.condominium_name || p.title || p.nome || 'Sem nome',
     nome_publico: p.nome_publico || null,
-    construtora: p.construtora || p.partner_name || null,
-    contato_construtora: p.contato_construtora || p.partner_phone || null,
     origem: p.origem || (p.source_type === 'Construtora' ? 'construtora' : p.source_type === 'Parceiro' ? 'parceiro' : 'proprio'),
     condicao: p.condicao || p.condition?.toLowerCase() || 'novo',
     bairro: p.neighborhood || p.bairro || null,
     cidade: p.cidade || p.city || 'João Pessoa',
     endereco: p.endereco !== undefined ? p.endereco : ([p.neighborhood || p.bairro, p.cidade || p.city].filter(Boolean).join(', ') || null),
-    endereco_completo: p.endereco_completo || p.address || null,
     status: p.stage || p.status || 'Ativo',
     entrega: p.delivery_date || null,
-    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null ? p.price_from : (p.price !== undefined ? p.price : null),
-    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null ? p.area_range.min : (p.area_m2 !== undefined ? p.area_m2 : null),
-    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null ? p.area_range.max : null,
+    preco_a_partir_de: p.price_from !== undefined && p.price_from !== null && Number(p.price_from) > 0 ? Number(p.price_from) : (p.price !== undefined && p.price !== null && Number(p.price) > 0 ? Number(p.price) : null),
+    area_min_m2: p.area_range?.min !== undefined && p.area_range?.min !== null && Number(p.area_range.min) > 0 ? Number(p.area_range.min) : (p.area_m2 !== undefined && p.area_m2 !== null && Number(p.area_m2) > 0 ? Number(p.area_m2) : null),
+    area_max_m2: p.area_range?.max !== undefined && p.area_range?.max !== null && Number(p.area_range.max) > 0 ? Number(p.area_range.max) : null,
     quartos_min: p.bedrooms_options && p.bedrooms_options.length > 0 ? p.bedrooms_options[0] : (p.bedrooms !== undefined ? p.bedrooms : null),
     quartos_max: p.bedrooms_options && p.bedrooms_options.length > 0 ? p.bedrooms_options[p.bedrooms_options.length - 1] : (p.bedrooms !== undefined ? p.bedrooms : null),
     vagas: p.parking_spaces !== undefined && p.parking_spaces !== null ? p.parking_spaces : null,
@@ -347,10 +351,7 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
     posicao: p.posicao || p.position || null,
     descricao: p.notes || p.descricao || null,
     observacao: p.observacao || null,
-    observacao_interna: p.observacao_interna || p.internal_notes || null,
     diferenciais: p.building_features || [],
-    link_tabela: p.link_tabela || null,
-    link_pasta: p.link_pasta || null,
     data_tabela: p.data_tabela || null,
     ativo: p.status !== 'Arquivado' && p.ativo !== false,
     fotos_count: photos.length,
@@ -368,17 +369,24 @@ export async function obterEmpreendimento({ id = null, chave_externa = null } = 
       banheiros: u.banheiros !== undefined && u.banheiros !== null ? u.banheiros : (u.bathrooms !== undefined ? u.bathrooms : null),
       vagas: u.vagas !== undefined && u.vagas !== null ? u.vagas : (u.parking_spaces !== undefined ? u.parking_spaces : null),
       posicao: u.posicao || u.position || null,
-      position: u.posicao || u.position || null,
       andar: u.andar !== undefined && u.andar !== null ? u.andar : (u.floor !== undefined ? u.floor : null),
       mobiliado: u.mobiliado !== undefined && u.mobiliado !== null ? Boolean(u.mobiliado) : (u.furnished !== undefined && u.furnished !== null ? Boolean(u.furnished) : null),
-      area_m2: u.area_m2 !== undefined && u.area_m2 !== null ? u.area_m2 : null,
-      metragem_texto: u.metragem_texto || (u.area_m2 ? `${u.area_m2}m²` : null),
-      preco: u.preco !== undefined && u.preco !== null ? u.preco : null,
-      sinal: u.sinal !== undefined && u.sinal !== null ? u.sinal : null,
-      parcela: u.parcela !== undefined && u.parcela !== null ? u.parcela : null,
+      area_m2: u.area_m2 !== undefined && u.area_m2 !== null && Number(u.area_m2) > 0 ? Number(u.area_m2) : null,
+      metragem_texto: u.metragem_texto || (u.area_m2 && Number(u.area_m2) > 0 ? `${u.area_m2}m²` : null),
+      preco: u.preco !== undefined && u.preco !== null && Number(u.preco) > 0 ? Number(u.preco) : null,
+      sinal: u.sinal !== undefined && u.sinal !== null && Number(u.sinal) > 0 ? Number(u.sinal) : null,
+      parcela: u.parcela !== undefined && u.parcela !== null && Number(u.parcela) > 0 ? Number(u.parcela) : null,
       status: u.status || 'disponivel',
       atualizado_em: u.atualizado_em || null,
     })),
+    interno: {
+      construtora: construtoraVal,
+      contato_construtora: contatoConstrutoraVal,
+      observacao_interna: observacaoInternaVal,
+      endereco_completo: enderecoCompletoVal,
+      link_tabela: linkTabelaVal,
+      link_pasta: linkPastaVal,
+    },
     atualizado_em: p.updated_at || found.updated_at,
   };
 }
@@ -502,20 +510,32 @@ export async function upsertEmpreendimento(params = {}) {
     finalPrecoFrom = params.preco_a_partir_de !== null ? Number(params.preco_a_partir_de) : null;
   }
 
-  // 10. Metragem mínima e máxima
-  let finalAreaMin = existingData.area_range?.min !== undefined ? existingData.area_range.min : (existingData.area_m2 ?? null);
+  // 10. Metragem mínima e máxima: se não informado ou null ou 0, permanece null
+  let finalAreaMin = existingData.area_range?.min !== undefined && existingData.area_range.min !== null && Number(existingData.area_range.min) > 0
+    ? Number(existingData.area_range.min)
+    : (existingData.area_m2 && Number(existingData.area_m2) > 0 ? Number(existingData.area_m2) : null);
   if (params.area_min_m2 !== undefined) {
-    finalAreaMin = params.area_min_m2 !== null ? Number(params.area_min_m2) : null;
+    finalAreaMin = params.area_min_m2 !== null && Number(params.area_min_m2) > 0 ? Number(params.area_min_m2) : null;
   }
 
-  let finalAreaMax = existingData.area_range?.max !== undefined ? existingData.area_range.max : null;
+  let finalAreaMax = existingData.area_range?.max !== undefined && existingData.area_range.max !== null && Number(existingData.area_range.max) > 0
+    ? Number(existingData.area_range.max)
+    : null;
   if (params.area_max_m2 !== undefined) {
-    finalAreaMax = params.area_max_m2 !== null ? Number(params.area_max_m2) : null;
+    finalAreaMax = params.area_max_m2 !== null && Number(params.area_max_m2) > 0 ? Number(params.area_max_m2) : null;
   }
 
-  const finalAreaRange = (finalAreaMin !== null || finalAreaMax !== null)
-    ? { min: finalAreaMin ?? finalAreaMax, max: finalAreaMax ?? finalAreaMin }
-    : (existingData.area_range ?? null);
+  let finalAreaRange = existingData.area_range ?? null;
+  if (params.area_min_m2 !== undefined || params.area_max_m2 !== undefined) {
+    if (finalAreaMin === null && finalAreaMax === null) {
+      finalAreaRange = null;
+    } else {
+      finalAreaRange = {
+        min: finalAreaMin ?? finalAreaMax,
+        max: finalAreaMax ?? finalAreaMin,
+      };
+    }
+  }
 
   // 11. Quartos
   let finalBedroomsOptions = existingData.bedrooms_options !== undefined ? existingData.bedrooms_options : null;
@@ -576,15 +596,11 @@ export async function upsertEmpreendimento(params = {}) {
     finalObservacaoInterna = params.observacao_interna !== null ? String(params.observacao_interna).trim() : null;
   }
 
-  // 18. Nome público: se vier vazio ou não informado, usar "Imóvel em <bairro>"
+  // 18. Nome público: NUNCA gerar automaticamente quando não enviado; deixar null
   let finalNomePublico = existingData.nome_publico ?? null;
   if (params.nome_publico !== undefined) {
     const trimmed = params.nome_publico !== null ? String(params.nome_publico).trim() : '';
     finalNomePublico = trimmed.length > 0 ? trimmed : null;
-  }
-  if (!finalNomePublico) {
-    const local = finalBairro ? finalBairro : (finalCidade || 'João Pessoa');
-    finalNomePublico = `Imóvel em ${local}`;
   }
 
   // 19. Diferenciais
@@ -641,7 +657,7 @@ export async function upsertEmpreendimento(params = {}) {
     bairro: finalBairro,
     cidade: finalCidade,
     city: finalCidade,
-    address: finalEnderecoCompleto || finalEndereco,
+    address: finalEnderecoCompleto,
     endereco: finalEndereco,
     endereco_completo: finalEnderecoCompleto,
     stage: finalStage,
@@ -927,7 +943,7 @@ export async function adicionarFoto({
     // 4. Upload no R2 / Storage
     const uploadResult = await uploadImageBuffer({ propertyId, buffer, mimeType });
     const photoId = crypto.randomUUID();
-    const isCover = Boolean(capa) || currentPhotos.length === 0;
+    const isCover = Boolean(capa);
     const sortOrder = ordem !== null && Number.isFinite(Number(ordem)) ? Number(ordem) : currentPhotos.length;
 
     // Se esta foto for capa, remove is_cover das outras
@@ -1148,8 +1164,6 @@ export async function adicionarFotosLote({
       currentPhotos.forEach((p) => {
         p.is_cover = p.id === coverPhotoIdToSet;
       });
-    } else if (currentPhotos.length > 0 && !currentPhotos.some((p) => p.is_cover)) {
-      currentPhotos[0].is_cover = true;
     }
 
     currentPhotos.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
@@ -1535,26 +1549,25 @@ export async function upsertUnidadesLote({ empreendimento_id = null, chave_exter
         vagas: unitVagas,
         parking_spaces: unitVagas,
         posicao: unitPosicao,
-        position: unitPosicao,
         andar: unitAndar,
         floor: unitAndar,
         mobiliado: unitMobiliado,
         furnished: unitMobiliado,
         area_m2: u.area_m2 !== undefined
-          ? (u.area_m2 !== null ? Number(u.area_m2) : null)
-          : (existing?.area_m2 ?? null),
+          ? (u.area_m2 !== null && Number(u.area_m2) > 0 ? Number(u.area_m2) : null)
+          : (existing?.area_m2 && Number(existing.area_m2) > 0 ? Number(existing.area_m2) : null),
         metragem_texto: u.metragem_texto !== undefined
           ? (u.metragem_texto !== null ? String(u.metragem_texto).trim() : null)
-          : (existing?.metragem_texto ?? (u.area_m2 ? `${u.area_m2}m²` : null)),
+          : (existing?.metragem_texto ?? (u.area_m2 && Number(u.area_m2) > 0 ? `${u.area_m2}m²` : null)),
         preco: u.preco !== undefined
-          ? (u.preco !== null ? Number(u.preco) : null)
-          : (existing?.preco ?? null),
+          ? (u.preco !== null && Number(u.preco) > 0 ? Number(u.preco) : null)
+          : (existing?.preco && Number(existing.preco) > 0 ? Number(existing.preco) : null),
         sinal: u.sinal !== undefined
-          ? (u.sinal !== null ? Number(u.sinal) : null)
-          : (existing?.sinal ?? null),
+          ? (u.sinal !== null && Number(u.sinal) > 0 ? Number(u.sinal) : null)
+          : (existing?.sinal && Number(existing.sinal) > 0 ? Number(existing.sinal) : null),
         parcela: u.parcela !== undefined
-          ? (u.parcela !== null ? Number(u.parcela) : null)
-          : (existing?.parcela ?? null),
+          ? (u.parcela !== null && Number(u.parcela) > 0 ? Number(u.parcela) : null)
+          : (existing?.parcela && Number(existing.parcela) > 0 ? Number(existing.parcela) : null),
         status: u.status !== undefined
           ? (['disponivel', 'reservada', 'vendida'].includes(String(u.status).toLowerCase()) ? String(u.status).toLowerCase() : (existing?.status || 'disponivel'))
           : (existing?.status || 'disponivel'),
