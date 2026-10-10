@@ -637,13 +637,14 @@ async function executeToolCall(toolName, args = {}) {
 }
 
 function sendJson(res, status, obj) {
-  const jsonStr = JSON.stringify(obj);
-  const buf = Buffer.from(jsonStr, 'utf-8');
+  if (typeof res.status === 'function' && typeof res.json === 'function') {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(status).json(obj);
+  }
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Content-Length', String(buf.length));
   res.setHeader('Cache-Control', 'no-store');
-  res.end(buf);
+  res.end(JSON.stringify(obj));
 }
 
 /**
@@ -657,6 +658,9 @@ export async function handleMcpServer(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
+    if (typeof res.status === 'function' && typeof res.end === 'function') {
+      return res.status(204).end();
+    }
     res.statusCode = 204;
     res.end();
     return;
