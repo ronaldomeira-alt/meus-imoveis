@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/imoveis/p/:token",
-      "destination": "/api/public-page?token=:token"
+      "destination": "/api/public-pages?token=:token"
     },
     {
       "source": "/imovel/:id/og.jpg",
@@ -10,7 +10,7 @@
     },
     {
       "source": "/imovel/:id",
-      "destination": "/api/public-page?id=:id"
+      "destination": "/api/public-pages?id=:id"
     },
     {
       "source": "/api/(.*)",
